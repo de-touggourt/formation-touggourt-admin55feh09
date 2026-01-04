@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>فضاء التكوين البيداغوجي</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+/* 1. تنسيقات الجسم - خلفية زرقاء فاتحة */
+body{
+  font-family:'Cairo',sans-serif;
+  margin:0;
+  /* تم تغيير التدرج إلى الأزرق الفاتح */
+  background:linear-gradient(135deg,#e3f2fd,#bbdefb);
+  text-align:center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* ===========================
+   شريط الأخبار - أزرق داكن
+   =========================== */
+.news-ticker-container {
+    background-color: #0d47a1; /* أزرق داكن */
+    color: #fff;
+    width: 100%;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.typewriter-text {
+    font-size: 17px;
+    font-weight: 700;
+    display: inline-block;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.typewriter-text.fade-out {
+    opacity: 0;
+}
+/* =========================== */
+
+/* ===========================
+   تنسيقات الشعار
+   =========================== */
+
+/* حاوية الشعار */
+.logo-container {
+  position: relative;
+  display: inline-block;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 0px; 
+}
+
+/* صورة الشعار */
+.logo-container img {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  object-fit: cover;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff; 
+  z-index: 2;
+  animation: pulseLogo 2.5s ease-in-out infinite;
+}
+
+/* الإطار الدائري المتقطع */
+.logo-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 3px dashed #fff; 
+  background: transparent;
+  mask: none;
+  -webkit-mask: none;
+  transform: translate(-50%, -50%);
+  animation: rotateRing 10s linear infinite;
+  z-index: 1;
+}
+
+@keyframes rotateRing {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes pulseLogo {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.05); }
+}
+/* =========================== */
+
+
+header{
+  /* اللون الرئيسي الجديد: أزرق ملكي */
+  background:#1E68E8; 
+  color:#fff;
+  padding:30px 15px;
+  border-bottom-left-radius:25px;
+  border-bottom-right-radius:25px;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
+}
+
+header h1 {
+    margin-top: 5px;
+    margin-bottom: 10px;
+}
+
+.services{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:25px;
+  padding:40px 20px;
+  max-width:1000px;
+  margin:auto;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.service{
+  background:#fff;
+  border-radius:20px;
+  padding:30px 15px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.1);
+  transition:.4s;
+}
+.service:hover{transform:translateY(-8px) scale(1.05);}
+
+.service i{
+  font-size:55px;
+  color:#1E68E8; /* لون الأيقونات أزرق */
+  margin-bottom:15px;
+}
+
+.service h3{
+  color:#1557c0; /* لون نص العنوان أزرق داكن */
+}
+
+.icon-container{
+  display:flex;
+  justify-content:center;
+  gap:20px;
+  flex-wrap:wrap;
+}
+
+.icon-btn{
+  width:140px;
+  height:140px;
+  border-radius:20px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  border:2px solid #1E68E8; /* إطار أزرق */
+  background:#f0f7ff; /* خلفية زر فاتحة جداً */
+  cursor:pointer;
+  transition:.3s;
+  text-align: center;
+  padding: 10px;
+}
+
+.icon-btn i {
+    font-size: 30px;
+    margin-bottom: 10px;
+    color: #1E68E8; /* أيقونة زرقاء */
+}
+
+.icon-btn:hover{
+  background:#1E68E8; /* خلفية عند التحويم زرقاء */
+  color:#fff;
+}
+.icon-btn:hover i{
+    color: #fff;
+}
+
+footer{
+  background:#1E68E8; /* تذييل الصفحة أزرق */
+  color:#fff;
+  padding:15px;
+  border-top-left-radius:25px;
+  border-top-right-radius:25px;
+  width: 100%;
+  margin-top: auto;
+  position: relative;
+}
+
+.swal2-confirm{
+  background:#939393 !important;
+  color:#333 !important;
+  border-radius:20px !important;
+  padding:8px 35px !important;
+  font-family:'Cairo',sans-serif;
+  font-weight:600;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);
+}
+
+.swal2-deny {
+    background: #1E68E8 !important; /* زر العودة أزرق */
+    color: #fff !important;
+    border-radius: 20px !important;
+    padding: 8px 35px !important;
+    font-family: 'Cairo', sans-serif;
+}
+
+.swal2-confirm:hover{
+  background:#d6d6d6 !important;
+}
+
+h3{
+  line-height:1.7;
+}
+</style>
+</head>
+
+<body>
+
+<div class="news-ticker-container">
+    <span id="typewriter-text" class="typewriter-text"></span>
+</div>
+
+<header>
+  <div class="logo-container">
+    <div class="logo-ring"></div>
+    <img 
+      src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
+      onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'"
+      alt="شعار"
+    >
+  </div>
+
+  <h1>فضاء التكوين البيداغوجي للأساتذة الجدد</h1>
+</header>
+
+<section class="services">
+  <div class="service" onclick="openCenter(1)">
+    <i class="fa-solid fa-school"></i>
+    <h3>مركز التكوين<br>ثانوية عبد الرحمان الكواكبي</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(2)">
+    <i class="fa-solid fa-school"></i>
+     <h3>مركز التكوين<br>متوسطة دقعة الطاهر بن الزاوي</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(3)">
+    <i class="fa-solid fa-school"></i>
+     <h3>مركز التكوين<br>ثانوية البشير الإبراهيمي</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(4)">
+    <i class="fa-solid fa-school"></i>
+    <h3>مركز التكوين<br>متوسطة أحمد زبانة</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(5)">
+    <i class="fa-solid fa-school"></i>
+    <h3>مركز التكوين<br>ثانوية لحسيني محمد</h3>
+  </div>
+</section>
+
+<footer>© 2025 فضاء التكوين</footer>
+
+<script>
+// ==========================================
+// 🔡 كود الكتابة السلسة
+// ==========================================
+const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت | مصلحة التفتيش والتكوين";
+const typeWriterElement = document.getElementById('typewriter-text');
+let charIndex = 0;
+
+function typeWriter() {
+    if (charIndex < textToType.length) {
+        typeWriterElement.innerHTML += textToType.charAt(charIndex);
+        charIndex++;
+        setTimeout(typeWriter, 45); 
+    } else {
+        setTimeout(startFadeOut, 3000); 
+    }
+}
+
+function startFadeOut() {
+    typeWriterElement.classList.add('fade-out');
+    
+    setTimeout(() => {
+        typeWriterElement.innerHTML = "";
+        charIndex = 0;
+        typeWriterElement.classList.remove('fade-out'); 
+        setTimeout(typeWriter, 500); 
+    }, 1000);
+}
+
+window.onload = function() {
+    typeWriter();
+};
+
+// ==========================================
+// 🔗 قاعدة بيانات الروابط والوظائف الأخرى
+// ==========================================
+const centerLinks = {
+    1: { 'arabic': 'kawakibi-arabic.html', 'french': 'kawakibi-french.html' },
+    2: { 'english': 'dagaa_english_ap_import2.html', 'sport': 'dagaa_sport_ap_import2.html' },
+    3: { 'french': 'ibrahimi-french.html', 'english': 'ibrahimi-english.html', 'sport': 'ibrahimi-sport.html', 'others': 'ibrahimi-others.html' },
+    4: {
+        'primary': { 'arabic': 'zabana-prim-arabic.html', 'french': 'zabana-prim-french.html', 'english': 'zabana-prim-english.html', 'sport': 'zabana-prim-sport.html' },
+        'middle_secondary': { 'french': 'zabana-ms-french.html', 'english': 'zabana-ms-english.html', 'sport': 'zabana-ms-sport.html', 'others': 'zabana-ms-others.html' }
+    },
+    5: {
+        'primary': { 'arabic': 'lahsini-prim-arabic.html', 'french': 'lahsini-prim-french.html', 'english': 'lahsini-prim-english.html', 'sport': 'lahsini-prim-sport.html' },
+        'middle_secondary': { 'french': 'lahsini-ms-french.html', 'english': 'lahsini-ms-english.html', 'sport': 'lahsini-ms-sport.html', 'others': 'lahsini-ms-others.html' }
+    }
+};
+
+function openCenter(centerId) {
+  let html = '<div class="icon-container">';
+  let popupTitle = '';
+
+  if (centerId === 1) {
+    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
+    html += `
+      <div class="icon-btn" onclick="openLink(1, 'arabic')">
+        <i class="fa-solid fa-book-open"></i> تخصص اللغة العربية
+      </div>
+      <div class="icon-btn" onclick="openLink(1, 'french')">
+       <i class="fa-solid fa-language"></i> تخصص اللغة الفرنسية
+      </div>`;
+  } 
+  else if (centerId === 2) {
+    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
+    html += `
+      <div class="icon-btn" onclick="openLink(2, 'english')">
+        <i class="fa-solid fa-font"></i> تخصص اللغة الإنجليزية
+      </div>
+      <div class="icon-btn" onclick="openLink(2, 'sport')">
+        <i class="fa-solid fa-person-running"></i> تخصص التربية البدنية والرياضة
+      </div>`;
+  } 
+  else if (centerId === 3) {
+      popupTitle = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
+      html += `
+        <div class="icon-btn" onclick="openLink(3, 'french')">
+            <i class="fa-solid fa-language"></i> اللغة الفرنسية
+        </div>
+        <div class="icon-btn" onclick="openLink(3, 'english')">
+            <i class="fa-solid fa-font"></i> اللغة الإنجليزية
+        </div>
+        <div class="icon-btn" onclick="openLink(3, 'sport')">
+            <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
+        </div>
+        <div class="icon-btn" onclick="openLink(3, 'others')">
+            <i class="fa-solid fa-layer-group"></i> باقي التخصصات
+        </div>`;
+  } 
+  else if (centerId === 4) {
+      popupTitle = 'اختر الطور:';
+      html += `
+        <div class="icon-btn" onclick="openSubMenu('primary', 4)">
+          <i class="fa-solid fa-child-reaching"></i>
+          الطور الابتدائي
+        </div>
+        <div class="icon-btn" onclick="openSubMenu('middle_secondary', 4)">
+          <i class="fa-solid fa-user-graduate"></i>
+          الطور المتوسط والثانوي
+        </div>`;
+  }
+  else if (centerId === 5) {
+      popupTitle = 'اختر الطور:';
+      html += `
+        <div class="icon-btn" onclick="openSubMenu('primary', 5)">
+          <i class="fa-solid fa-child-reaching"></i>
+          الطور الابتدائي
+        </div>
+        <div class="icon-btn" onclick="openSubMenu('middle_secondary', 5)">
+          <i class="fa-solid fa-user-graduate"></i>
+          الطور المتوسط والثانوي
+        </div>`;
+  }
+
+  html += '</div>';
+
+  Swal.fire({
+    title: popupTitle,
+    html: html,
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    confirmButtonColor: '#e0e0e0',
+    showCloseButton: false,
+    width: '600px'
+  });
+}
+
+function openSubMenu(level, parentId) {
+    let html = '<div class="icon-container">';
+    let title = '';
+
+    if (level === 'primary') {
+        title = 'أساتذة الطور الابتدائي - اختر التخصص:';
+        html += `
+            <div class="icon-btn" onclick="openLink(${parentId}, 'arabic', 'primary')">
+                <i class="fa-solid fa-book-open"></i> اللغة العربية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'primary')">
+                <i class="fa-solid fa-language"></i> اللغة الفرنسية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'primary')">
+                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'primary')">
+                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
+            </div>
+        `;
+    } else if (level === 'middle_secondary') {
+        title = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
+        html += `
+            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'middle_secondary')">
+                <i class="fa-solid fa-language"></i> اللغة الفرنسية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'middle_secondary')">
+                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'middle_secondary')">
+                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'others', 'middle_secondary')">
+                <i class="fa-solid fa-layer-group"></i> باقي التخصصات
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    Swal.fire({
+        title: title,
+        html: html,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#e0e0e0',
+        showDenyButton: true,
+        denyButtonText: 'عودة للخلف',
+        denyButtonColor: '#1E68E8', /* تم تغيير لون زر الرجوع للأزرق */
+        showCloseButton: false,
+        width: '600px'
+    }).then((result) => {
+        if (result.isDenied) {
+            openCenter(parentId);
+        }
+    });
+}
+
+function openLink(centerId, type, level = null) {
+    let url = '';
+    const centerData = centerLinks[centerId];
+
+    if (centerData) {
+        if (level && centerData[level]) {
+            url = centerData[level][type];
+        } else if (!level && centerData[type]) {
+            url = centerData[type];
+        }
+    }
+
+    if(url && url !== '#') {
+        window.location.href = url;
+    } else {
+        Swal.fire({
+            icon: 'info',
+            title: 'قريباً',
+            text: 'سيتم إضافة الرابط قريباً',
+            confirmButtonColor: '#1E68E8' /* تم تغيير لون زر التأكيد للأزرق */
+        });
+    }
+}
+</script>
+
+</body>
+</html>

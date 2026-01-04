@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>فضاء التكوين البيداغوجي - توقرت</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+/* --- تنسيقات الصفحة العامة --- */
+body{
+  font-family:'Cairo',sans-serif;
+  margin:0;
+  background:linear-gradient(135deg,#e3f2fd,#bbdefb);
+  text-align:center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===========================
+   1. تنسيقات شريط الأخبار (جديد - أزرق داكن)
+   =========================== */
+.news-ticker-container {
+    background-color: #0d47a1; /* أزرق داكن ليتناسب مع الثيم */
+    color: #fff;
+    width: 100%;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.typewriter-text {
+    font-size: 17px;
+    font-weight: 700;
+    display: inline-block;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.typewriter-text.fade-out {
+    opacity: 0;
+}
+
+/* ===========================
+   2. تنسيقات الشعار (جديد)
+   =========================== */
+.logo-container {
+  position: relative;
+  display: inline-block;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 0px; 
+}
+
+.logo-container img {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  object-fit: cover;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff; 
+  z-index: 2;
+  animation: pulseLogo 2.5s ease-in-out infinite;
+}
+
+.logo-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 3px dashed #fff; 
+  background: transparent;
+  mask: none;
+  -webkit-mask: none;
+  transform: translate(-50%, -50%);
+  animation: rotateRing 10s linear infinite;
+  z-index: 1;
+}
+
+@keyframes rotateRing {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes pulseLogo {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ===========================
+   تنسيقات الهيدر
+   =========================== */
+header{
+  background:#1E68E8; /* اللون الأساسي الأزرق */
+  color:#fff;
+  padding:30px 15px;
+  border-bottom-left-radius:25px;
+  border-bottom-right-radius:25px;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
+}
+
+header h1 {
+    margin-top: 5px;
+    margin-bottom: 10px;
+}
+
+header p {
+    font-size: 1.1em;
+    opacity: 0.9;
+    margin-top: 0;
+}
+
+/* ===========================
+   تنسيقات الخدمات
+   =========================== */
+.services{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:25px;
+  padding:40px 20px;
+  max-width:1000px;
+  margin:auto;
+  flex: 1;
+}
+
+.service{
+  background:#fff;
+  border-radius:20px;
+  padding:30px 15px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.1);
+  transition:.4s;
+}
+.service:hover{transform:translateY(-8px) scale(1.05);}
+
+.service i{
+  font-size:55px;
+  color:#1E68E8; /* لون الأيقونات أزرق */
+  margin-bottom:15px;
+}
+
+.service h3{
+  color:#0d47a1; /* لون النص أزرق داكن */
+}
+
+/* --- تنسيقات النوافذ المنبثقة --- */
+.icon-container{
+  display:flex;
+  justify-content:center;
+  gap:20px;
+  flex-wrap:wrap;
+}
+
+.icon-btn{
+  width:130px;
+  height:130px;
+  border-radius:20px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  border:2px solid #1E68E8; /* حدود زرقاء */
+  background:#f0f7ff;
+  cursor:pointer;
+  transition:.3s;
+}
+
+.icon-btn:hover:not(.closed){
+  background:#1E68E8;
+  color:#fff;
+}
+
+.icon-btn.closed{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+.badge{
+  margin-top:6px;
+  padding:4px 10px;
+  border-radius:12px;
+  font-size:13px;
+}
+.badge.open{background:#e3f2fd;color:#1565c0;}
+.badge.closed{background:#ffebee;color:#c62828;}
+
+footer{
+  background:#1E68E8;
+  color:#fff;
+  padding:16px;
+  font-weight:600;
+  border-top-left-radius:25px;
+  border-top-right-radius:25px;
+  margin-top: auto;
+}
+
+/* --- تنسيقات SweetAlert --- */
+.swal2-popup { border-radius: 20px !important; }
+.swal2-confirm{ background:#939393 !important; color:#333 !important; border-radius:20px !important; padding:8px 35px !important; font-family:'Cairo',sans-serif; font-weight:600; border:none !important; margin: 5px !important; }
+.swal2-deny{ 
+  background:#1E68E8 !important; 
+  color:#fff !important; 
+  border-radius:20px !important; 
+  padding:8px 35px !important; 
+  font-family:'Cairo',sans-serif; 
+  font-weight:600; 
+  border:none !important; 
+  margin: 5px !important; 
+}
+.swal2-deny:hover{
+    background: #1557c0 !important;
+}
+
+/* --- تنسيقات مدير الملفات --- */
+.file-manager-container { text-align: right; direction: rtl; }
+
+.upload-section { 
+  background: #f0f7ff; 
+  padding: 15px; 
+  border-radius: 10px; 
+  border: 2px dashed #1E68E8; 
+  margin-bottom: 15px; 
+  display: flex; 
+  gap: 10px; 
+  align-items: center; 
+  justify-content: center; 
+  flex-wrap: wrap; 
+}
+
+.file-list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 5px; }
+
+.file-row { 
+  background: #fff; 
+  border: 1px solid #eee; 
+  padding: 10px; 
+  border-radius: 8px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  transition: 0.2s; 
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+}
+.file-row:hover { 
+  background: #f0f7ff; 
+  transform: translateX(-3px); 
+}
+
+.file-name-group { display: flex; align-items: center; gap: 10px; font-weight: 600; color: #333; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-icon { font-size: 20px; width: 25px; text-align: center; }
+.fa-file-pdf { color: #d32f2f; } .fa-file-word { color: #1976d2; } .fa-file-image { color: #7b1fa2; }
+
+.delete-btn { 
+  background: #ffebee; 
+  color: #c62828; 
+  border: none; 
+  padding: 6px 12px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  font-size: 12px; 
+  font-family: 'Cairo'; 
+  transition: 0.3s; 
+  display: flex; 
+  align-items: center; 
+  gap: 5px; 
+}
+.delete-btn:hover { background: #c62828; color: #fff; }
+
+.upload-btn-real { 
+  background: #d32f2f; 
+  color: white; 
+  border: none; 
+  padding: 8px 20px; 
+  border-radius: 50px; 
+  cursor: pointer; 
+  font-weight: bold; 
+  font-family: 'Cairo'; 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+}
+.upload-btn-real:hover { background: #b71c1c; transform: scale(1.05); }
+
+.spinner { 
+  border: 3px solid #f3f3f3; 
+  border-top: 3px solid #1E68E8; 
+  border-radius: 50%; 
+  width: 24px; 
+  height: 24px; 
+  animation: spin 1s linear infinite; 
+  margin: 20px auto; 
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.info-box{
+  max-width: 850px;
+  margin: 20px auto;
+  padding: 25px 20px;
+  border: 3px solid rgba(255,255,255,0.8);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.08);
+  color: #ffffff;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+.info-box h1{
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.info-box hr{
+  width: 60%;
+  margin: 10px auto;
+  border: none;
+  height: 2px;
+  background: rgba(255,255,255,0.7);
+}
+
+.info-box p{
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+
+</style>
+</head>
+
+<body>
+
+<div class="news-ticker-container">
+    <span id="typewriter-text" class="typewriter-text"></span>
+</div>
+
+<header>
+  <div class="logo-container">
+    <div class="logo-ring"></div>
+    <img 
+      src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
+      onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'"
+      alt="شعار"
+    >
+  </div>
+
+  <h1>فضاء التكوين البيداغوجي - توقرت</h1>
+
+<div class="info-box">
+  <h1>مركز التكوين متوسطة دقعة الطاهر بن الزاوي</h1>
+  <hr>
+  <p>إدارة ملفات التكوين البيداغوجي لأساتذة الطور الابتدائي - تخصص اللغة الإنجليزية</p>
+</div>
+  
+
+</header>
+
+<section class="services">
+<div class="service" onclick="openCourses('didactique')"><i class="fa-solid fa-chalkboard"></i><h3>تعليمية مادة التخصص</h3></div>
+<div class="service" onclick="openCourses('tasyire')"><i class="fa-solid fa-users-gear"></i><h3>تقنيات تسيير القسم</h3></div>
+<div class="service" onclick="openCourses('takwime')"><i class="fa-solid fa-clipboard-check"></i><h3>التقويم و المعالجة البيداغوجية</h3></div>
+<div class="service" onclick="openCourses('informatique')"><i class="fa-solid fa-computer"></i><h3>الإعلام الآلي</h3></div>
+<div class="service" onclick="openCourses('nidame')"><i class="fa-solid fa-school"></i><h3>النظام التربوي و المناهج</h3></div>
+<div class="service" onclick="openCourses('akhlakiyate')"><i class="fa-solid fa-scale-balanced"></i><h3>أخلاقيات المهنة</h3></div>
+<div class="service" onclick="openCourses('handasa')"><i class="fa-solid fa-network-wired"></i><h3>هندسة التكوين</h3></div>
+<div class="service" onclick="openCourses('wasata')"><i class="fa-solid fa-handshake"></i><h3>الوساطة المدرسية</h3></div>
+<div class="service" onclick="openCourses('tachri')"><i class="fa-solid fa-gavel"></i><h3>التشريع المدرسي</h3></div>
+<div class="service" onclick="openCourses('psycho')"><i class="fa-solid fa-brain"></i><h3>علوم التربية وعلم النفس</h3></div>
+</section>
+
+<footer>مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة  © 2025</footer>
+
+<script>
+/* ==========================================
+   🔡 كود الكتابة السلسة (شريط الأخبار)
+   ========================================== */
+const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت | مصلحة التفتيش والتكوين";
+const typeWriterElement = document.getElementById('typewriter-text');
+let charIndex = 0;
+
+function typeWriter() {
+    if (charIndex < textToType.length) {
+        typeWriterElement.innerHTML += textToType.charAt(charIndex);
+        charIndex++;
+        setTimeout(typeWriter, 45); 
+    } else {
+        setTimeout(startFadeOut, 3000); 
+    }
+}
+
+function startFadeOut() {
+    typeWriterElement.classList.add('fade-out');
+    
+    setTimeout(() => {
+        typeWriterElement.innerHTML = "";
+        charIndex = 0;
+        typeWriterElement.classList.remove('fade-out'); 
+        setTimeout(typeWriter, 500); 
+    }, 1000);
+}
+
+// تشغيل شريط الأخبار عند التحميل
+window.onload = function() {
+    typeWriter();
+};
+
+/* =========================================
+   ⚙️ إعدادات الرابط الخلفي (Google Apps Script)
+   ========================================= */
+// 🔴 ضع رابط Apps Script الذي أنشأته هنا بين علامتي التنصيص
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
+
+// 🔹 الروابط (نفس الروابط الأصلية)
+const driveLinks = {
+    didactique:{1:"https://drive.google.com/drive/folders/15IxfJWDEw9C_yfRIIs5ylxU0ZGGZAVNE?usp=sharing",
+              2:"https://drive.google.com/drive/folders/1wfVk0Ht1r7EmNvlZYLfDQTeBCMGNZ3uP?usp=sharing",
+              3:"https://drive.google.com/drive/folders/1afNDsS7pwzY4IogL8j71VZFhSd8jQy3J?usp=sharing"},
+
+  tasyire:{1:"https://drive.google.com/drive/folders/1Cer2vf6CPlIYkqEWTuJQKeL0WKDaJIQA?usp=sharing",
+           2:"https://drive.google.com/drive/folders/1DMXEzhmW5qeDcCIkinHUu3sODS8GMuBw?usp=sharing",
+           3:"https://drive.google.com/drive/folders/1eHZK_AhNE1B3ClVKoAFI86FD3_IjipBq?usp=sharing"},
+
+  takwime:{1:"https://drive.google.com/drive/folders/10Tlnvz31vm8vXbQwITeM9Sxa4fj3T4Tb?usp=sharing",
+           2:"https://drive.google.com/drive/folders/1kcYwa5kQulcZGl80WWSblyi2P91jj89m?usp=sharing",
+           3:"https://drive.google.com/drive/folders/1nYDQyVw1c5qsB5bP8PcIXQX_KzV7QkZo?usp=sharing"},
+
+  nidame:{1:"https://drive.google.com/drive/folders/1Xs-O0OFvtGrCz4wjxU526yPTio9HUrRK?usp=sharing",
+          2:"https://drive.google.com/drive/folders/1zK8MettMqztZ6o-LsTBy-agee71IrGxG?usp=sharing",
+          3:"https://drive.google.com/drive/folders/1xlq9QXHbFHay7_WFSV8NZpieuPXtSdxD?usp=sharing"},
+
+  akhlakiyate:{1:"https://drive.google.com/drive/folders/1559-c406V7wsBsz5fw5OHz9jaE8GDh9q?usp=sharing",
+               2:"https://drive.google.com/drive/folders/11D8Dah6NPwVvZvRqIPhkEL_Wrhi5ftiX?usp=sharing",
+               3:"https://drive.google.com/drive/folders/1ZjcVDA3ObBve2Qe5uueQRJQ71wqN5yb0?usp=sharing"},
+
+  handasa:{1:"https://drive.google.com/drive/folders/1YjZ1C8Sp_DRzJHIG-BFN-dcEwxjDnjqx?usp=sharing",
+           2:"https://drive.google.com/drive/folders/11RiHPfhRX_zlEm9PrtcyP_Leye_O9UJ-?usp=sharing",
+           3:"https://drive.google.com/drive/folders/1VoUtVMVLfTHQUWciWKjkTp-oAL51QnDc?usp=sharing"},
+
+  wasata:{1:"https://drive.google.com/drive/folders/1TTxKQWUxxvohYRWc0N8Uf23NlHWh7nVX?usp=sharing",
+          2:"https://drive.google.com/drive/folders/1jhnW1i8vzhOckIPalWsqoCu-FQ71jjyY?usp=sharing",
+          3:"https://drive.google.com/drive/folders/1wXOiwpl5XnfOXJDxaW7ok5vl0xvTHDmv?usp=sharing"},
+
+  tachri:{1:"https://drive.google.com/drive/folders/1ys2c2v5fkz7GFTzUOTxmbEAWRYvomb2x?usp=sharing",
+          2:"https://drive.google.com/drive/folders/1xmAHc9X9OcuhmSON3IZgrS1PHsKUVoR-?usp=sharing",
+          3:"https://drive.google.com/drive/folders/1i3Kt9n_3yCgzfRmRCZbxtEsjwOr2Affe?usp=sharing"},
+
+  psycho:{1:"https://drive.google.com/drive/folders/1yE5TM0JugX6H3kkwjK-YgmzA_JV42aCn?usp=sharing",
+          2:"https://drive.google.com/drive/folders/1RECS840svN61GkNpebbbJOUr-7LAXbGZ?usp=sharing",
+          3:"https://drive.google.com/drive/folders/1zUxWLKxP7FwXFg0Kuh8k6usOh1OaZVU5?usp=sharing"},
+
+  informatique:{1:"https://drive.google.com/drive/folders/1GePuEu6dyHMFg0jgywhyEzdpqKYivogZ?usp=sharing",
+                2:"https://drive.google.com/drive/folders/10gBH0FmkhboD-OriFMsKj1J-0sncr4KJ?usp=sharing",
+                3:"https://drive.google.com/drive/folders/1DSG0p81Tlv5qKUg2FGLy3MNWa1A8_jxw?usp=sharing"}
+};
+
+const globalCycleStatus = {1:true, 2:false, 3:false};
+const moduleCycleStatus = {
+  didactique:{1:true,2:true,3:true}, tasyire:{1:true,2:true,3:true}, takwime:{1:true,2:true,3:true},
+  nidame:{1:true,2:true,3:true}, akhlakiyate:{1:true,2:true,3:true}, handasa:{1:true,2:true,3:true},
+  wasata:{1:true,2:true,3:true}, tachri:{1:true,2:true,3:true}, psycho:{1:true,2:true,3:true},
+  informatique:{1:true,2:true,3:true}
+};
+
+function isCycleOpen(module,cycle){
+  if(!globalCycleStatus[cycle]) return false;
+  return moduleCycleStatus[module][cycle];
+}
+
+// 🔹 استخراج ID المجلد
+function getFolderId(url) {
+    if (!url) return null;
+    const match = url.match(/folders\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : null;
+}
+
+// 🔹 فتح نافذة اختيار الدورة
+function openCourses(module){
+  let html='<div class="icon-container">';
+  for(let i=1;i<=3;i++){
+    const open=isCycleOpen(module,i);
+    // عند الضغط يتم استدعاء مدير الملفات
+    html+=`
+      <div class="icon-btn ${open?'':'closed'}"
+        onclick="${open?`openFileManager('${module}',${i})`:''}">
+        الدورة ${i===1?'الأولى':i===2?'الثانية':'الثالثة'}
+        <span class="badge ${open?'open':'closed'}">
+          ${open?'مفتوحة':'مغلقة'}
+        </span>
+      </div>`;
+  }
+  html+='</div>';
+
+  Swal.fire({
+    title: 'اختر الدورة',
+    html: html,
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    width: '600px'
+  });
+}
+
+// 🔹 فتح مدير الملفات والاتصال بالسكريبت
+function openFileManager(module, cycle) {
+  const url = driveLinks[module][cycle];
+  const folderId = getFolderId(url);
+
+  if (!url || !folderId) {
+    Swal.fire('خطأ', 'رابط المجلد غير صحيح', 'error');
+    return;
+  }
+
+  // عرض تحميل
+  Swal.fire({
+    title: 'جاري جلب الملفات...',
+    html: '<div class="spinner"></div>',
+    showConfirmButton: false,
+    width: '700px',
+    allowOutsideClick: false
+  });
+
+  // طلب قائمة الملفات من السكريبت
+  fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
+  .then(res => res.json())
+  .then(data => {
+    if(data.error) {
+        Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد', 'error');
+    } else {
+        renderFileManager(folderId, data.files, module, cycle);
+    }
+  })
+  .catch(err => Swal.fire('خطأ في الاتصال', 'تأكد من وضع رابط Apps Script الصحيح', 'error'));
+}
+
+// 🔹 رسم واجهة الملفات
+function renderFileManager(folderId, files, module, cycle) {
+    let filesHtml = '';
+    
+    if(!files || files.length === 0) {
+        filesHtml = '<div style="text-align:center; padding:20px; color:#777;">المجلد فارغ</div>';
+    } else {
+        files.forEach(file => {
+            // أيقونة الملف
+            let iconClass = 'fa-file'; 
+            if(file.type.includes('pdf')) iconClass = 'fa-file-pdf';
+            else if(file.type.includes('image')) iconClass = 'fa-file-image';
+            else if(file.type.includes('word') || file.type.includes('doc')) iconClass = 'fa-file-word';
+
+            filesHtml += `
+            <div class="file-row">
+                <a href="${file.url}" target="_blank" class="file-name-group">
+                    <i class="fa-solid ${iconClass} file-icon"></i> ${file.name}
+                </a>
+                <button class="delete-btn" onclick="deleteFile('${file.id}', '${folderId}', '${module}', ${cycle})">
+                    <i class="fa-solid fa-trash"></i> حذف
+                </button>
+            </div>
+            `;
+        });
+    }
+
+    const htmlContent = `
+    <div class="file-manager-container">
+        <div class="upload-section">
+            <input type="file" id="fileInput" style="display:none" onchange="document.getElementById('fileNameDisplay').innerText = this.files[0].name">
+            <button class="upload-btn-real" onclick="document.getElementById('fileInput').click()">
+                <i class="fa-solid fa-folder-open"></i> اختر ملفاً
+            </button>
+            <span id="fileNameDisplay" style="font-size:12px; color:#666; margin:0 10px;">لم يتم اختيار ملف</span>
+            <button class="upload-btn-real" style="background:#1E68E8" onclick="uploadFile('${folderId}', '${module}', ${cycle})">
+                <i class="fa-solid fa-cloud-arrow-up"></i> رفع الآن
+            </button>
+        </div>
+
+        <div class="file-list">
+            ${filesHtml}
+        </div>
+    </div>
+    `;
+
+    Swal.fire({
+        title: `ملفات الدورة ${cycle}`,
+        html: htmlContent,
+        width: '700px',
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        showDenyButton: true,
+        denyButtonText: 'عودة',
+        scrollbarPadding: false
+    }).then((res) => {
+        if(res.isDenied) openCourses(module);
+    });
+}
+
+// 🔹 دالة حذف ملف
+function deleteFile(fileId, folderId, module, cycle) {
+    Swal.fire({
+        title: 'هل أنت متأكد؟',
+        text: "لا يمكن التراجع عن هذا الإجراء!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'نعم، احذفه!',
+        cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({title: 'جاري الحذف...', showConfirmButton: false});
+            
+            fetch(`${APPS_SCRIPT_URL}?action=delete&fileId=${fileId}&folderId=${folderId}`, {method: 'POST'})
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    Swal.fire('تم!', 'تم حذف الملف.', 'success')
+                    .then(() => openFileManager(module, cycle)); 
+                } else {
+                    Swal.fire('خطأ', 'فشل الحذف', 'error');
+                }
+            });
+        }
+    });
+}
+
+// 🔹 دالة رفع ملف
+function uploadFile(folderId, module, cycle) {
+    const fileInput = document.getElementById('fileInput');
+    if(fileInput.files.length === 0) {
+        Swal.showValidationMessage('الرجاء اختيار ملف أولاً');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        const rawData = e.target.result.split(',')[1];
+        
+        Swal.fire({
+            title: 'جاري الرفع...',
+            html: 'يرجى الانتظار <div class="spinner"></div>',
+            showConfirmButton: false,
+            allowOutsideClick: false
+        });
+
+        const formData = new FormData();
+        formData.append('action', 'upload');
+        formData.append('folderId', folderId);
+        formData.append('data', rawData);
+        formData.append('name', file.name);
+        formData.append('mime', file.type);
+
+        fetch(APPS_SCRIPT_URL, {method: 'POST', body: formData})
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                Swal.fire('نجاح', 'تم رفع الملف بنجاح', 'success')
+                .then(() => openFileManager(module, cycle));
+            } else {
+                Swal.fire('خطأ', 'فشل الرفع', 'error');
+            }
+        })
+        .catch(err => Swal.fire('خطأ', 'حدث خطأ أثناء الرفع', 'error'));
+    };
+    reader.readAsDataURL(file);
+}
+</script>
+</body>
+</html>
