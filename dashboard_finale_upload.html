@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>فضاء التكوين البيداغوجي</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -11,10 +11,15 @@
 
 <style>
 /* 1. تنسيقات الجسم - خلفية زرقاء فاتحة */
+/* إضافة: ضبط حساب الأبعاد لجميع العناصر */
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent; /* إزالة لون النقر الافتراضي في الموبايل */
+}
+
 body{
   font-family:'Cairo',sans-serif;
   margin:0;
-  /* تم تغيير التدرج إلى الأزرق الفاتح */
   background:linear-gradient(135deg,#e3f2fd,#bbdefb);
   text-align:center;
   min-height: 100vh;
@@ -27,7 +32,7 @@ body{
    شريط الأخبار - أزرق داكن
    =========================== */
 .news-ticker-container {
-    background-color: #0d47a1; /* أزرق داكن */
+    background-color: #0d47a1;
     color: #fff;
     width: 100%;
     height: 50px;
@@ -46,6 +51,10 @@ body{
     opacity: 1;
     transition: opacity 1s ease-in-out;
     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    white-space: nowrap; /* منع النص من الالتفاف */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 95%; /* ضمان عدم خروج النص في الموبايل */
 }
 
 .typewriter-text.fade-out {
@@ -64,6 +73,7 @@ body{
   width: 160px;
   height: 160px;
   margin-bottom: 0px; 
+  transition: transform 0.3s ease; /* حركة سلسة عند التصغير */
 }
 
 /* صورة الشعار */
@@ -113,7 +123,6 @@ body{
 
 
 header{
-  /* اللون الرئيسي الجديد: أزرق ملكي */
   background:#1E68E8; 
   color:#fff;
   padding:30px 15px;
@@ -125,6 +134,8 @@ header{
 header h1 {
     margin-top: 5px;
     margin-bottom: 10px;
+    font-size: 1.8rem; /* حجم افتراضي */
+    padding: 0 10px;
 }
 
 .services{
@@ -147,17 +158,24 @@ header h1 {
   cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.1);
   transition:.4s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .service:hover{transform:translateY(-8px) scale(1.05);}
+.service:active{transform:scale(0.98);} /* تأثير الضغط للموبايل */
 
 .service i{
   font-size:55px;
-  color:#1E68E8; /* لون الأيقونات أزرق */
+  color:#1E68E8; 
   margin-bottom:15px;
 }
 
 .service h3{
-  color:#1557c0; /* لون نص العنوان أزرق داكن */
+  color:#1557c0; 
+  font-size: 1.1rem;
+  margin: 0;
 }
 
 .icon-container{
@@ -165,6 +183,7 @@ header h1 {
   justify-content:center;
   gap:20px;
   flex-wrap:wrap;
+  width: 100%;
 }
 
 .icon-btn{
@@ -176,30 +195,31 @@ header h1 {
   align-items:center;
   justify-content:center;
   font-weight:700;
-  border:2px solid #1E68E8; /* إطار أزرق */
-  background:#f0f7ff; /* خلفية زر فاتحة جداً */
+  border:2px solid #1E68E8; 
+  background:#f0f7ff; 
   cursor:pointer;
   transition:.3s;
   text-align: center;
   padding: 10px;
+  font-size: 0.95rem;
 }
 
 .icon-btn i {
     font-size: 30px;
     margin-bottom: 10px;
-    color: #1E68E8; /* أيقونة زرقاء */
+    color: #1E68E8; 
 }
 
-.icon-btn:hover{
-  background:#1E68E8; /* خلفية عند التحويم زرقاء */
+.icon-btn:hover, .icon-btn:active {
+  background:#1E68E8; 
   color:#fff;
 }
-.icon-btn:hover i{
+.icon-btn:hover i, .icon-btn:active i {
     color: #fff;
 }
 
 footer{
-  background:#1E68E8; /* تذييل الصفحة أزرق */
+  background:#1E68E8; 
   color:#fff;
   padding:15px;
   border-top-left-radius:25px;
@@ -207,6 +227,13 @@ footer{
   width: 100%;
   margin-top: auto;
   position: relative;
+  font-size: 0.9rem;
+}
+
+/* تنسيقات SweetAlert */
+.swal2-popup {
+    border-radius: 20px !important;
+    padding: 1.5em !important;
 }
 
 .swal2-confirm{
@@ -217,14 +244,16 @@ footer{
   font-family:'Cairo',sans-serif;
   font-weight:600;
   box-shadow:0 2px 6px rgba(0,0,0,.15);
+  margin: 5px !important;
 }
 
 .swal2-deny {
-    background: #1E68E8 !important; /* زر العودة أزرق */
+    background: #1E68E8 !important; 
     color: #fff !important;
     border-radius: 20px !important;
     padding: 8px 35px !important;
     font-family: 'Cairo', sans-serif;
+    margin: 5px !important;
 }
 
 .swal2-confirm:hover{
@@ -233,6 +262,82 @@ footer{
 
 h3{
   line-height:1.7;
+}
+
+/* ============================================================
+   📱 تحسينات التجاوب (Media Queries) - الإضافة الجديدة
+   ============================================================ */
+@media (max-width: 768px) {
+    /* 1. تصغير الشعار */
+    .logo-container {
+        transform: scale(0.85); /* تصغير بنسبة بسيطة */
+        margin-bottom: 0px;
+    }
+
+    /* 2. ضبط حجم خط العنوان الرئيسي */
+    header h1 {
+        font-size: 1.4rem;
+        line-height: 1.4;
+    }
+
+    /* 3. تحسين الشبكة (Grid) للموبايل */
+    .services {
+        grid-template-columns: 1fr; /* عمود واحد في الموبايل */
+        padding: 20px 15px;
+        gap: 15px;
+    }
+
+    .service {
+        flex-direction: row; /* الأيقونة بجانب النص في الموبايل */
+        text-align: right;
+        padding: 20px;
+        gap: 15px;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    .service i {
+        font-size: 40px;
+        margin-bottom: 0;
+        min-width: 50px;
+        text-align: center;
+    }
+
+    .service h3 {
+        font-size: 1rem;
+        text-align: right;
+    }
+
+    /* 4. إجبار نافذة SweetAlert على التجاوب (تجاوز JS) */
+    .swal2-popup {
+        width: 95% !important; /* يأخذ 95% من عرض الهاتف */
+        min-width: unset !important;
+    }
+
+    /* 5. تحسين أزرار النافذة المنبثقة */
+    .icon-btn {
+        width: 46%; /* زرين في كل صف */
+        height: 120px;
+        font-size: 0.85rem;
+    }
+    
+    .icon-container {
+        gap: 10px;
+    }
+    
+    .icon-btn i {
+        font-size: 26px;
+    }
+
+    /* 6. شريط الأخبار */
+    .typewriter-text {
+        font-size: 14px;
+    }
+    
+    footer {
+        font-size: 0.8rem;
+        padding: 12px;
+    }
 }
 </style>
 </head>
@@ -461,7 +566,7 @@ function openSubMenu(level, parentId) {
         confirmButtonColor: '#e0e0e0',
         showDenyButton: true,
         denyButtonText: 'عودة للخلف',
-        denyButtonColor: '#1E68E8', /* تم تغيير لون زر الرجوع للأزرق */
+        denyButtonColor: '#1E68E8', 
         showCloseButton: false,
         width: '600px'
     }).then((result) => {
@@ -490,7 +595,7 @@ function openLink(centerId, type, level = null) {
             icon: 'info',
             title: 'قريباً',
             text: 'سيتم إضافة الرابط قريباً',
-            confirmButtonColor: '#1E68E8' /* تم تغيير لون زر التأكيد للأزرق */
+            confirmButtonColor: '#1E68E8' 
         });
     }
 }
