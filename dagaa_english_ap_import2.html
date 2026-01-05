@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>فضاء التكوين البيداغوجي - توقرت</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -11,6 +11,11 @@
 
 <style>
 /* --- تنسيقات الصفحة العامة --- */
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
 body{
   font-family:'Cairo',sans-serif;
   margin:0;
@@ -19,10 +24,11 @@ body{
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden; /* لمنع التمرير الأفقي */
 }
 
 /* ===========================
-   1. تنسيقات شريط الأخبار (جديد - أزرق داكن)
+   1. تنسيقات شريط الأخبار
    =========================== */
 .news-ticker-container {
     background-color: #0d47a1;
@@ -55,7 +61,7 @@ body{
 }
 
 /* ===========================
-   2. تنسيقات الشعار (جديد)
+   2. تنسيقات الشعار
    =========================== */
 .logo-container {
   position: relative;
@@ -63,6 +69,7 @@ body{
   width: 160px;
   height: 160px;
   margin-bottom: 0px; 
+  transition: transform 0.3s ease;
 }
 
 .logo-container img {
@@ -90,8 +97,6 @@ body{
   border-radius: 50%;
   border: 3px dashed #fff; 
   background: transparent;
-  mask: none;
-  -webkit-mask: none;
   transform: translate(-50%, -50%);
   animation: rotateRing 10s linear infinite;
   z-index: 1;
@@ -122,12 +127,8 @@ header{
 header h1 {
     margin-top: 5px;
     margin-bottom: 10px;
-}
-
-header p {
-    font-size: 1.1em;
-    opacity: 0.9;
-    margin-top: 0;
+    font-size: 1.8rem;
+    padding: 0 10px;
 }
 
 /* ===========================
@@ -135,9 +136,9 @@ header p {
    =========================== */
 .services{
   display:grid;
-  /* تم تعديل العرض الأدنى ليناسب الهواتف بشكل أفضل */
-  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-  gap:20px;
+  /* تحسين الشبكة لتتجاوب مع الهواتف بحد أدنى 160 بكسل */
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:25px;
   padding:40px 20px;
   max-width:1000px;
   margin:auto;
@@ -148,22 +149,27 @@ header p {
 .service{
   background:#fff;
   border-radius:20px;
-  padding:25px 10px;
+  padding:30px 15px;
   cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.1);
   transition:.4s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .service:hover{transform:translateY(-8px) scale(1.05);}
+.service:active{transform:scale(0.98);}
 
 .service i{
-  font-size:45px; /* تصغير طفيف */
+  font-size:55px;
   color:#1E68E8;
   margin-bottom:15px;
 }
 
 .service h3{
   color:#0d47a1;
-  font-size: 1rem;
+  font-size: 1.1rem;
   margin: 0;
 }
 
@@ -171,13 +177,14 @@ header p {
 .icon-container{
   display:flex;
   justify-content:center;
-  gap:15px;
+  gap:20px;
   flex-wrap:wrap;
+  width: 100%;
 }
 
 .icon-btn{
-  width:120px; /* تصغير قليل ليتناسب مع شاشات الجوال */
-  height:120px;
+  width:130px;
+  height:130px;
   border-radius:20px;
   display:flex;
   flex-direction:column;
@@ -188,7 +195,13 @@ header p {
   background:#f0f7ff;
   cursor:pointer;
   transition:.3s;
-  font-size: 0.9rem;
+  text-align: center;
+  padding: 5px;
+}
+
+.icon-btn i {
+    font-size: 30px;
+    margin-bottom: 5px;
 }
 
 .icon-btn:hover:not(.closed){
@@ -203,9 +216,9 @@ header p {
 
 .badge{
   margin-top:6px;
-  padding:4px 8px;
+  padding:4px 10px;
   border-radius:12px;
-  font-size:12px;
+  font-size:13px;
 }
 .badge.open{background:#e3f2fd;color:#1565c0;}
 .badge.closed{background:#ffebee;color:#c62828;}
@@ -222,27 +235,21 @@ footer{
 }
 
 /* --- تنسيقات SweetAlert --- */
-.swal2-popup { 
-    border-radius: 20px !important; 
-    padding: 1.5em !important;
-}
-.swal2-confirm{ background:#939393 !important; color:#333 !important; border-radius:20px !important; padding:8px 35px !important; font-family:'Cairo',sans-serif; font-weight:600; border:none !important; margin: 5px !important; }
+.swal2-popup { border-radius: 20px !important; padding: 1em !important; }
+.swal2-confirm{ background:#939393 !important; color:#333 !important; border-radius:20px !important; padding:10px 30px !important; font-family:'Cairo',sans-serif; font-weight:600; border:none !important; margin: 5px !important; }
 .swal2-deny{ 
   background:#1E68E8 !important; 
   color:#fff !important; 
   border-radius:20px !important; 
-  padding:8px 35px !important; 
+  padding:10px 30px !important; 
   font-family:'Cairo',sans-serif; 
   font-weight:600; 
   border:none !important; 
   margin: 5px !important; 
 }
-.swal2-deny:hover{
-    background: #1557c0 !important;
-}
 
 /* --- تنسيقات مدير الملفات --- */
-.file-manager-container { text-align: right; direction: rtl; }
+.file-manager-container { text-align: right; direction: rtl; width: 100%; }
 
 .upload-section { 
   background: #f0f7ff; 
@@ -270,12 +277,8 @@ footer{
   transition: 0.2s; 
   box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
 }
-.file-row:hover { 
-  background: #f0f7ff; 
-  transform: translateX(-3px); 
-}
 
-.file-name-group { display: flex; align-items: center; gap: 10px; font-weight: 600; color: #333; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name-group { display: flex; align-items: center; gap: 10px; font-weight: 600; color: #333; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .file-icon { font-size: 20px; width: 25px; text-align: center; }
 .fa-file-pdf { color: #d32f2f; } .fa-file-word { color: #1976d2; } .fa-file-image { color: #7b1fa2; }
 
@@ -292,15 +295,14 @@ footer{
   display: flex; 
   align-items: center; 
   gap: 5px; 
-  flex-shrink: 0; /* منع الزر من الانكماش */
+  flex-shrink: 0;
 }
-.delete-btn:hover { background: #c62828; color: #fff; }
 
 .upload-btn-real { 
   background: #d32f2f; 
   color: white; 
   border: none; 
-  padding: 8px 20px; 
+  padding: 10px 20px; 
   border-radius: 50px; 
   cursor: pointer; 
   font-weight: bold; 
@@ -309,8 +311,8 @@ footer{
   align-items: center; 
   gap: 8px; 
   box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+  font-size: 14px;
 }
-.upload-btn-real:hover { background: #b71c1c; transform: scale(1.05); }
 
 .spinner { 
   border: 3px solid #f3f3f3; 
@@ -325,9 +327,9 @@ footer{
 
 .info-box{
   max-width: 850px;
-  width: 95%; /* لضمان عدم الخروج عن الشاشة في الهاتف */
+  width: 95%;
   margin: 20px auto;
-  padding: 25px 20px;
+  padding: 20px;
   border: 3px solid rgba(255,255,255,0.8);
   border-radius: 20px;
   background: rgba(255,255,255,0.08);
@@ -337,9 +339,9 @@ footer{
 }
 
 .info-box h1{
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
 .info-box hr{
@@ -351,7 +353,7 @@ footer{
 }
 
 .info-box p{
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   margin: 0;
 }
@@ -360,42 +362,77 @@ footer{
    📱 تحسينات التجاوب (Media Queries) - الإضافة الجديدة
    ============================================================ */
 @media (max-width: 768px) {
-    /* تصغير الشعار والنصوص في الهيدر */
-    .logo-container { transform: scale(0.9); margin-bottom: 0; }
-    header h1 { font-size: 1.4rem; padding: 0 10px; }
-    .info-box h1 { font-size: 1.2rem; }
-    .info-box p { font-size: 0.9rem; }
+    /* 1. تصغير الشعار */
+    .logo-container {
+        transform: scale(0.9);
+        margin-bottom: 0px;
+    }
+
+    /* 2. ضبط الهيدر */
+    header h1 {
+        font-size: 1.4rem;
+        line-height: 1.4;
+    }
     
-    /* تحسين الشبكة في الهاتف */
+    .info-box h1 { font-size: 1.1rem; }
+    .info-box p { font-size: 0.9rem; }
+
+    /* 3. تحسين الشبكة (Grid) للموبايل */
     .services {
         padding: 20px 15px;
         gap: 15px;
+        grid-template-columns: repeat(2, 1fr); /* عمودين في الموبايل */
     }
     
-    /* جعل أزرار الدورة تأخذ عرض مناسب في الهاتف */
+    /* للشاشات الضيقة جداً، عمود واحد */
+    @media (max-width: 380px) {
+        .services { grid-template-columns: 1fr; }
+    }
+
+    .service {
+        padding: 20px 10px;
+        min-height: 140px;
+    }
+
+    .service i {
+        font-size: 40px;
+        margin-bottom: 10px;
+    }
+
+    .service h3 {
+        font-size: 0.95rem;
+    }
+
+    /* 4. تحسين النوافذ المنبثقة (الأزرار الداخلية) */
     .icon-btn {
-        width: 45%; /* زرين في الصف */
+        width: 46%; /* زرين بجانب بعض */
         height: 110px;
         font-size: 0.85rem;
     }
+    
+    .icon-container { gap: 10px; }
 
-    /* تحسين منطقة الرفع في الهاتف */
+    /* 5. تحسين منطقة الرفع */
     .upload-section {
-        flex-direction: column;
-        text-align: center;
+        flex-direction: column; /* ترتيب العناصر عمودياً */
+        padding: 10px;
     }
+    
     .upload-btn-real {
-        width: 100%;
+        width: 100%; /* الزر يأخذ كامل العرض */
         justify-content: center;
     }
     
-    /* شريط الأخبار */
-    .typewriter-text { font-size: 13px; }
-    
-    /* تعديل الفوتر */
-    footer { font-size: 0.75rem; padding: 12px; }
-}
+    #fileNameDisplay {
+        width: 100%;
+        text-align: center;
+        margin: 5px 0;
+    }
 
+    /* 6. تحسينات عامة */
+    footer { font-size: 0.75rem; padding: 12px; }
+    .typewriter-text { font-size: 13px; }
+}
 </style>
 </head>
 
@@ -423,7 +460,6 @@ footer{
   <p>إدارة ملفات التكوين البيداغوجي لأساتذة الطور الابتدائي - تخصص اللغة الإنجليزية</p>
 </div>
   
-
 </header>
 
 <section class="services">
@@ -443,7 +479,7 @@ footer{
 
 <script>
 /* ==========================================
-   🔡 كود الكتابة السلسة (شريط الأخبار)
+   🔡 كود الكتابة السلسة
    ========================================== */
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت | مصلحة التفتيش والتكوين";
 const typeWriterElement = document.getElementById('typewriter-text');
@@ -461,7 +497,6 @@ function typeWriter() {
 
 function startFadeOut() {
     typeWriterElement.classList.add('fade-out');
-    
     setTimeout(() => {
         typeWriterElement.innerHTML = "";
         charIndex = 0;
@@ -470,17 +505,13 @@ function startFadeOut() {
     }, 1000);
 }
 
-// تشغيل شريط الأخبار عند التحميل
-window.onload = function() {
-    typeWriter();
-};
+window.onload = function() { typeWriter(); };
 
 /* =========================================
-   ⚙️ إعدادات الرابط الخلفي (Google Apps Script)
+   ⚙️ الإعدادات والروابط
    ========================================= */
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
 
-// 🔹 الروابط
 const driveLinks = {
   didactique:{1:"https://drive.google.com/drive/folders/130Fogml3fCsFkUdpNIoaFXvAWfypD5v0?usp=drive_link",2:"",3:""},
   tasyire:{1:"https://drive.google.com/drive/folders/1vtK5JBS7vmskAU14Ph7-oWBG13o6IAB_?usp=drive_link",2:"",3:""},
@@ -507,16 +538,15 @@ function isCycleOpen(module,cycle){
   return moduleCycleStatus[module][cycle];
 }
 
-// 🔹 استخراج ID المجلد
 function getFolderId(url) {
     if (!url) return null;
     const match = url.match(/folders\/([a-zA-Z0-9-_]+)/);
     return match ? match[1] : null;
 }
 
-// 🔹 دالة مساعدة لتحديد عرض النافذة
-function getResponsiveWidth(desktopWidth) {
-    return window.innerWidth < 768 ? '95%' : desktopWidth;
+// 📱 دالة مساعدة لتحديد عرض النافذة حسب الجهاز
+function getSwalWidth(desktopSize) {
+    return window.innerWidth < 768 ? '95%' : desktopSize;
 }
 
 // 🔹 فتح نافذة اختيار الدورة
@@ -540,11 +570,11 @@ function openCourses(module){
     html: html,
     showConfirmButton: true,
     confirmButtonText: 'إغلاق',
-    width: getResponsiveWidth('600px') // تم استخدام دالة لتحديد العرض حسب الجهاز
+    width: getSwalWidth('600px') // استخدام العرض المتجاوب
   });
 }
 
-// 🔹 فتح مدير الملفات والاتصال بالسكريبت
+// 🔹 فتح مدير الملفات
 function openFileManager(module, cycle) {
   const url = driveLinks[module][cycle];
   const folderId = getFolderId(url);
@@ -554,16 +584,14 @@ function openFileManager(module, cycle) {
     return;
   }
 
-  // عرض تحميل
   Swal.fire({
     title: 'جاري جلب الملفات...',
     html: '<div class="spinner"></div>',
     showConfirmButton: false,
-    width: getResponsiveWidth('700px'),
+    width: getSwalWidth('700px'),
     allowOutsideClick: false
   });
 
-  // طلب قائمة الملفات
   fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
   .then(res => res.json())
   .then(data => {
@@ -576,7 +604,6 @@ function openFileManager(module, cycle) {
   .catch(err => Swal.fire('خطأ في الاتصال', 'تأكد من وضع رابط Apps Script الصحيح', 'error'));
 }
 
-// 🔹 رسم واجهة الملفات
 function renderFileManager(folderId, files, module, cycle) {
     let filesHtml = '';
     
@@ -609,7 +636,7 @@ function renderFileManager(folderId, files, module, cycle) {
             <button class="upload-btn-real" onclick="document.getElementById('fileInput').click()">
                 <i class="fa-solid fa-folder-open"></i> اختر ملفاً
             </button>
-            <span id="fileNameDisplay" style="font-size:12px; color:#666; margin:0 10px; display:block; width:100%; margin-top:5px;">لم يتم اختيار ملف</span>
+            <span id="fileNameDisplay" style="font-size:12px; color:#666; margin:0 10px; display:block; width:100%;">لم يتم اختيار ملف</span>
             <button class="upload-btn-real" style="background:#1E68E8" onclick="uploadFile('${folderId}', '${module}', ${cycle})">
                 <i class="fa-solid fa-cloud-arrow-up"></i> رفع الآن
             </button>
@@ -624,7 +651,7 @@ function renderFileManager(folderId, files, module, cycle) {
     Swal.fire({
         title: `ملفات الدورة ${cycle}`,
         html: htmlContent,
-        width: getResponsiveWidth('700px'), // جعل العرض مرن
+        width: getSwalWidth('700px'), // استخدام العرض المتجاوب
         showConfirmButton: true,
         confirmButtonText: 'إغلاق',
         showDenyButton: true,
@@ -635,7 +662,6 @@ function renderFileManager(folderId, files, module, cycle) {
     });
 }
 
-// 🔹 دالة حذف ملف
 function deleteFile(fileId, folderId, module, cycle) {
     Swal.fire({
         title: 'هل أنت متأكد؟',
@@ -646,7 +672,7 @@ function deleteFile(fileId, folderId, module, cycle) {
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'نعم، احذفه!',
         cancelButtonText: 'إلغاء',
-        width: getResponsiveWidth('500px')
+        width: getSwalWidth('500px')
     }).then((result) => {
         if (result.isConfirmed) {
             Swal.fire({title: 'جاري الحذف...', showConfirmButton: false});
@@ -665,7 +691,6 @@ function deleteFile(fileId, folderId, module, cycle) {
     });
 }
 
-// 🔹 دالة رفع ملف
 function uploadFile(folderId, module, cycle) {
     const fileInput = document.getElementById('fileInput');
     if(fileInput.files.length === 0) {
@@ -684,7 +709,7 @@ function uploadFile(folderId, module, cycle) {
             html: 'يرجى الانتظار <div class="spinner"></div>',
             showConfirmButton: false,
             allowOutsideClick: false,
-            width: getResponsiveWidth('500px')
+            width: getSwalWidth('500px')
         });
 
         const formData = new FormData();
