@@ -25,7 +25,7 @@ body{
    1. تنسيقات شريط الأخبار (جديد - أزرق داكن)
    =========================== */
 .news-ticker-container {
-    background-color: #0d47a1; /* أزرق داكن ليتناسب مع الثيم */
+    background-color: #0d47a1;
     color: #fff;
     width: 100%;
     height: 50px;
@@ -44,6 +44,10 @@ body{
     opacity: 1;
     transition: opacity 1s ease-in-out;
     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 95%;
 }
 
 .typewriter-text.fade-out {
@@ -107,7 +111,7 @@ body{
    تنسيقات الهيدر
    =========================== */
 header{
-  background:#1E68E8; /* اللون الأساسي الأزرق */
+  background:#1E68E8;
   color:#fff;
   padding:30px 15px;
   border-bottom-left-radius:25px;
@@ -131,18 +135,20 @@ header p {
    =========================== */
 .services{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:25px;
+  /* تم تعديل العرض الأدنى ليناسب الهواتف بشكل أفضل */
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:20px;
   padding:40px 20px;
   max-width:1000px;
   margin:auto;
   flex: 1;
+  width: 100%;
 }
 
 .service{
   background:#fff;
   border-radius:20px;
-  padding:30px 15px;
+  padding:25px 10px;
   cursor:pointer;
   box-shadow:0 4px 10px rgba(0,0,0,.1);
   transition:.4s;
@@ -150,36 +156,39 @@ header p {
 .service:hover{transform:translateY(-8px) scale(1.05);}
 
 .service i{
-  font-size:55px;
-  color:#1E68E8; /* لون الأيقونات أزرق */
+  font-size:45px; /* تصغير طفيف */
+  color:#1E68E8;
   margin-bottom:15px;
 }
 
 .service h3{
-  color:#0d47a1; /* لون النص أزرق داكن */
+  color:#0d47a1;
+  font-size: 1rem;
+  margin: 0;
 }
 
 /* --- تنسيقات النوافذ المنبثقة --- */
 .icon-container{
   display:flex;
   justify-content:center;
-  gap:20px;
+  gap:15px;
   flex-wrap:wrap;
 }
 
 .icon-btn{
-  width:130px;
-  height:130px;
+  width:120px; /* تصغير قليل ليتناسب مع شاشات الجوال */
+  height:120px;
   border-radius:20px;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   font-weight:700;
-  border:2px solid #1E68E8; /* حدود زرقاء */
+  border:2px solid #1E68E8;
   background:#f0f7ff;
   cursor:pointer;
   transition:.3s;
+  font-size: 0.9rem;
 }
 
 .icon-btn:hover:not(.closed){
@@ -194,9 +203,9 @@ header p {
 
 .badge{
   margin-top:6px;
-  padding:4px 10px;
+  padding:4px 8px;
   border-radius:12px;
-  font-size:13px;
+  font-size:12px;
 }
 .badge.open{background:#e3f2fd;color:#1565c0;}
 .badge.closed{background:#ffebee;color:#c62828;}
@@ -209,10 +218,14 @@ footer{
   border-top-left-radius:25px;
   border-top-right-radius:25px;
   margin-top: auto;
+  font-size: 0.9rem;
 }
 
 /* --- تنسيقات SweetAlert --- */
-.swal2-popup { border-radius: 20px !important; }
+.swal2-popup { 
+    border-radius: 20px !important; 
+    padding: 1.5em !important;
+}
 .swal2-confirm{ background:#939393 !important; color:#333 !important; border-radius:20px !important; padding:8px 35px !important; font-family:'Cairo',sans-serif; font-weight:600; border:none !important; margin: 5px !important; }
 .swal2-deny{ 
   background:#1E68E8 !important; 
@@ -279,6 +292,7 @@ footer{
   display: flex; 
   align-items: center; 
   gap: 5px; 
+  flex-shrink: 0; /* منع الزر من الانكماش */
 }
 .delete-btn:hover { background: #c62828; color: #fff; }
 
@@ -311,6 +325,7 @@ footer{
 
 .info-box{
   max-width: 850px;
+  width: 95%; /* لضمان عدم الخروج عن الشاشة في الهاتف */
   margin: 20px auto;
   padding: 25px 20px;
   border: 3px solid rgba(255,255,255,0.8);
@@ -341,6 +356,45 @@ footer{
   margin: 0;
 }
 
+/* ============================================================
+   📱 تحسينات التجاوب (Media Queries) - الإضافة الجديدة
+   ============================================================ */
+@media (max-width: 768px) {
+    /* تصغير الشعار والنصوص في الهيدر */
+    .logo-container { transform: scale(0.9); margin-bottom: 0; }
+    header h1 { font-size: 1.4rem; padding: 0 10px; }
+    .info-box h1 { font-size: 1.2rem; }
+    .info-box p { font-size: 0.9rem; }
+    
+    /* تحسين الشبكة في الهاتف */
+    .services {
+        padding: 20px 15px;
+        gap: 15px;
+    }
+    
+    /* جعل أزرار الدورة تأخذ عرض مناسب في الهاتف */
+    .icon-btn {
+        width: 45%; /* زرين في الصف */
+        height: 110px;
+        font-size: 0.85rem;
+    }
+
+    /* تحسين منطقة الرفع في الهاتف */
+    .upload-section {
+        flex-direction: column;
+        text-align: center;
+    }
+    .upload-btn-real {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* شريط الأخبار */
+    .typewriter-text { font-size: 13px; }
+    
+    /* تعديل الفوتر */
+    footer { font-size: 0.75rem; padding: 12px; }
+}
 
 </style>
 </head>
@@ -424,50 +478,20 @@ window.onload = function() {
 /* =========================================
    ⚙️ إعدادات الرابط الخلفي (Google Apps Script)
    ========================================= */
-// 🔴 ضع رابط Apps Script الذي أنشأته هنا بين علامتي التنصيص
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
 
-// 🔹 الروابط (نفس الروابط الأصلية)
+// 🔹 الروابط
 const driveLinks = {
-    didactique:{1:"https://drive.google.com/drive/folders/15IxfJWDEw9C_yfRIIs5ylxU0ZGGZAVNE?usp=sharing",
-              2:"https://drive.google.com/drive/folders/1wfVk0Ht1r7EmNvlZYLfDQTeBCMGNZ3uP?usp=sharing",
-              3:"https://drive.google.com/drive/folders/1afNDsS7pwzY4IogL8j71VZFhSd8jQy3J?usp=sharing"},
-
-  tasyire:{1:"https://drive.google.com/drive/folders/1Cer2vf6CPlIYkqEWTuJQKeL0WKDaJIQA?usp=sharing",
-           2:"https://drive.google.com/drive/folders/1DMXEzhmW5qeDcCIkinHUu3sODS8GMuBw?usp=sharing",
-           3:"https://drive.google.com/drive/folders/1eHZK_AhNE1B3ClVKoAFI86FD3_IjipBq?usp=sharing"},
-
-  takwime:{1:"https://drive.google.com/drive/folders/10Tlnvz31vm8vXbQwITeM9Sxa4fj3T4Tb?usp=sharing",
-           2:"https://drive.google.com/drive/folders/1kcYwa5kQulcZGl80WWSblyi2P91jj89m?usp=sharing",
-           3:"https://drive.google.com/drive/folders/1nYDQyVw1c5qsB5bP8PcIXQX_KzV7QkZo?usp=sharing"},
-
-  nidame:{1:"https://drive.google.com/drive/folders/1Xs-O0OFvtGrCz4wjxU526yPTio9HUrRK?usp=sharing",
-          2:"https://drive.google.com/drive/folders/1zK8MettMqztZ6o-LsTBy-agee71IrGxG?usp=sharing",
-          3:"https://drive.google.com/drive/folders/1xlq9QXHbFHay7_WFSV8NZpieuPXtSdxD?usp=sharing"},
-
-  akhlakiyate:{1:"https://drive.google.com/drive/folders/1559-c406V7wsBsz5fw5OHz9jaE8GDh9q?usp=sharing",
-               2:"https://drive.google.com/drive/folders/11D8Dah6NPwVvZvRqIPhkEL_Wrhi5ftiX?usp=sharing",
-               3:"https://drive.google.com/drive/folders/1ZjcVDA3ObBve2Qe5uueQRJQ71wqN5yb0?usp=sharing"},
-
-  handasa:{1:"https://drive.google.com/drive/folders/1YjZ1C8Sp_DRzJHIG-BFN-dcEwxjDnjqx?usp=sharing",
-           2:"https://drive.google.com/drive/folders/11RiHPfhRX_zlEm9PrtcyP_Leye_O9UJ-?usp=sharing",
-           3:"https://drive.google.com/drive/folders/1VoUtVMVLfTHQUWciWKjkTp-oAL51QnDc?usp=sharing"},
-
-  wasata:{1:"https://drive.google.com/drive/folders/1TTxKQWUxxvohYRWc0N8Uf23NlHWh7nVX?usp=sharing",
-          2:"https://drive.google.com/drive/folders/1jhnW1i8vzhOckIPalWsqoCu-FQ71jjyY?usp=sharing",
-          3:"https://drive.google.com/drive/folders/1wXOiwpl5XnfOXJDxaW7ok5vl0xvTHDmv?usp=sharing"},
-
-  tachri:{1:"https://drive.google.com/drive/folders/1ys2c2v5fkz7GFTzUOTxmbEAWRYvomb2x?usp=sharing",
-          2:"https://drive.google.com/drive/folders/1xmAHc9X9OcuhmSON3IZgrS1PHsKUVoR-?usp=sharing",
-          3:"https://drive.google.com/drive/folders/1i3Kt9n_3yCgzfRmRCZbxtEsjwOr2Affe?usp=sharing"},
-
-  psycho:{1:"https://drive.google.com/drive/folders/1yE5TM0JugX6H3kkwjK-YgmzA_JV42aCn?usp=sharing",
-          2:"https://drive.google.com/drive/folders/1RECS840svN61GkNpebbbJOUr-7LAXbGZ?usp=sharing",
-          3:"https://drive.google.com/drive/folders/1zUxWLKxP7FwXFg0Kuh8k6usOh1OaZVU5?usp=sharing"},
-
-  informatique:{1:"https://drive.google.com/drive/folders/1GePuEu6dyHMFg0jgywhyEzdpqKYivogZ?usp=sharing",
-                2:"https://drive.google.com/drive/folders/10gBH0FmkhboD-OriFMsKj1J-0sncr4KJ?usp=sharing",
-                3:"https://drive.google.com/drive/folders/1DSG0p81Tlv5qKUg2FGLy3MNWa1A8_jxw?usp=sharing"}
+  didactique:{1:"https://drive.google.com/drive/folders/130Fogml3fCsFkUdpNIoaFXvAWfypD5v0?usp=drive_link",2:"",3:""},
+  tasyire:{1:"https://drive.google.com/drive/folders/1vtK5JBS7vmskAU14Ph7-oWBG13o6IAB_?usp=drive_link",2:"",3:""},
+  takwime:{1:"https://drive.google.com/drive/folders/1AqQTkajWK1xePfqGEE9wOtkQsQHHibFj?usp=drive_link",2:"",3:""},
+  nidame:{1:"https://drive.google.com/drive/folders/16JwrdI4ziALQJ173zbhehNxkjczBPxEu?usp=drive_link",2:"",3:""},
+  akhlakiyate:{1:"https://drive.google.com/drive/folders/18KVnZ022tFOoqfTJXGrWtnRHrzMpOKZM?usp=drive_link",2:"",3:""},
+  handasa:{1:"https://drive.google.com/drive/folders/1tkikbCZ-fYmMroJ5yGZ3FxdHPEvq1wY4?usp=drive_link",2:"",3:""},
+  wasata:{1:"https://drive.google.com/drive/folders/1OqdCf5cHxJUIX1YIlZ1ZefxmEOzIkG_q?usp=drive_link",2:"",3:""},
+  tachri:{1:"https://drive.google.com/drive/folders/1M2DQRT3gaaoq3VL1NxKgCVxsx6i0Ll9u?usp=drive_link",2:"",3:""},
+  psycho:{1:"https://drive.google.com/drive/folders/1ZExuodHzj5LkWCkgajk67sS4S0IZdOjF?usp=drive_link",2:"",3:""},
+  informatique:{1:"https://drive.google.com/drive/folders/1MIBO4TNu1bJhaZ2S2lHtD5WYPESsge5u?usp=drive_link",2:"HHHH",3:"IIII"}
 };
 
 const globalCycleStatus = {1:true, 2:false, 3:false};
@@ -490,12 +514,16 @@ function getFolderId(url) {
     return match ? match[1] : null;
 }
 
+// 🔹 دالة مساعدة لتحديد عرض النافذة
+function getResponsiveWidth(desktopWidth) {
+    return window.innerWidth < 768 ? '95%' : desktopWidth;
+}
+
 // 🔹 فتح نافذة اختيار الدورة
 function openCourses(module){
   let html='<div class="icon-container">';
   for(let i=1;i<=3;i++){
     const open=isCycleOpen(module,i);
-    // عند الضغط يتم استدعاء مدير الملفات
     html+=`
       <div class="icon-btn ${open?'':'closed'}"
         onclick="${open?`openFileManager('${module}',${i})`:''}">
@@ -512,7 +540,7 @@ function openCourses(module){
     html: html,
     showConfirmButton: true,
     confirmButtonText: 'إغلاق',
-    width: '600px'
+    width: getResponsiveWidth('600px') // تم استخدام دالة لتحديد العرض حسب الجهاز
   });
 }
 
@@ -531,11 +559,11 @@ function openFileManager(module, cycle) {
     title: 'جاري جلب الملفات...',
     html: '<div class="spinner"></div>',
     showConfirmButton: false,
-    width: '700px',
+    width: getResponsiveWidth('700px'),
     allowOutsideClick: false
   });
 
-  // طلب قائمة الملفات من السكريبت
+  // طلب قائمة الملفات
   fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
   .then(res => res.json())
   .then(data => {
@@ -556,7 +584,6 @@ function renderFileManager(folderId, files, module, cycle) {
         filesHtml = '<div style="text-align:center; padding:20px; color:#777;">المجلد فارغ</div>';
     } else {
         files.forEach(file => {
-            // أيقونة الملف
             let iconClass = 'fa-file'; 
             if(file.type.includes('pdf')) iconClass = 'fa-file-pdf';
             else if(file.type.includes('image')) iconClass = 'fa-file-image';
@@ -582,7 +609,7 @@ function renderFileManager(folderId, files, module, cycle) {
             <button class="upload-btn-real" onclick="document.getElementById('fileInput').click()">
                 <i class="fa-solid fa-folder-open"></i> اختر ملفاً
             </button>
-            <span id="fileNameDisplay" style="font-size:12px; color:#666; margin:0 10px;">لم يتم اختيار ملف</span>
+            <span id="fileNameDisplay" style="font-size:12px; color:#666; margin:0 10px; display:block; width:100%; margin-top:5px;">لم يتم اختيار ملف</span>
             <button class="upload-btn-real" style="background:#1E68E8" onclick="uploadFile('${folderId}', '${module}', ${cycle})">
                 <i class="fa-solid fa-cloud-arrow-up"></i> رفع الآن
             </button>
@@ -597,7 +624,7 @@ function renderFileManager(folderId, files, module, cycle) {
     Swal.fire({
         title: `ملفات الدورة ${cycle}`,
         html: htmlContent,
-        width: '700px',
+        width: getResponsiveWidth('700px'), // جعل العرض مرن
         showConfirmButton: true,
         confirmButtonText: 'إغلاق',
         showDenyButton: true,
@@ -618,7 +645,8 @@ function deleteFile(fileId, folderId, module, cycle) {
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
         confirmButtonText: 'نعم، احذفه!',
-        cancelButtonText: 'إلغاء'
+        cancelButtonText: 'إلغاء',
+        width: getResponsiveWidth('500px')
     }).then((result) => {
         if (result.isConfirmed) {
             Swal.fire({title: 'جاري الحذف...', showConfirmButton: false});
@@ -655,7 +683,8 @@ function uploadFile(folderId, module, cycle) {
             title: 'جاري الرفع...',
             html: 'يرجى الانتظار <div class="spinner"></div>',
             showConfirmButton: false,
-            allowOutsideClick: false
+            allowOutsideClick: false,
+            width: getResponsiveWidth('500px')
         });
 
         const formData = new FormData();
