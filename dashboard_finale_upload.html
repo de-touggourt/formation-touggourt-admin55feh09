@@ -10,18 +10,17 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-/* 1. تنسيقات الجسم - خلفية زرقاء فاتحة */
-/* إضافة: ضبط حساب الأبعاد لجميع العناصر */
+/* 1. تنسيقات الجسم العامة */
 * {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent; /* إزالة لون النقر الافتراضي في الموبايل */
+    box-sizing: border-box; /* حساب الأبعاد بشكل صحيح */
+    -webkit-tap-highlight-color: transparent; /* إزالة لون النقر الافتراضي */
 }
 
-body{
-  font-family:'Cairo',sans-serif;
-  margin:0;
-  background:linear-gradient(135deg,#e3f2fd,#bbdefb);
-  text-align:center;
+body {
+  font-family: 'Cairo', sans-serif;
+  margin: 0;
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  text-align: center;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -29,7 +28,7 @@ body{
 }
 
 /* ===========================
-   شريط الأخبار - أزرق داكن
+   شريط الأخبار
    =========================== */
 .news-ticker-container {
     background-color: #0d47a1;
@@ -51,32 +50,28 @@ body{
     opacity: 1;
     transition: opacity 1s ease-in-out;
     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    white-space: nowrap; /* منع النص من الالتفاف */
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 95%; /* ضمان عدم خروج النص في الموبايل */
+    max-width: 95%;
 }
 
 .typewriter-text.fade-out {
     opacity: 0;
 }
-/* =========================== */
 
 /* ===========================
    تنسيقات الشعار
    =========================== */
-
-/* حاوية الشعار */
 .logo-container {
   position: relative;
   display: inline-block;
   width: 160px;
   height: 160px;
   margin-bottom: 0px; 
-  transition: transform 0.3s ease; /* حركة سلسة عند التصغير */
+  transition: transform 0.3s ease;
 }
 
-/* صورة الشعار */
 .logo-container img {
   width: 130px;
   height: 130px;
@@ -93,7 +88,6 @@ body{
   animation: pulseLogo 2.5s ease-in-out infinite;
 }
 
-/* الإطار الدائري المتقطع */
 .logo-ring {
   position: absolute;
   top: 50%;
@@ -103,8 +97,6 @@ body{
   border-radius: 50%;
   border: 3px dashed #fff; 
   background: transparent;
-  mask: none;
-  -webkit-mask: none;
   transform: translate(-50%, -50%);
   animation: rotateRing 10s linear infinite;
   z-index: 1;
@@ -119,176 +111,202 @@ body{
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
   50% { transform: translate(-50%, -50%) scale(1.05); }
 }
-/* =========================== */
 
-
-header{
-  background:#1E68E8; 
-  color:#fff;
-  padding:30px 15px;
-  border-bottom-left-radius:25px;
-  border-bottom-right-radius:25px;
-  box-shadow:0 4px 10px rgba(0,0,0,.2);
+/* ===========================
+   الهيدر
+   =========================== */
+header {
+  background: #1E68E8;
+  color: #fff;
+  padding: 30px 15px;
+  border-bottom-left-radius: 25px;
+  border-bottom-right-radius: 25px;
+  box-shadow: 0 4px 10px rgba(0,0,0,.2);
 }
 
 header h1 {
     margin-top: 5px;
     margin-bottom: 10px;
-    font-size: 1.8rem; /* حجم افتراضي */
+    font-size: 1.8rem;
     padding: 0 10px;
 }
 
-.services{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:25px;
-  padding:40px 20px;
-  max-width:1000px;
-  margin:auto;
+/* ===========================
+   قائمة الخدمات (المراكز)
+   =========================== */
+.services {
+  display: grid;
+  /* سطح المكتب: أعمدة مرنة */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 25px;
+  padding: 40px 20px;
+  max-width: 1000px;
+  margin: auto;
   justify-content: center;
   flex: 1;
   width: 100%;
-  box-sizing: border-box;
 }
 
-.service{
-  background:#fff;
-  border-radius:20px;
-  padding:30px 15px;
-  cursor:pointer;
-  box-shadow:0 4px 10px rgba(0,0,0,.1);
-  transition:.4s;
+.service {
+  background: #fff;
+  border-radius: 20px;
+  padding: 30px 15px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,.1);
+  transition: .4s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
-.service:hover{transform:translateY(-8px) scale(1.05);}
-.service:active{transform:scale(0.98);} /* تأثير الضغط للموبايل */
 
-.service i{
-  font-size:55px;
-  color:#1E68E8; 
-  margin-bottom:15px;
+.service:hover { transform: translateY(-8px) scale(1.05); }
+.service:active { transform: scale(0.98); }
+
+.service i {
+  font-size: 55px;
+  color: #1E68E8;
+  margin-bottom: 15px;
 }
 
-.service h3{
-  color:#1557c0; 
+.service h3 {
+  color: #1557c0;
   font-size: 1.1rem;
   margin: 0;
+  line-height: 1.7;
 }
 
-.icon-container{
-  display:flex;
-  justify-content:center;
-  gap:20px;
-  flex-wrap:wrap;
-  width: 100%;
+/* =========================================
+   ✨ تحسينات النوافذ المنبثقة (New Popups)
+   ========================================= */
+
+/* تخصيص نافذة SweetAlert */
+.swal2-popup {
+    border-radius: 25px !important;
+    padding: 25px 20px !important;
+    border: 1px solid #e3f2fd;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15) !important;
 }
 
-.icon-btn{
-  width:140px;
-  height:140px;
-  border-radius:20px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  font-weight:700;
-  border:2px solid #1E68E8; 
-  background:#f0f7ff; 
-  cursor:pointer;
-  transition:.3s;
-  text-align: center;
-  padding: 10px;
-  font-size: 0.95rem;
+/* عنوان النافذة */
+.swal2-title {
+    color: #1E68E8 !important;
+    font-size: 1.4rem !important;
+    margin-bottom: 20px !important;
+    border-bottom: 2px dashed #e3f2fd;
+    padding-bottom: 15px;
+}
+
+/* شبكة الأزرار داخل النافذة */
+.icon-container {
+    display: grid;
+    /* تنظيم تلقائي حسب المساحة */
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+    gap: 15px;
+    width: 100%;
+    padding: 5px;
+}
+
+/* تنسيق الأزرار */
+.icon-btn {
+    width: 100%;
+    height: 130px;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #444;
+    background: #ffffff;
+    border: 1px solid #e8f0fe;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .icon-btn i {
-    font-size: 30px;
-    margin-bottom: 10px;
-    color: #1E68E8; 
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #1E68E8;
+    transition: transform 0.3s ease;
 }
 
+/* تأثيرات التحويم */
 .icon-btn:hover, .icon-btn:active {
-  background:#1E68E8; 
-  color:#fff;
+    background: #1E68E8;
+    color: #fff;
+    border-color: #1E68E8;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(30, 104, 232, 0.25);
 }
+
 .icon-btn:hover i, .icon-btn:active i {
     color: #fff;
+    transform: scale(1.1);
 }
 
-footer{
-  background:#1E68E8; 
-  color:#fff;
-  padding:15px;
-  border-top-left-radius:25px;
-  border-top-right-radius:25px;
+/* أزرار الإغلاق والعودة */
+.swal2-confirm {
+  background: #939393 !important;
+  color: #333 !important;
+  border-radius: 20px !important;
+  padding: 10px 30px !important;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 600;
+  box-shadow: none !important;
+  margin: 5px !important;
+}
+
+.swal2-deny {
+    background: #1E68E8 !important;
+    color: #fff !important;
+    border-radius: 20px !important;
+    padding: 10px 30px !important;
+    font-family: 'Cairo', sans-serif;
+    margin: 5px !important;
+    box-shadow: none !important;
+}
+
+/* الفوتر */
+footer {
+  background: #1E68E8;
+  color: #fff;
+  padding: 15px;
+  border-top-left-radius: 25px;
+  border-top-right-radius: 25px;
   width: 100%;
   margin-top: auto;
   position: relative;
   font-size: 0.9rem;
 }
 
-/* تنسيقات SweetAlert */
-.swal2-popup {
-    border-radius: 20px !important;
-    padding: 1.5em !important;
-}
-
-.swal2-confirm{
-  background:#939393 !important;
-  color:#333 !important;
-  border-radius:20px !important;
-  padding:8px 35px !important;
-  font-family:'Cairo',sans-serif;
-  font-weight:600;
-  box-shadow:0 2px 6px rgba(0,0,0,.15);
-  margin: 5px !important;
-}
-
-.swal2-deny {
-    background: #1E68E8 !important; 
-    color: #fff !important;
-    border-radius: 20px !important;
-    padding: 8px 35px !important;
-    font-family: 'Cairo', sans-serif;
-    margin: 5px !important;
-}
-
-.swal2-confirm:hover{
-  background:#d6d6d6 !important;
-}
-
-h3{
-  line-height:1.7;
-}
-
 /* ============================================================
-   📱 تحسينات التجاوب (Media Queries) - الإضافة الجديدة
+   📱 تحسينات التجاوب (Media Queries)
    ============================================================ */
 @media (max-width: 768px) {
     /* 1. تصغير الشعار */
     .logo-container {
-        transform: scale(0.85); /* تصغير بنسبة بسيطة */
+        transform: scale(0.85);
         margin-bottom: 0px;
     }
 
-    /* 2. ضبط حجم خط العنوان الرئيسي */
+    /* 2. ضبط العنوان */
     header h1 {
         font-size: 1.4rem;
         line-height: 1.4;
     }
 
-    /* 3. تحسين الشبكة (Grid) للموبايل */
+    /* 3. الخدمات: عمود واحد في الموبايل */
     .services {
-        grid-template-columns: 1fr; /* عمود واحد في الموبايل */
+        grid-template-columns: 1fr;
         padding: 20px 15px;
         gap: 15px;
     }
 
     .service {
-        flex-direction: row; /* الأيقونة بجانب النص في الموبايل */
+        flex-direction: row; /* الأيقونة بجانب النص */
         text-align: right;
         padding: 20px;
         gap: 15px;
@@ -308,36 +326,36 @@ h3{
         text-align: right;
     }
 
-    /* 4. إجبار نافذة SweetAlert على التجاوب (تجاوز JS) */
+    /* 4. إجبار النافذة على العرض الكامل تقريباً */
     .swal2-popup {
-        width: 95% !important; /* يأخذ 95% من عرض الهاتف */
-        min-width: unset !important;
-    }
-
-    /* 5. تحسين أزرار النافذة المنبثقة */
-    .icon-btn {
-        width: 46%; /* زرين في كل صف */
-        height: 120px;
-        font-size: 0.85rem;
+        width: 92% !important;
+        padding: 20px 15px !important;
     }
     
+    .swal2-title {
+        font-size: 1.1rem !important;
+        margin-bottom: 15px !important;
+    }
+
+    /* 5. شبكة الأزرار: زرين في كل صف */
     .icon-container {
-        gap: 10px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .icon-btn {
+        height: 115px;
+        font-size: 0.8rem;
     }
     
     .icon-btn i {
         font-size: 26px;
+        margin-bottom: 8px;
     }
 
-    /* 6. شريط الأخبار */
-    .typewriter-text {
-        font-size: 14px;
-    }
-    
-    footer {
-        font-size: 0.8rem;
-        padding: 12px;
-    }
+    /* 6. تحسينات عامة */
+    .typewriter-text { font-size: 14px; }
+    footer { font-size: 0.8rem; padding: 12px; }
 }
 </style>
 </head>
@@ -410,7 +428,6 @@ function typeWriter() {
 
 function startFadeOut() {
     typeWriterElement.classList.add('fade-out');
-    
     setTimeout(() => {
         typeWriterElement.innerHTML = "";
         charIndex = 0;
@@ -419,9 +436,7 @@ function startFadeOut() {
     }, 1000);
 }
 
-window.onload = function() {
-    typeWriter();
-};
+window.onload = function() { typeWriter(); };
 
 // ==========================================
 // 🔗 قاعدة بيانات الروابط والوظائف الأخرى
@@ -514,7 +529,7 @@ function openCenter(centerId) {
     confirmButtonText: 'إغلاق',
     confirmButtonColor: '#e0e0e0',
     showCloseButton: false,
-    width: '600px'
+    width: '600px' // CSS يطغى على هذا في الهاتف
   });
 }
 
@@ -566,7 +581,7 @@ function openSubMenu(level, parentId) {
         confirmButtonColor: '#e0e0e0',
         showDenyButton: true,
         denyButtonText: 'عودة للخلف',
-        denyButtonColor: '#1E68E8', 
+        denyButtonColor: '#1E68E8',
         showCloseButton: false,
         width: '600px'
     }).then((result) => {
@@ -595,7 +610,7 @@ function openLink(centerId, type, level = null) {
             icon: 'info',
             title: 'قريباً',
             text: 'سيتم إضافة الرابط قريباً',
-            confirmButtonColor: '#1E68E8' 
+            confirmButtonColor: '#1E68E8'
         });
     }
 }
