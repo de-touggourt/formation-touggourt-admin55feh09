@@ -10,26 +10,24 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-/* 1. تنسيقات الجسم العامة */
+/* 1. تنسيقات الجسم */
 * {
-    box-sizing: border-box; /* حساب الأبعاد بشكل صحيح */
-    -webkit-tap-highlight-color: transparent; /* إزالة لون النقر الافتراضي */
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
-body {
-  font-family: 'Cairo', sans-serif;
-  margin: 0;
-  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-  text-align: center;
+body{
+  font-family:'Cairo',sans-serif;
+  margin:0;
+  background:linear-gradient(135deg,#e3f2fd,#bbdefb);
+  text-align:center;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
 }
 
-/* ===========================
-   شريط الأخبار
-   =========================== */
+/* شريط الأخبار */
 .news-ticker-container {
     background-color: #0d47a1;
     color: #fff;
@@ -56,13 +54,9 @@ body {
     max-width: 95%;
 }
 
-.typewriter-text.fade-out {
-    opacity: 0;
-}
+.typewriter-text.fade-out { opacity: 0; }
 
-/* ===========================
-   تنسيقات الشعار
-   =========================== */
+/* الشعار */
 .logo-container {
   position: relative;
   display: inline-block;
@@ -112,16 +106,14 @@ body {
   50% { transform: translate(-50%, -50%) scale(1.05); }
 }
 
-/* ===========================
-   الهيدر
-   =========================== */
-header {
-  background: #1E68E8;
-  color: #fff;
-  padding: 30px 15px;
-  border-bottom-left-radius: 25px;
-  border-bottom-right-radius: 25px;
-  box-shadow: 0 4px 10px rgba(0,0,0,.2);
+/* الهيدر */
+header{
+  background:#1E68E8;
+  color:#fff;
+  padding:30px 15px;
+  border-bottom-left-radius:25px;
+  border-bottom-right-radius:25px;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
 }
 
 header h1 {
@@ -131,131 +123,114 @@ header h1 {
     padding: 0 10px;
 }
 
-/* ===========================
-   قائمة الخدمات (المراكز)
-   =========================== */
-.services {
-  display: grid;
-  /* سطح المكتب: أعمدة مرنة */
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 25px;
-  padding: 40px 20px;
-  max-width: 1000px;
-  margin: auto;
+/* الخدمات */
+.services{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:25px;
+  padding:40px 20px;
+  max-width:1000px;
+  margin:auto;
   justify-content: center;
   flex: 1;
   width: 100%;
 }
 
-.service {
-  background: #fff;
-  border-radius: 20px;
-  padding: 30px 15px;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0,0,0,.1);
-  transition: .4s;
+.service{
+  background:#fff;
+  border-radius:20px;
+  padding:30px 15px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.1);
+  transition:.4s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
+.service:hover{transform:translateY(-8px) scale(1.05);}
+.service:active{transform:scale(0.98);}
 
-.service:hover { transform: translateY(-8px) scale(1.05); }
-.service:active { transform: scale(0.98); }
-
-.service i {
-  font-size: 55px;
-  color: #1E68E8;
-  margin-bottom: 15px;
+.service i{
+  font-size:55px;
+  color:#1E68E8;
+  margin-bottom:15px;
 }
 
-.service h3 {
-  color: #1557c0;
+.service h3{
+  color:#1557c0;
   font-size: 1.1rem;
   margin: 0;
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
-/* =========================================
-   ✨ تحسينات النوافذ المنبثقة (New Popups)
-   ========================================= */
+/* =======================================================
+   🎨 تحسين عرض النوافذ (Grid System) مع الحفاظ على التنسيق
+   ======================================================= */
 
-/* تخصيص نافذة SweetAlert */
-.swal2-popup {
-    border-radius: 25px !important;
-    padding: 25px 20px !important;
-    border: 1px solid #e3f2fd;
-    box-shadow: 0 15px 40px rgba(0,0,0,0.15) !important;
+/* 1. جعل الحاوية شبكة منتظمة بدلاً من فليكس عشوائي */
+.icon-container{
+  display: grid;
+  /* في الكمبيوتر: تتسع تلقائياً بحد أدنى 140 بكسل */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 15px;
+  width: 100%;
+  padding: 5px;
 }
 
-/* عنوان النافذة */
-.swal2-title {
-    color: #1E68E8 !important;
-    font-size: 1.4rem !important;
-    margin-bottom: 20px !important;
-    border-bottom: 2px dashed #e3f2fd;
-    padding-bottom: 15px;
-}
-
-/* شبكة الأزرار داخل النافذة */
-.icon-container {
-    display: grid;
-    /* تنظيم تلقائي حسب المساحة */
-    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-    gap: 15px;
-    width: 100%;
-    padding: 5px;
-}
-
-/* تنسيق الأزرار */
-.icon-btn {
-    width: 100%;
-    height: 130px;
-    border-radius: 18px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: #444;
-    background: #ffffff;
-    border: 1px solid #e8f0fe;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+/* 2. تحسين الزر ليملأ الخانة المخصصة له في الشبكة */
+.icon-btn{
+  width: 100%; /* العرض يملأ الخانة */
+  height: 140px; /* ارتفاع ثابت */
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  
+  /* --- نفس التنسيق الأصلي --- */
+  border: 2px solid #1E68E8; 
+  background: #f0f7ff; 
+  color: #000;
+  /* ----------------------- */
+  
+  cursor: pointer;
+  transition: .3s;
+  text-align: center;
+  padding: 10px;
+  font-size: 0.95rem;
 }
 
 .icon-btn i {
-    font-size: 32px;
-    margin-bottom: 12px;
+    font-size: 30px;
+    margin-bottom: 10px;
     color: #1E68E8;
-    transition: transform 0.3s ease;
 }
 
-/* تأثيرات التحويم */
+/* تأثير التحويم الأصلي */
 .icon-btn:hover, .icon-btn:active {
-    background: #1E68E8;
-    color: #fff;
-    border-color: #1E68E8;
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(30, 104, 232, 0.25);
+  background: #1E68E8;
+  color: #fff;
 }
-
 .icon-btn:hover i, .icon-btn:active i {
     color: #fff;
-    transform: scale(1.1);
 }
 
-/* أزرار الإغلاق والعودة */
-.swal2-confirm {
-  background: #939393 !important;
-  color: #333 !important;
-  border-radius: 20px !important;
-  padding: 10px 30px !important;
-  font-family: 'Cairo', sans-serif;
-  font-weight: 600;
-  box-shadow: none !important;
+/* تنسيقات SweetAlert الأصلية */
+.swal2-popup {
+    border-radius: 20px !important;
+    padding: 1.5em !important;
+}
+
+.swal2-confirm{
+  background:#939393 !important;
+  color:#333 !important;
+  border-radius:20px !important;
+  padding:8px 35px !important;
+  font-family:'Cairo',sans-serif;
+  font-weight:600;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);
   margin: 5px !important;
 }
 
@@ -263,19 +238,17 @@ header h1 {
     background: #1E68E8 !important;
     color: #fff !important;
     border-radius: 20px !important;
-    padding: 10px 30px !important;
+    padding: 8px 35px !important;
     font-family: 'Cairo', sans-serif;
     margin: 5px !important;
-    box-shadow: none !important;
 }
 
-/* الفوتر */
-footer {
-  background: #1E68E8;
-  color: #fff;
-  padding: 15px;
-  border-top-left-radius: 25px;
-  border-top-right-radius: 25px;
+footer{
+  background:#1E68E8;
+  color:#fff;
+  padding:15px;
+  border-top-left-radius:25px;
+  border-top-right-radius:25px;
   width: 100%;
   margin-top: auto;
   position: relative;
@@ -286,19 +259,10 @@ footer {
    📱 تحسينات التجاوب (Media Queries)
    ============================================================ */
 @media (max-width: 768px) {
-    /* 1. تصغير الشعار */
-    .logo-container {
-        transform: scale(0.85);
-        margin-bottom: 0px;
-    }
+    .logo-container { transform: scale(0.85); margin-bottom: 0px; }
+    header h1 { font-size: 1.4rem; line-height: 1.4; }
 
-    /* 2. ضبط العنوان */
-    header h1 {
-        font-size: 1.4rem;
-        line-height: 1.4;
-    }
-
-    /* 3. الخدمات: عمود واحد في الموبايل */
+    /* الخدمات: عمود واحد في الموبايل */
     .services {
         grid-template-columns: 1fr;
         padding: 20px 15px;
@@ -306,7 +270,7 @@ footer {
     }
 
     .service {
-        flex-direction: row; /* الأيقونة بجانب النص */
+        flex-direction: row;
         text-align: right;
         padding: 20px;
         gap: 15px;
@@ -314,46 +278,29 @@ footer {
         justify-content: flex-start;
     }
 
-    .service i {
-        font-size: 40px;
-        margin-bottom: 0;
-        min-width: 50px;
-        text-align: center;
-    }
+    .service i { font-size: 40px; margin-bottom: 0; min-width: 50px; text-align: center; }
+    .service h3 { font-size: 1rem; text-align: right; }
 
-    .service h3 {
-        font-size: 1rem;
-        text-align: right;
-    }
-
-    /* 4. إجبار النافذة على العرض الكامل تقريباً */
+    /* ضبط عرض النافذة في الموبايل */
     .swal2-popup {
-        width: 92% !important;
-        padding: 20px 15px !important;
-    }
-    
-    .swal2-title {
-        font-size: 1.1rem !important;
-        margin-bottom: 15px !important;
+        width: 95% !important; /* ملء الشاشة تقريباً */
+        padding: 15px !important;
     }
 
-    /* 5. شبكة الأزرار: زرين في كل صف */
+    /* تحسين عرض الأزرار في النافذة للموبايل */
     .icon-container {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+        /* إجبار ظهور عمودين متساويين في الموبايل */
+        grid-template-columns: repeat(2, 1fr); 
+        gap: 10px;
     }
 
     .icon-btn {
-        height: 115px;
-        font-size: 0.8rem;
+        height: 110px; /* تقليل الارتفاع قليلاً */
+        font-size: 0.85rem;
     }
     
-    .icon-btn i {
-        font-size: 26px;
-        margin-bottom: 8px;
-    }
+    .icon-btn i { font-size: 26px; }
 
-    /* 6. تحسينات عامة */
     .typewriter-text { font-size: 14px; }
     footer { font-size: 0.8rem; padding: 12px; }
 }
@@ -409,9 +356,7 @@ footer {
 <footer>© 2025 فضاء التكوين</footer>
 
 <script>
-// ==========================================
-// 🔡 كود الكتابة السلسة
-// ==========================================
+/* كود الكتابة السلسة */
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت | مصلحة التفتيش والتكوين";
 const typeWriterElement = document.getElementById('typewriter-text');
 let charIndex = 0;
@@ -438,9 +383,7 @@ function startFadeOut() {
 
 window.onload = function() { typeWriter(); };
 
-// ==========================================
-// 🔗 قاعدة بيانات الروابط والوظائف الأخرى
-// ==========================================
+/* الروابط */
 const centerLinks = {
     1: { 'arabic': 'kawakibi-arabic.html', 'french': 'kawakibi-french.html' },
     2: { 'english': 'dagaa_english_ap_import2.html', 'sport': 'dagaa_sport_ap_import2.html' },
@@ -455,6 +398,7 @@ const centerLinks = {
     }
 };
 
+/* دوال الفتح */
 function openCenter(centerId) {
   let html = '<div class="icon-container">';
   let popupTitle = '';
@@ -529,7 +473,7 @@ function openCenter(centerId) {
     confirmButtonText: 'إغلاق',
     confirmButtonColor: '#e0e0e0',
     showCloseButton: false,
-    width: '600px' // CSS يطغى على هذا في الهاتف
+    width: '600px'
   });
 }
 
