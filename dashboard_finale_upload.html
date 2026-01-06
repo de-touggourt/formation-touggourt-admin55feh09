@@ -478,7 +478,7 @@ footer{
 }
 
 /* للأجهزة اللوحية والشاشات الكبيرة */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (min-width: 800px) and (max-width: 1200px) {
     .services {
         grid-template-columns: repeat(2, 1fr);
         gap: 20px;
@@ -525,6 +525,18 @@ footer{
         min-height: 80px;
     }
 }
+
+
+/* ====== إصلاح عرض أيقونات مركز أحمد زبانة ولحسيني محمد فقط ====== */
+@media (min-width: 769px) {
+
+  .swal2-popup .icon-container {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+}
+
+
 </style>
 </head>
 
