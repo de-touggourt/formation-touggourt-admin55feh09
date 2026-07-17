@@ -1464,23 +1464,21 @@ function filterAttendanceTable() {
     renderAttendanceTable();
 }
 
-// ================= تغيير حالة الحضور وحفظها يدوياً (محدثة لتصفير الوقت) =================
+// ================= تغيير حالة الحضور وحفظها يدوياً =================
 async function changeRecordStatus(empId, newStatus, selectElement) {
-    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    const docId = `${INSPECTOR_CENTER.trim()}_${currentAttDate}`;
     
-    // تحديد الوقت: إذا اخترنا "غير محدد" نتركه فارغاً، وإلا نسجل الوقت الحالي بالثواني
     let timeString = '';
-    
     if (newStatus !== 'غير محدد') {
         const d = new Date();
         timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
     }
 
     try {
-        // إرسال التحديث الصريح للفايربيز: سيقوم بمسح الوقت القديم واستبداله بفراغ
+        // الحفظ الصحيح داخل مجلد records
         await db.collection('attendance_daily').doc(docId).set({
             records: {
-                [empId]: { status: newStatus, time: timeString }
+                [String(empId).trim()]: { status: newStatus, time: timeString }
             }
         }, { merge: true });
         

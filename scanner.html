@@ -237,10 +237,13 @@ async function onScanSuccess(decodedText, decodedResult) {
         let badgeClass = status === "حاضر" ? "badge-present" : "badge-late";
         let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
 
+       // تحديث قاعدة البيانات بالطريقة الصحيحة (كائن متداخل)
         await db.collection('attendance_daily').doc(docId).set({
             center: centerName,
             date: todayDate,
-            [`records.${trainee.empId}`]: { status: status, time: timeString }
+            records: {
+                [empId]: { status: status, time: timeString }
+            }
         }, { merge: true });
 
         Swal.fire({
