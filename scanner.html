@@ -214,12 +214,40 @@ async function onScanSuccess(decodedText, decodedResult) {
 
         const docId = `${centerName}_${todayDate}`;
         let attDoc = await db.collection('attendance_daily').doc(docId).get();
+        
         let sysMode = "closed"; 
+        let existingRecords = {}; // تخزين السجلات الحالية للتحقق منها
 
-        if (attDoc.exists && attDoc.data().systemMode) {
-            sysMode = attDoc.data().systemMode;
+        if (attDoc.exists) {
+            let data = attDoc.data();
+            if (data.systemMode) sysMode = data.systemMode;
+            if (data.records) existingRecords = data.records;
         }
 
+        // 🔴 التعديل الجديد: التحقق مما إذا كان المتكون قد مسح بطاقته مسبقاً
+        if (existingRecords[trainee.empId] && existingRecords[trainee.empId].time && existingRecords[trainee.empId].time !== '') {
+            let recStatus = existingRecords[trainee.empId].status;
+            let recTime = existingRecords[trainee.empId].time;
+            
+            Swal.fire({
+                icon: 'info',
+                title: 'مسجل مسبقاً!',
+                html: `
+                    <div style="line-height: 2; font-size:15px; text-align:right;">
+                        لقد تم تسجيل حضور <b>${trainee.name || '-'}</b> مسبقاً.<br>
+                        الوضعية الحالية: <span style="color:#0FBA50; font-weight:bold;">${recStatus}</span> على الساعة <span dir="ltr">${recTime}</span>
+                    </div>
+                `,
+                confirmButtonText: 'استمرار المسح',
+                confirmButtonColor: '#203a43',
+                timer: 3500,
+                timerProgressBar: true
+            }).then(() => { isScanningPaused = false; });
+            
+            return; // 🔴 إيقاف تنفيذ الكود هنا حتى لا يتم تحديث الوقت في قاعدة البيانات
+        }
+
+        // التحقق من حالة النظام (مفتوح / مغلق)
         if (sysMode === "closed") {
             Swal.fire({
                 icon: 'error',
@@ -231,22 +259,23 @@ async function onScanSuccess(decodedText, decodedResult) {
             return;
         }
 
+        // إذا لم يكن مسجلاً، نقوم بتسجيله الآن
         const d = new Date();
         const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
         let status = sysMode === "open" ? "حاضر" : "متأخر";
         let badgeClass = status === "حاضر" ? "badge-present" : "badge-late";
         let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
 
-       // تحديث قاعدة البيانات بالطريقة الصحيحة (كائن متداخل)
+        // تحديث قاعدة البيانات بالطريقة الصحيحة 
         await db.collection('attendance_daily').doc(docId).set({
             center: centerName,
             date: todayDate,
-            // 🔴 التصحيح هنا: استخدام trainee.empId
             records: {
                 [trainee.empId]: { status: status, time: timeString }
             }
         }, { merge: true });
 
+        // نافذة النجاح
         Swal.fire({
             title: 'تم التسجيل بنجاح!',
             html: `
