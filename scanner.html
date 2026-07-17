@@ -241,8 +241,9 @@ async function onScanSuccess(decodedText, decodedResult) {
         await db.collection('attendance_daily').doc(docId).set({
             center: centerName,
             date: todayDate,
+            // 🔴 التصحيح هنا: استخدام trainee.empId
             records: {
-                [empId]: { status: status, time: timeString }
+                [trainee.empId]: { status: status, time: timeString }
             }
         }, { merge: true });
 
