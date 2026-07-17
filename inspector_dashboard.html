@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة تحكم المفتش - فضاء التكوين</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  
+  <!-- استدعاء قاعدة البيانات المحلية -->
+  <script src="database.js"></script>
+  
+  <style>
+    * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+    body { margin: 0; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); color: #333; min-height: 100vh; display: flex; flex-direction: column; }
+    .top-nav { background: #102a43; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .top-nav h2 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; color: #62b0e8; }
+    .top-nav h2 span { color: #fff; font-size: 16px; background: #243b53; padding: 4px 12px; border-radius: 20px; margin-right: 10px; border: 1px solid #334e68;}
+    .logout-btn { background: #d90429; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+    .logout-btn:hover { background: #ef233c; }
+    .dashboard-container { padding: 20px; flex: 1; max-width: 100%; margin: 0 auto; width: 100%; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .stat-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; border-right: 5px solid #102a43; }
+    .stat-card.blue { border-right-color: #1E68E8; }
+    .stat-card.pink { border-right-color: #e91e63; }
+    .stat-info h3 { margin: 0; font-size: 14px; color: #777; }
+    .stat-info p { margin: 5px 0 0; font-size: 28px; font-weight: 700; color: #333; }
+    .stat-icon { font-size: 40px; color: #102a43; opacity: 0.8; }
+    .stat-card.blue .stat-icon { color: #1E68E8; }
+    .stat-card.pink .stat-icon { color: #e91e63; }
+    .filters-section { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+    .filters-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 2px dashed #eee; padding-bottom: 15px; flex-wrap: wrap; gap: 15px; }
+    .btn-print { background: #1E68E8; color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-family: 'Cairo'; font-size: 14px; transition: 0.3s; }
+    .btn-print:hover { background: #1557c0; transform: translateY(-2px); }
+    .btn-detailed-stats { background: linear-gradient(45deg, #ff9800, #ff5722); color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(255, 87, 34, 0.3); font-family: 'Cairo'; font-size: 14px; transition: 0.3s; animation: pulse 2s infinite; }
+    .btn-detailed-stats:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(255, 87, 34, 0.4); }
+    @keyframes pulse { 0% {box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4);} 70% {box-shadow: 0 0 0 10px rgba(255, 152, 0, 0);} 100% {box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);} }
+    .filter-group { flex: 1; min-width: 180px; display: flex; flex-direction: column; position: relative; }
+    .filter-group label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px; }
+    .filter-group select, .filter-group input { padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; outline: none; transition: 0.3s; }
+    .filter-group select:focus, .filter-group input:focus { border-color: #102a43; box-shadow: 0 0 5px rgba(16, 42, 67, 0.2); }
+    .multi-select-box { padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; background: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 42px; }
+    .multi-select-box:hover { border-color: #102a43; }
+    .multi-select-options { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #102a43; border-radius: 8px; z-index: 100; max-height: 250px; overflow-y: auto; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-top: 5px; padding: 5px; }
+    .multi-select-options label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 0; border-radius: 5px; }
+    .multi-select-options label:hover { background: #f0f4f8; }
+    .multi-select-options input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #102a43; }
+    .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+    thead { background: #102a43; color: white; }
+    th, td { padding: 12px 15px; text-align: right; border-bottom: 1px solid #eee; font-size: 14px; }
+    tbody tr:hover { background: #f8fbff; }
+    .action-btns { display: flex; gap: 5px; }
+    .btn-icon { width: 35px; height: 35px; border-radius: 8px; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-size: 16px;}
+    .btn-info { background: #17a2b8; } .btn-info:hover { background: #138496; }
+    .pagination-container { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; flex-wrap: wrap; gap: 10px; }
+    .pagination-info { font-weight: 600; color: #555; font-size: 14px; }
+    .pagination-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
+    .page-btn { background: #f0f4f8; color: #102a43; border: 1px solid #102a43; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-family: 'Cairo'; }
+    .page-btn:hover:not(:disabled) { background: #102a43; color: white; }
+    .page-btn.active { background: #102a43; color: white; }
+    .page-btn:disabled { background: #eee; color: #aaa; border-color: #ddd; cursor: not-allowed; }
+    #loader { display: flex; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; justify-content:center; align-items:center; flex-direction:column; }
+    .spinner { border: 5px solid #f3f3f3; border-top: 5px solid #102a43; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .adv-stats-container { text-align: right; direction: rtl; }
+    .adv-stats-section { margin-bottom: 25px; }
+    .adv-stats-title { font-size: 16px; font-weight: 800; color: #102a43; border-bottom: 2px solid #62b0e8; padding-bottom: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+    .stats-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .s-card { background: #f8fbff; border: 1px solid #d9e2ec; border-radius: 10px; padding: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: 0.3s; }
+    .s-card:hover { border-color: #62b0e8; transform: translateY(-3px); box-shadow: 0 5px 15px rgba(16, 42, 67, 0.1); }
+    .s-card-title { font-size: 14px; font-weight: 700; color: #334e68; margin-bottom: 10px; text-align: center; border-bottom: 1px dashed #bcccdc; padding-bottom: 5px; }
+    .s-card-data { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+    .s-card-data.total { font-size: 15px; color: #102a43; font-weight: 800; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px; }
+    .c-male { color: #1E68E8; }
+    .c-female { color: #e91e63; }
+    @media (max-width: 900px) { .top-nav { flex-direction: column; gap: 15px; text-align: center; } .filters-section { flex-direction: column; align-items: stretch; } .filters-header { flex-direction: column; gap: 15px; } }
+ 
+/* ================= تنسيقات نظام الحضور ================= */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(16, 42, 67, 0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+.modal-content { background: #f0f4f8; width: 95%; height: 95%; border-radius: 15px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-header { background: #102a43; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.close-modal { background: #d90429; color: white; border: none; width: 35px; height: 35px; border-radius: 8px; cursor: pointer; font-size: 18px; transition: 0.3s; }
+.close-modal:hover { background: #ef233c; transform: scale(1.05); }
+
+.att-controls { background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-bottom: 2px solid #d9e2ec; }
+.att-date-picker { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #102a43; }
+.att-date-picker input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Cairo'; outline: none; }
+
+/* زر نظام الحضور (مفتوح / متأخر) */
+.system-toggle { display: flex; align-items: center; gap: 10px; background: #e8fbf0; padding: 8px 15px; border-radius: 30px; border: 2px solid #0FBA50; transition: 0.3s; cursor: pointer; user-select: none;}
+.system-toggle.is-late { background: #fff4e5; border-color: #ff9800; }
+.system-toggle .toggle-text { font-weight: bold; color: #102a43; }
+
+.att-stats { display: flex; gap: 10px; flex: 1; justify-content: flex-end; }
+.att-stat-box { padding: 8px 15px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; flex-direction: column; align-items: center; min-width: 100px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+.box-total { background: #102a43; color: white; }
+.box-present { background: #0FBA50; color: white; }
+.box-absent { background: #d90429; color: white; }
+.box-late { background: #ff9800; color: white; }
+
+.att-filters { padding: 15px; display: flex; gap: 15px; background: #fff; }
+.att-filters input, .att-filters select { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Cairo'; outline: none; flex: 1; }
+
+.att-table-container { flex: 1; overflow-y: auto; background: white; padding: 0 15px 15px 15px; }
+.att-table th { background: #334e68; position: sticky; top: 0; z-index: 10; }
+.att-select { padding: 6px; border-radius: 6px; font-family: 'Cairo'; font-weight: bold; outline: none; border: 1px solid #ccc; cursor: pointer; }
+.att-time { font-size: 12px; font-weight: bold; color: #555; direction: ltr; display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; margin-right: 5px;}
+
+/* ألوان السطور حسب الوضعية */
+.row-unspecified { background-color: #fff !important; } /* أبيض للحالة غير المحددة */
+.row-unspecified td { border-bottom: 1px solid #eee; }
+
+.row-absent { background-color: #ffeaea !important; } /* أحمر فاتح للغائب */
+.row-absent td { border-bottom: 1px solid #ffc6c6; }
+
+.row-present { background-color: #e8fbf0 !important; } /* أخضر فاتح للحاضر */
+.row-present td { border-bottom: 1px solid #c3f4d6; }
+
+.row-late { background-color: #fff8eb !important; } /* برتقالي فاتح للمتأخر */
+.row-late td { border-bottom: 1px solid #ffe0b2; }
+
+
+/* ألوان القائمة المنسدلة */
+.sel-absent { color: #d90429; }
+.sel-present { color: #0FBA50; }
+.sel-late { color: #ff9800; }
+
+/* لون القائمة المنسدلة لحالة غير محدد */
+.sel-unspecified { color: #777; font-weight: normal; }
+
+ </style>
+</head>
+<body>
+
+  <!-- شاشة التحميل -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h3 style="color: #102a43; margin-top: 15px;">جاري تحميل بيانات مركزك...</h3>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <div class="top-nav">
+    <h2><i class="fa-solid fa-user-tie"></i> فضاء التكوين <span id="headerCenterName">المركز...</span></h2>
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;">
+      <span id="welcomeName" style="font-weight:bold; font-size:14px; margin-left:15px; color:#62b0e8;"></span>
+      
+      <!-- زر إدارة الملفات الخاص بالمفتش -->
+      <button class="logout-btn" style="background: #1E68E8;" onclick="openFileManagerSelection()">
+        <i class="fa-solid fa-folder-open"></i> إدارة ملفات المقاييس
+      </button>
+
+      <button class="logout-btn" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    
+    <!-- البطاقات الإحصائية الرئيسية -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-info">
+          <h3>إجمالي أساتذة المركز</h3>
+          <p id="stat-total">0</p>
+        </div>
+        <i class="fa-solid fa-users stat-icon"></i>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-info">
+          <h3>الذكور</h3>
+          <p id="stat-male">0</p>
+        </div>
+        <i class="fa-solid fa-person stat-icon"></i>
+      </div>
+      <div class="stat-card pink">
+        <div class="stat-info">
+          <h3>الإناث</h3>
+          <p id="stat-female">0</p>
+        </div>
+        <i class="fa-solid fa-person-dress stat-icon"></i>
+      </div>
+    </div>
+
+    <!-- الفلاتر -->
+    <div class="filters-section">
+      <div class="filters-header">
+         <h3 style="margin: 0; color: #102a43; font-size: 16px;"><i class="fa-solid fa-filter" style="color: #102a43;"></i> أدوات التصفية والطباعة</h3>
+         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+             <button class="btn-detailed-stats" onclick="showDetailedStats()">
+                <i class="fa-solid fa-chart-pie"></i> إحصائيات دقيقة
+             </button>
+             
+             <!-- أزرار القوائم الثلاثة -->
+             <button class="btn-print" onclick="printFilteredList()">
+               <i class="fa-solid fa-print"></i> القائمة 1
+             </button>
+             <button class="btn-print" style="background: #17a2b8;" onclick="printFilteredList2()">
+               <i class="fa-solid fa-list"></i> القائمة 2
+             </button>
+             <button class="btn-print" style="background: #6c757d;" onclick="printFilteredList3()">
+               <i class="fa-solid fa-list-check"></i> القائمة 3
+             </button>
+
+             <!-- زر طباعة البطاقات -->
+             <button class="btn-print" style="background: #0FBA50;" onclick="printIDCards()">
+               <i class="fa-solid fa-id-badge"></i> طباعة البطاقات
+             </button>
+
+             <button class="btn-print" style="background: #e91e63;" onclick="openAttendanceModal()">
+               <i class="fa-solid fa-clipboard-user"></i> متابعة الحضور
+             </button>
+             
+             <span style="background: #e2e8f0; color: #334e68; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; border: 1px solid #cbd5e1;">
+               نتيجة الفلترة: <span id="stat-filtered" style="color:#d90429;">0</span>
+             </span>
+         </div>
+      </div>
+      
+      <div class="filter-group">
+        <label>بحث بالاسم أو الرقم</label>
+        <input type="text" id="searchInput" placeholder="ابحث هنا..." oninput="applyFilters()">
+      </div>
+      
+      <div class="filter-group">
+        <label>الدائرة</label>
+        <select id="filterDaira" onchange="applyFilters()">
+          <option value="الكل">الكل</option>
+          <option value="توقرت">توقرت</option>
+          <option value="تماسين">تماسين</option>
+          <option value="المقارين">المقارين</option>
+          <option value="الطيبات">الطيبات</option>
+          <option value="الحجيرة">الحجيرة</option>
+          <option value="البرمة">البرمة</option>
+        </select>
+      </div>
+
+      <div class="filter-group" id="multiSelectRankContainer">
+        <label>الرتبة / الطور</label>
+        <div class="multi-select-box" onclick="toggleRankMenu()">
+           <span id="rank-selected-text">الكل</span>
+           <i class="fa-solid fa-chevron-down" style="color:#102a43;"></i>
+        </div>
+        <div class="multi-select-options" id="rankOptions"></div>
+      </div>
+
+      <div class="filter-group" id="multiSelectContainer">
+        <label>مادة التخصص (حسب الرتبة)</label>
+        <div class="multi-select-box" onclick="toggleSpecMenu()">
+           <span id="spec-selected-text">الكل</span>
+           <i class="fa-solid fa-chevron-down" style="color:#102a43;"></i>
+        </div>
+        <div class="multi-select-options" id="specOptions"></div>
+      </div>
+    </div>
+
+    <!-- الجدول -->
+    <div class="table-responsive" id="table-section">
+      <table id="traineesTable">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th>الرقم الوظيفي</th>
+            <th>الاسم واللقب</th>
+            <th>تاريخ الميلاد</th>
+            <th>الدائرة</th>
+            <th>العنوان</th>
+            <th>رقم الهاتف</th>
+            <th>الرتبة / مكان العمل</th>
+            <th>مادة التخصص</th>
+            <th style="width: 80px; text-align:center;">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- البيانات ستظهر هنا -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- نظام الصفحات -->
+    <div id="pagination-controls" class="pagination-container" style="display: none;"></div>
+
+  </div>
+
+<!-- نافذة متابعة الحضور -->
+  <div class="modal-overlay" id="attendanceModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-clipboard-user"></i> سجل الحضور والغياب اليومي</h2>
+        <button class="close-modal" onclick="closeAttendanceModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="att-controls">
+        <div class="att-date-picker">
+          <label>تاريخ السجل:</label>
+          <input type="date" id="attDate" onchange="loadAttendanceData()">
+        </div>
+
+        <div class="system-toggle" id="sysToggle" onclick="toggleAttendanceSystem()">
+          <!-- أزرار التحكم في حالة النظام (حاضر / متأخر / غلق نهائي) -->
+        <div style="display: flex; gap: 8px; align-items: center; background: #fff; padding: 5px 10px; border-radius: 10px; border: 1px solid #ccc;">
+            <button id="btnSysOpen" class="page-btn" style="background:#0FBA50; color:white;" onclick="changeSystemMode('open')">فتح (حاضر)</button>
+            <button id="btnSysLate" class="page-btn" onclick="changeSystemMode('late')">فتح (متأخر)</button>
+            <button id="btnSysClosed" class="page-btn" style="background:#d90429; color:white;" onclick="changeSystemMode('closed')"><i class="fa-solid fa-lock"></i> غلق النظام</button>
+        </div>
+
+        <!-- زر الانتقال لصفحة الإحصاء الشامل -->
+        <button class="btn-print" style="background: #34495e;" onclick="window.open('tracking.html', '_blank')">
+          <i class="fa-solid fa-chart-line"></i> الإحصاء الشامل
+        </button>
+        </div>
+
+        <div class="att-stats">
+          <div class="att-stat-box box-total">الإجمالي<span id="st-total">0</span></div>
+          <div class="att-stat-box box-present">حاضر<span id="st-present">0 (0%)</span></div>
+          <div class="att-stat-box box-late">متأخر<span id="st-late">0 (0%)</span></div>
+          <div class="att-stat-box box-absent">غائب<span id="st-absent">0 (0%)</span></div>
+        </div>
+      </div>
+
+    <div class="att-filters" style="flex-wrap: wrap;">
+        <input type="text" id="attSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="filterAttendanceTable()">
+        
+        <select id="attGroupFilter" onchange="filterAttendanceTable()">
+          <option value="الكل">كل الأفواج</option>
+          <!-- سيتم إضافة الأفواج برمجياً -->
+        </select>
+        
+        <select id="attStatusFilter" onchange="filterAttendanceTable()">
+          <option value="الكل">عرض كل الحالات</option>
+          <option value="غير محدد">غير محدد (لم يُسجل)</option> <!-- الخيار الجديد -->
+          <option value="غائب">غائب</option>
+          <option value="حاضر">حاضر</option>
+          <option value="متأخر">متأخر</option>
+        </select>
+
+        <!-- أزرار الإدراج الشامل الجديدة -->
+        <button class="btn-print" style="background: #1E68E8;" onclick="markAllPresent()">
+          <i class="fa-solid fa-user-check"></i> إدراج الحضور
+        </button>
+        <button class="btn-print" style="background: #d90429;" onclick="markAllAbsent()">
+          <i class="fa-solid fa-user-xmark"></i> إدراج الغياب
+        </button>
+
+        <!-- أزرار الطباعة والماسح -->
+        <button class="btn-print" style="background: #17a2b8;" onclick="printAttendanceList()">
+          <i class="fa-solid fa-print"></i> طباعة القائمة
+        </button>
+        <button class="btn-print" style="background: #8e44ad;" onclick="window.open('scanner.html', '_blank')">
+          <i class="fa-solid fa-qrcode"></i> فتح ماسح الباركود
+        </button>
+      </div>
+
+      <div class="att-table-container">
+        <table id="attTable" class="att-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>الرقم الوظيفي</th>
+              <th>الاسم واللقب</th>
+              <th>الرتبة</th>
+              <th>مادة التخصص</th>
+              <th>الفوج</th> <!-- تمت إضافة الفوج هنا -->
+              <th>مكان العمل</th>
+              <th style="width: 200px; text-align: center;">الوضعية والتوقيت</th>
+            </tr>
+          </thead>
+          <tbody id="attTableBody">
+            <!-- سيتم توليد البيانات هنا -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ================= إعدادات Firebase المحدثة =================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61",
+  measurementId: "G-TTJT4LQ65L"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ================= استدعاء المركز بناءً على جلسة الدخول =================
+let INSPECTOR_CENTER = "";
+
+window.onload = function() {
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+    const adminName = sessionStorage.getItem("userName");
+
+    if (!isLoggedIn || !INSPECTOR_CENTER) {
+        window.location.href = "index_2.html";
+        return;
+    }
+
+    document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
+    document.getElementById("welcomeName").innerText = `مرحباً بك: ${adminName}`;
+
+    fetchData();
+};
+
+let centerData = []; 
+let filteredData = [];
+let currentPage = 1;
+const rowsPerPage = 10;
+
+function logout() {
+    sessionStorage.clear();
+    window.location.href = "index_2.html";
+}
+
+// ================= دالة فتح نافذة اختيار إدارة الملفات =================
+function openFileManagerSelection() {
+    window.location.href = "dashboard_finale_upload.html";
+}
+
+// ================= دوال الفلاتر المتعددة =================
+function toggleRankMenu() { const menu = document.getElementById("rankOptions"); menu.style.display = menu.style.display === "block" ? "none" : "block"; }
+function toggleSpecMenu() { const menu = document.getElementById("specOptions"); menu.style.display = menu.style.display === "block" ? "none" : "block"; }
+document.addEventListener('click', function(e) {
+    if(!e.target.closest('#multiSelectRankContainer')) document.getElementById("rankOptions").style.display = "none";
+    if(!e.target.closest('#multiSelectContainer')) document.getElementById("specOptions").style.display = "none";
+});
+
+function handleRankAll() { document.querySelectorAll('.rank-checkbox').forEach(cb => cb.checked = false); updateRankText(); updateDynamicSpecs(); }
+function handleRankChange() { const anyChecked = Array.from(document.querySelectorAll('.rank-checkbox')).some(cb => cb.checked); document.getElementById('rank-all').checked = !anyChecked; updateRankText(); updateDynamicSpecs(); }
+function updateRankText() {
+    if(document.getElementById('rank-all').checked) { document.getElementById('rank-selected-text').innerText = "الكل"; return; }
+    const checkedBoxes = document.querySelectorAll('.rank-checkbox:checked');
+    if(checkedBoxes.length === 1) { document.getElementById('rank-selected-text').innerText = checkedBoxes[0].value; } 
+    else { document.getElementById('rank-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`; }
+}
+
+function updateDynamicSpecs() {
+    let selectedRanks = [];
+    if(!document.getElementById('rank-all').checked) { selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value); }
+    let validSpecs = new Set();
+    centerData.forEach(item => {
+        if (selectedRanks.length === 0 || selectedRanks.includes(item.rank)) {
+            if (item.specialty && item.specialty.trim() !== "") validSpecs.add(item.specialty);
+        }
+    });
+    const specOptionsDiv = document.getElementById("specOptions");
+    specOptionsDiv.innerHTML = `<label><input type="checkbox" id="spec-all" value="الكل" checked onchange="handleSpecAll()"> الكل</label>`;
+    validSpecs.forEach(val => { specOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="spec-checkbox" value="${val}" onchange="handleSpecChange()"> ${val}</label>`); });
+    document.getElementById('spec-selected-text').innerText = "الكل";
+    applyFilters();
+}
+
+function handleSpecAll() { document.querySelectorAll('.spec-checkbox').forEach(cb => cb.checked = false); updateSpecText(); applyFilters(); }
+function handleSpecChange() { const anyChecked = Array.from(document.querySelectorAll('.spec-checkbox')).some(cb => cb.checked); document.getElementById('spec-all').checked = !anyChecked; updateSpecText(); applyFilters(); }
+function updateSpecText() {
+    if(document.getElementById('spec-all').checked) { document.getElementById('spec-selected-text').innerText = "الكل"; return; }
+    const checkedBoxes = document.querySelectorAll('.spec-checkbox:checked');
+    if(checkedBoxes.length === 1) { document.getElementById('spec-selected-text').innerText = checkedBoxes[0].value; } 
+    else { document.getElementById('spec-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`; }
+}
+
+// ================= جلب البيانات الخاصة بالمركز =================
+async function fetchData() {
+    try {
+        const snapshot = await db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).get();
+        centerData = [];
+        let ranks = new Set();
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            let item = {
+                docId: doc.id, empId: data.id || doc.id, name: data.name || "", gender: data.gnr || "",
+                dob: data.diz || "", rank: data.grade || "", specialty: data.maty || "", workplace: data.place || "",
+                address: data.adrs || "", daira: data.daira || "-", phone: data.phone || data.tel || "-", 
+                pob: data.pob || "-", center: data.center || "",
+                group: data.group || data.fawj || "-" 
+            };
+
+            if (item.dob && typeof item.dob.toDate === 'function') {
+                let d = item.dob.toDate(); let day = ("0" + d.getDate()).slice(-2); let month = ("0" + (d.getMonth() + 1)).slice(-2); let year = d.getFullYear();
+                item.dob = `${day}-${month}-${year}`; 
+            } else if (typeof item.dob === 'string') {
+                item.dob = item.dob.replace(/\//g, '-');
+            }
+
+            centerData.push(item);
+            if(item.rank) ranks.add(item.rank);
+        });
+
+        const rankOptionsDiv = document.getElementById("rankOptions");
+        rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
+        ranks.forEach(val => { 
+            if(val.trim() !== "") { rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); }
+        });
+
+        document.getElementById("loader").style.display = "none";
+        updateDynamicSpecs(); 
+
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        document.getElementById("loader").style.display = "none";
+        Swal.fire('خطأ', 'تعذر جلب البيانات من قاعدة البيانات', 'error');
+    }
+}
+
+// ================= الفلترة وعرض الجدول =================
+function applyFilters() {
+    const search = document.getElementById("searchInput").value.toLowerCase();
+    const filterDaira = document.getElementById("filterDaira").value;
+
+    let selectedRanks = []; if(!document.getElementById('rank-all').checked) { selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value); }
+    let selectedSpecs = []; if(!document.getElementById('spec-all').checked) { selectedSpecs = Array.from(document.querySelectorAll('.spec-checkbox:checked')).map(cb => cb.value); }
+
+    filteredData = centerData.filter(item => {
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchDaira = (filterDaira === "الكل") || (item.daira === filterDaira);
+        const matchRank = selectedRanks.length === 0 || selectedRanks.includes(item.rank);
+        const matchSpec = selectedSpecs.length === 0 || selectedSpecs.includes(item.specialty);
+        return matchSearch && matchDaira && matchRank && matchSpec;
+    });
+
+    currentPage = 1; 
+    updateStats();
+    renderTable();
+}
+
+function updateStats() {
+    document.getElementById("stat-total").innerText = centerData.length;
+    const males = centerData.filter(i => (i.gender || '').includes('ذكر') || (i.gender || '').toUpperCase() === 'M').length;
+    const females = centerData.filter(i => (i.gender || '').includes('نث') || (i.gender || '').toUpperCase() === 'F').length;
+    
+    document.getElementById("stat-male").innerText = males;
+    document.getElementById("stat-female").innerText = females;
+    document.getElementById("stat-filtered").innerText = filteredData.length;
+}
+
+function renderTable() {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+
+    if(filteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة</td></tr>`;
+        renderPagination(0);
+        return;
+    }
+
+    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    const paginatedData = filteredData.slice(start, end);
+
+    paginatedData.forEach((item, index) => {
+        const tr = document.createElement("tr");
+        const rankPlaceHtml = `
+            <div style="line-height: 1.4;">
+                <strong>${item.rank || '-'}</strong><br>
+                <span style="font-size: 12px; color: #555;">${item.workplace || '-'}</span>
+            </div>
+        `;
+        tr.innerHTML = `
+            <td style="text-align:center;">${start + index + 1}</td>
+            <td><strong>${item.empId || '-'}</strong></td>
+            <td>${item.name || '-'}</td>
+            <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
+            <td style="font-weight:600; color:#1E68E8;">${item.daira || '-'}</td>
+            <td>${item.address || '-'}</td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
+            <td>${rankPlaceHtml}</td>
+            <td style="font-weight:600; color:#555;">${item.specialty || '-'}</td>
+            <td style="text-align:center;">
+                <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="معلومات المتكون"><i class="fa-solid fa-eye"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    renderPagination(totalPages);
+}
+
+function viewInfo(docId) {
+    const item = centerData.find(d => d.docId === docId);
+    if(!item) return;
+    Swal.fire({
+        title: 'بطاقة معلومات الأستاذ',
+        html: `
+            <div style="text-align:right; line-height:2.2; font-size:15px; padding: 10px;">
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee;">
+                    <b>الرقم الوظيفي:</b> ${item.empId || '-'} <br>
+                    <b>الاسم واللقب:</b> ${item.name || '-'} <br>
+                    <b>الجنس:</b> ${item.gender || '-'} <br>
+                    <b>تاريخ الميلاد:</b> <span dir="ltr">${item.dob || '-'}</span> <br>
+                    <b>مكان الميلاد:</b> ${item.pob || '-'} <br>
+                    <b>الدائرة:</b> ${item.daira || '-'} <br>
+                    <b>العنوان:</b> ${item.address || '-'} <br>
+                    <b>رقم الهاتف:</b> <span dir="ltr">${item.phone || '-'}</span> <br>
+                    <hr style="border:0; border-top:1px dashed #ccc; margin: 10px 0;">
+                    <b>الرتبة:</b> ${item.rank || '-'} <br>
+                    <b>مكان العمل:</b> ${item.workplace || '-'} <br>
+                    <b>الفوج:</b> ${item.group || '-'} <br>
+                    <b>مادة التخصص:</b> ${item.specialty || '-'} <br>
+                </div>
+            </div>
+        `, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+    });
+}
+
+function showDetailedStats() {
+    if(filteredData.length === 0){ Swal.fire('تنبيه', 'لا توجد بيانات حالياً لعرض إحصائياتها.', 'warning'); return; }
+
+    let rankStats = {}; let specStats = {};
+    filteredData.forEach(item => {
+        let isMale = (item.gender || '').includes('ذكر') || (item.gender || '').toUpperCase() === 'M';
+        let r = item.rank || 'غير محدد';
+        if(!rankStats[r]) rankStats[r] = { m: 0, f: 0, t: 0 };
+        rankStats[r].t++; if(isMale) rankStats[r].m++; else rankStats[r].f++;
+        let s = item.specialty || 'غير محدد';
+        if(!specStats[s]) specStats[s] = { m: 0, f: 0, t: 0 };
+        specStats[s].t++; if(isMale) specStats[s].m++; else specStats[s].f++;
+    });
+
+    let rankHtml = '';
+    for (const [rName, data] of Object.entries(rankStats)) {
+        rankHtml += `<div class="s-card"><div class="s-card-title">${rName}</div><div class="s-card-data c-male"><span>الذكور:</span> <span>${data.m}</span></div><div class="s-card-data c-female"><span>الإناث:</span> <span>${data.f}</span></div><div class="s-card-data total"><span>الإجمالي:</span> <span>${data.t}</span></div></div>`;
+    }
+
+    let specHtml = '';
+    for (const [sName, data] of Object.entries(specStats)) {
+        specHtml += `<div class="s-card"><div class="s-card-title">${sName}</div><div class="s-card-data c-male"><span>الذكور:</span> <span>${data.m}</span></div><div class="s-card-data c-female"><span>الإناث:</span> <span>${data.f}</span></div><div class="s-card-data total"><span>الإجمالي:</span> <span>${data.t}</span></div></div>`;
+    }
+
+    Swal.fire({
+        title: 'الإحصاء الدقيق للمركز 📊', width: '800px',
+        html: `
+            <div class="adv-stats-container">
+                <div style="background:#e8fbf0; color:#0FBA50; padding:10px; border-radius:8px; text-align:center; font-weight:bold; margin-bottom:20px; border:1px solid #0FBA50;">إجمالي المسجلين (حسب الفلتر الحالي): ${filteredData.length}</div>
+                <div class="adv-stats-section"><div class="adv-stats-title"><i class="fa-solid fa-layer-group"></i> الإحصاء حسب الرتبة / الطور</div><div class="stats-cards-grid">${rankHtml}</div></div>
+                <div class="adv-stats-section"><div class="adv-stats-title"><i class="fa-solid fa-book-open"></i> الإحصاء حسب مادة التخصص</div><div class="stats-cards-grid">${specHtml}</div></div>
+            </div>
+        `, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+    });
+}
+
+// ================= دالة طباعة القوائم المحدثة (تعديل الترويسة ومنع التفاف النص) =================
+function printFilteredList() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning'); return; }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet); let phaseText = "الكل";
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`); 
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة قوائم المركز</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            
+            /* التنسيق الجديد لترويسة اليمين واليسار */
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .header-right { text-align: right; }
+            .header-left { text-align: left; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            
+            /* ==== التعديلات الجديدة لجدول الطباعة لمنع الالتفاف ==== */
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { 
+                border: 1px solid #000; 
+                padding: 6px 4px; /* تقليل الحشوة الداخلية لربح المساحة */
+                text-align: right; 
+                font-size: 12.5px; /* تصغير الخط ليتسع النص */
+            }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 13.5px; }
+            td.center-text { text-align: center; }
+            td.ltr-text { direction: ltr; text-align: right; }
+            td.nowrap { white-space: nowrap; } /* هذه الخاصية تمنع النص من النزول لسطر جديد نهائياً */
+            
+            @media print { body { padding: 0; } .sub-titles { background: transparent; border: none; padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        
+        <!-- الترويسة المقسمة -->
+        <div class="header-flex">
+            <div class="header-right">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div class="header-left">مركز التكوين البيداغوجي:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+
+        <div class="main-title">قوائم الأساتذة المتكونين</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 15%;">رقم الهاتف</th>
+                    <th style="width: 25%;">الرتبة</th>
+                    <th style="width: 30%;">مكان العمل</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    filteredData.forEach((item, index) => {
+        // تم إضافة كلاس 'nowrap' للأعمدة التي نريد إجبارها على سطر واحد
+        html += `<tr>
+            <td class="center-text">${index + 1}</td>
+            <td class="nowrap"><b>${item.name || '-'}</b></td>
+            <td class="ltr-text nowrap">${item.phone || '-'}</td>
+            <td class="nowrap">${item.rank || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+        </tr>`;
+    });
+    html += `</tbody></table><script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// ================= دالة طباعة القائمة 2 (الرقم - الاسم - الرتبة - التخصص - مكان العمل) =================
+function printFilteredList2() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning'); return; }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet); let phaseText = "الكل";
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`); 
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة القائمة 2</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .header-right { text-align: right; }
+            .header-left { text-align: left; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12.5px; }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 13.5px; }
+            td.center-text { text-align: center; }
+            td.nowrap { white-space: nowrap; } 
+            @media print { body { padding: 0; } .sub-titles { background: transparent; border: none; padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="header-flex">
+            <div class="header-right">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div class="header-left">مركز التكوين البيداغوجي:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+        <div class="main-title">قوائم الأساتذة المتكونين (القائمة 2)</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 20%;">التخصص</th>
+                    <th style="width: 30%;">مكان العمل</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    filteredData.forEach((item, index) => {
+        html += `<tr>
+            <td class="center-text">${index + 1}</td>
+            <td class="nowrap"><b>${item.name || '-'}</b></td>
+            <td class="nowrap">${item.rank || '-'}</td>
+            <td class="nowrap">${item.specialty || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+        </tr>`;
+    });
+    html += `</tbody></table><script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+
+// ================= دالة طباعة القائمة 3 (إضافة الملاحظة) =================
+function printFilteredList3() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning'); return; }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet); let phaseText = "الكل";
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`); 
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة القائمة 3</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .header-right { text-align: right; }
+            .header-left { text-align: left; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12.5px; }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 13.5px; }
+            td.center-text { text-align: center; }
+            td.nowrap { white-space: nowrap; } 
+            @media print { body { padding: 0; } .sub-titles { background: transparent; border: none; padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="header-flex">
+            <div class="header-right">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div class="header-left">مركز التكوين البيداغوجي:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+        <div class="main-title">قوائم الأساتذة المتكونين (القائمة 3)</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 22%;">الاسم واللقب</th>
+                    <th style="width: 18%;">الرتبة</th>
+                    <th style="width: 15%;">التخصص</th>
+                    <th style="width: 25%;">مكان العمل</th>
+                    <th style="width: 15%;">الملاحظة</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    filteredData.forEach((item, index) => {
+        html += `<tr>
+            <td class="center-text">${index + 1}</td>
+            <td class="nowrap"><b>${item.name || '-'}</b></td>
+            <td class="nowrap">${item.rank || '-'}</td>
+            <td class="nowrap">${item.specialty || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+            <td></td> <!-- خلية فارغة لكتابة الملاحظات -->
+        </tr>`;
+    });
+    html += `</tbody></table><script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+
+
+// ================= دالة طباعة البطاقات المحدثة (حل مشكلة الاختفاء والالتصاق) =================
+function printIDCards() {
+    if (filteredData.length === 0) { 
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعة بطاقاتها. تأكد من نتائج الفلترة.', 'warning'); 
+        return; 
+    }
+
+    let printWindow = window.open('', '_blank');
+    let pagesHtml = '';
+    
+    // تقسيم البيانات إلى مجموعات من 8 بطاقات
+    for (let i = 0; i < filteredData.length; i += 8) {
+        let pageData = filteredData.slice(i, i + 8);
+        pagesHtml += '<div class="page">';
+        
+        pageData.forEach(item => {
+            // حماية إضافية: إذا كان الرقم الوظيفي فارغاً نضع أصفاراً حتى لا تتعطل المكتبة
+            let empId = (item.empId && item.empId.trim() !== '') ? item.empId : '000000';
+            
+            pagesHtml += `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+                        <div class="side-headers">
+                            <div class="right-header">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                            <div class="left-header">مركز التكوين:<br><span class="center-name">${INSPECTOR_CENTER}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-title">بطاقة أستاذ متكون</div>
+                    
+                    <div class="card-body">
+                        <div class="info-section">
+                            <div class="info-row"><b>الاسم واللقب:</b> <span>${item.name || '-'}</span></div>
+                            <div class="info-row"><b>الرتبة:</b> <span>${item.rank || '-'}</span></div>
+                            <div class="info-row"><b>مكان العمل:</b> <span>${item.workplace || '-'}</span></div>
+                            <div class="info-row"><b>مادة التخصص:</b> <span>${item.specialty || '-'}</span></div>
+                            <div class="info-row"><b>الفوج:</b> <span>${item.group || '-'}</span></div>
+                            <div class="barcode-wrapper">
+                                <svg class="barcode" jsbarcode-value="${empId}" jsbarcode-displayvalue="false"></svg>
+                            </div>
+                        </div>
+                        
+                        <div class="photo-section">
+                            <div class="photo-box">صورة<br>الموظف</div>
+                            <div class="signature">رئيس المركز</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        pagesHtml += '</div>';
+    }
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة بطاقات المتكونين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <!-- استدعاء مكتبة الباركود -->
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { font-family: 'Cairo', sans-serif; background: #e0e6ed; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            
+            .page { 
+                width: 210mm; 
+                height: 297mm; 
+                background: white; 
+                margin: 0 auto; 
+                padding: 10mm; 
+                display: grid; 
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: repeat(4, 1fr);
+                gap: 6mm 5mm; 
+                box-sizing: border-box; 
+                page-break-after: always; 
+            }
+            
+            @media print { 
+                body { background: white; } 
+                .page { margin: 0; box-shadow: none; page-break-after: always; } 
+            }
+            
+            .card{
+                border:2px solid #102a43;
+                border-radius:10px;
+                /* تعديل الحشوة السفلية إلى 8 بدل 18 لإعطاء مساحة للباركود */
+                padding:8px 10px 8px 10px; 
+                display:flex;
+                flex-direction:column;
+                background:#fff;
+                position:relative;
+                /* تغيير visible إلى hidden لمنع خروج أي عنصر خارج الإطار */
+                overflow:hidden; 
+                min-height:100%;
+                box-sizing:border-box;
+            }
+            .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: #1E68E8; }
+            
+            .card-header { margin-bottom: 3px; }
+            .rep-title { text-align: center; font-size: 10.5px; font-weight: 800; line-height: 1.3; margin-bottom: 4px; color: #102a43; }
+            .side-headers { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; color: #334e68; line-height: 1.3; }
+            .right-header { text-align: right; }
+            .left-header { text-align: left; }
+            .center-name { color: #d90429; font-weight: 900; }
+            
+            .card-title { 
+                text-align: center; font-size: 13.5px; font-weight: 900; 
+                background: #102a43; color: #fff; padding: 3px; 
+                border-radius: 5px; margin: 3px 0 5px 0; letter-spacing: 0.5px; 
+            }
+            
+            .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
+            
+           .info-section{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-start;
+}
+
+            .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
+            .info-row b { color: #1E68E8; display: inline-block; min-width: 60px; font-weight: 800;}
+            .info-row span { font-weight: 600; }
+
+             .barcode-wrapper{
+                margin-top: auto; /* لدفعه لأسفل المساحة المتاحة بشكل مرن */
+                margin-bottom: 4px; /* مسافة أمان صغيرة عن الحافة السفلية */
+                text-align:center;
+                display:flex;
+                justify-content:center;
+                align-items:center;
+            }
+
+            .barcode-wrapper svg { 
+                width: 100%; 
+                max-width: 115px; /* السر هنا: تصغير العرض الأقصى (كان 140) */
+                height: auto !important; 
+                display: block; 
+                margin: 0 auto; 
+            }
+
+            .photo-section{
+    width:25%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    gap:6px;
+}
+            .photo-box { 
+                width: 85%; aspect-ratio: 3/4; border: 2px dashed #9cb4d8; 
+                border-radius: 6px; display: flex; align-items: center; 
+                justify-content: center; font-size: 10px; color: #9cb4d8; 
+                font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3;
+            }
+           .signature{
+    font-size:8px;
+    font-weight:800;
+    text-align:center;
+    color:#102a43;
+    line-height:1.2;
+    margin-top:0;
+    padding-bottom:0;
+}
+        </style>
+    </head>
+    <body>
+        ${pagesHtml}
+        
+        <script>
+            // دالة للتحقق من تحميل المكتبة لتفادي خطأ عدم ظهور الباركود
+            function initBarcodes() {
+                if (typeof JsBarcode === 'undefined') {
+                    // إذا لم تكتمل المكتبة، انتظر 50 جزء من الثانية وأعد المحاولة
+                    setTimeout(initBarcodes, 50);
+                    return;
+                }
+                
+                // رسم الباركود
+                JsBarcode(".barcode").init({
+                    format: "CODE128",
+                    lineColor: "#000",
+                    width: 1.2,
+                    height: 25,          
+                    displayValue: true,  
+                    fontSize: 12,        
+                    fontOptions: "bold",
+                    textMargin: 2,
+                    margin: 0,           
+                    font: "Cairo"
+                });
+                
+                // فتح نافذة الطباعة بعد التأكد من الرسم
+                setTimeout(function() {
+                    window.print();
+                }, 800);
+            }
+
+            // تشغيل الدالة
+            window.onload = initBarcodes;
+        <\/script>
+    </body>
+    </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+function renderPagination(totalPages) {
+    const container = document.getElementById("pagination-controls");
+    if (totalPages <= 1) { container.innerHTML = ""; container.style.display = "none"; return; }
+    container.style.display = "flex";
+    let startItem = (currentPage - 1) * rowsPerPage + 1; let endItem = Math.min(currentPage * rowsPerPage, filteredData.length);
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${filteredData.length} مسجل</div><div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">السابق</button>`;
+    let startPage = Math.max(1, currentPage - 2); let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+    if (startPage > 1) { html += `<button class="page-btn" onclick="changePage(1)">1</button>`; if (startPage > 2) html += `<span style="align-self:center; color:#777;">...</span>`; }
+    for (let i = startPage; i <= endPage; i++) { html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`; }
+    if (endPage < totalPages) { if (endPage < totalPages - 1) html += `<span style="align-self:center; color:#777;">...</span>`; html += `<button class="page-btn" onclick="changePage(${totalPages})">${totalPages}</button>`; }
+    html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">التالي</button></div>`;
+    container.innerHTML = html;
+}
+
+function changePage(page) { currentPage = page; renderTable(); document.getElementById("table-section").scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+// ================= نظام متابعة الحضور والغياب المتقدم =================
+
+let currentAttDate = "";
+let attSystemMode = "open"; // open = حاضر, late = متأخر
+let attendanceRecords = {}; // تخزين الحالات والتوقيت
+
+// تعيين تاريخ اليوم كافتراضي
+function getTodayDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// فتح النافذة
+function openAttendanceModal() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات لأساتذة المركز.', 'warning'); return; }
+    
+    document.getElementById('attendanceModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // منع التمرير في الخلفية
+    
+    const dateInput = document.getElementById('attDate');
+    if (!dateInput.value) { dateInput.value = getTodayDate(); }
+    
+    loadAttendanceData();
+}
+
+// إغلاق النافذة
+function closeAttendanceModal() {
+    document.getElementById('attendanceModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// ================= تغيير حالة النظام (مفتوح / متأخر / مغلق) =================
+function changeSystemMode(mode) {
+    attSystemMode = mode;
+    const btnOpen = document.getElementById('btnSysOpen');
+    const btnLate = document.getElementById('btnSysLate');
+    const btnClosed = document.getElementById('btnSysClosed');
+
+    // إعادة ضبط الألوان
+    btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+    btnLate.style.background = "#f0f4f8"; btnLate.style.color = "#102a43";
+    btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+
+    if (mode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+    else if (mode === 'late') { btnLate.style.background = "#ff9800"; btnLate.style.color = "white"; }
+    else if (mode === 'closed') { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+
+    saveSystemState(mode);
+}
+
+let attendanceListener = null; // متغير لحفظ المستمع اللحظي
+
+// ================= جلب بيانات الحضور لحظياً (Real-Time) =================
+async function loadAttendanceData() {
+    currentAttDate = document.getElementById('attDate').value;
+    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    
+    document.getElementById('attTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السجل...</td></tr>';
+
+    // إيقاف أي استماع سابق إذا قمنا بتغيير التاريخ
+    if (attendanceListener) { attendanceListener(); }
+
+    // إنشاء اتصال لحظي (onSnapshot) بدلاً من (get)
+    attendanceListener = db.collection('attendance_daily').doc(docId).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            attendanceRecords = data.records || {};
+            
+            // تحديث أزرار حالة النظام في الواجهة إذا تغيرت من جهاز آخر
+            changeSystemModeLocal(data.systemMode || "closed");
+        } else {
+            attendanceRecords = {};
+            changeSystemModeLocal("closed"); // افتراضياً مغلق إذا لم يتم إنشاؤه
+        }
+        renderAttendanceTable(); // إعادة بناء الجدول فوراً عند أي مسح جديد
+    }, (error) => {
+        console.error("خطأ في المزامنة اللحظية:", error);
+    });
+}
+
+// دالة لتغيير ألوان الأزرار فقط (بدون إرسال طلب جديد للفايربيز)
+function changeSystemModeLocal(mode) {
+    attSystemMode = mode;
+    const btnOpen = document.getElementById('btnSysOpen');
+    const btnLate = document.getElementById('btnSysLate');
+    const btnClosed = document.getElementById('btnSysClosed');
+
+    btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+    btnLate.style.background = "#f0f4f8"; btnLate.style.color = "#102a43";
+    btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+
+    if (mode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+    else if (mode === 'late') { btnLate.style.background = "#ff9800"; btnLate.style.color = "white"; }
+    else if (mode === 'closed') { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+}
+
+// تغيير حالة النظام وحفظها
+function changeSystemMode(mode) {
+    changeSystemModeLocal(mode);
+    saveSystemState(mode);
+}
+
+// حفظ حالة النظام في الداتابيز
+async function saveSystemState(mode) {
+    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    await db.collection('attendance_daily').doc(docId).set({ systemMode: mode }, { merge: true });
+}
+
+// حفظ حالة النظام في الداتابيز
+async function saveSystemState(mode) {
+    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    await db.collection('attendance_daily').doc(docId).set({ systemMode: mode }, { merge: true });
+}
+
+// تعبئة قائمة الأفواج في نافذة الحضور
+function populateAttGroups() {
+    const groupSelect = document.getElementById('attGroupFilter');
+    let groups = new Set();
+    centerData.forEach(item => { if (item.group && item.group !== '-') groups.add(item.group); });
+    groupSelect.innerHTML = '<option value="الكل">كل الأفواج</option>';
+    groups.forEach(g => { groupSelect.innerHTML += `<option value="${g}">${g}</option>`; });
+}
+
+// بناء جدول الحضور (محدث ليشمل الفوج)
+// ================= بناء جدول الحضور (محدث ليشمل حالة: غير محدد) =================
+function renderAttendanceTable() {
+    const search = document.getElementById('attSearch').value.toLowerCase();
+    const filterStatus = document.getElementById('attStatusFilter').value;
+    const filterGroup = document.getElementById('attGroupFilter').value;
+    const tbody = document.getElementById('attTableBody');
+    tbody.innerHTML = '';
+
+    let total = 0, present = 0, absent = 0, late = 0;
+
+    if (document.getElementById('attGroupFilter').options.length <= 1) populateAttGroups();
+
+    centerData.forEach((item, index) => {
+        // الحالة الافتراضية الآن أصبحت "غير محدد" بدلاً من "غائب"
+        let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
+        
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchStatus = filterStatus === "الكل" || record.status === filterStatus;
+        const matchGroup = filterGroup === "الكل" || item.group === filterGroup;
+
+        if (matchGroup) {
+            total++;
+            // حساب الإحصائيات بدقة
+            if (record.status === 'حاضر') present++;
+            else if (record.status === 'متأخر') late++;
+            else if (record.status === 'غائب') absent++;
+        }
+
+        if (matchSearch && matchStatus && matchGroup) {
+            const tr = document.createElement('tr');
+            
+            // تحديد ألوان السطر والقائمة المنسدلة
+            let rowClass = 'row-unspecified'; // افتراضياً أبيض لغير المحدد
+            let selectClass = 'sel-unspecified';
+            
+            if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
+            else if (record.status === 'متأخر') { rowClass = 'row-late'; selectClass = 'sel-late'; }
+            else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
+
+            tr.className = rowClass;
+
+            tr.innerHTML = `
+                <td style="text-align:center;">${index + 1}</td>
+                <td><strong>${item.empId}</strong></td>
+                <td><b>${item.name}</b></td>
+                <td>${item.rank || '-'}</td>
+                <td>${item.specialty || '-'}</td>
+                <td><span style="background:#eee; padding:2px 8px; border-radius:10px; font-size:12px;">${item.group || '-'}</span></td>
+                <td>${item.workplace || '-'}</td>
+                <td style="text-align: center; white-space: nowrap;">
+                    <span class="att-time">${record.time || '--:--'}</span>
+                    <select class="att-select ${selectClass}" onchange="changeRecordStatus('${item.empId}', this.value, this)">
+                        <option value="غير محدد" ${record.status === 'غير محدد' ? 'selected' : ''}>غير محدد</option>
+                        <option value="غائب" ${record.status === 'غائب' ? 'selected' : ''}>غائب</option>
+                        <option value="حاضر" ${record.status === 'حاضر' ? 'selected' : ''}>حاضر</option>
+                        <option value="متأخر" ${record.status === 'متأخر' ? 'selected' : ''}>متأخر</option>
+                    </select>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    });
+
+    document.getElementById('st-total').innerText = total;
+    document.getElementById('st-present').innerText = `${present} (${((present/total)*100 || 0).toFixed(1)}%)`;
+    document.getElementById('st-late').innerText = `${late} (${((late/total)*100 || 0).toFixed(1)}%)`;
+    document.getElementById('st-absent').innerText = `${absent} (${((absent/total)*100 || 0).toFixed(1)}%)`;
+}
+
+// ================= دالة طباعة قائمة الحضور اليومية (تنسيق رسمي مع تسطير العنوان) =================
+function printAttendanceList() {
+    const selGroup = document.getElementById('attGroupFilter').value;
+    const search = document.getElementById('attSearch').value.toLowerCase();
+    const filterStatus = document.getElementById('attStatusFilter').value;
+
+    let hasData = false;
+    let phasesSet = new Set();
+
+    centerData.forEach(item => {
+        let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
+        if ((item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search)) {
+            if (filterStatus === "الكل" || record.status === filterStatus) {
+                if (selGroup === "الكل" || item.group === selGroup) {
+                    hasData = true;
+                    if (item.rank) {
+                        if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+                        else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+                        else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+                    }
+                }
+            }
+        }
+    });
+
+    if (!hasData) { Swal.fire('تنبيه', 'لا توجد بيانات لطباعتها', 'warning'); return; }
+
+    let phasesArr = Array.from(phasesSet); 
+    let phaseText = "المجمع"; 
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "المجمع (ابتدائي، متوسط، ثانوي)";
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>سجل الحضور اليومي</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            /* إضافة خاصية التسطير هنا للعنوان الرئيسي */
+            .main-title { text-align: center; font-size: 20px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: table; margin: 0 auto 20px auto;}
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #000; padding: 4px 6px; text-align: right; font-size: 11.5px; }
+            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 12.5px;}
+            .nowrap { white-space: nowrap; }
+            td.center-text { text-align: center; }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        
+        <div class="header-flex">
+            <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align:left;">مركز التكوين البيداغوجي<br><span style="color: #000; font-size: 14px; font-weight: bold;">${INSPECTOR_CENTER}</span></div>
+        </div>
+
+        <div class="main-title">
+            قائمة الحضور اليومي للمتكونين 
+            <span style="color: red; text-decoration: underline; direction: ltr; display: inline-block;">(${currentAttDate})</span>
+        </div>
+        
+        <div class="sub-titles">الطور: ${phaseText}</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:3%;">الرقم</th>
+                    <th style="width:25%;">الاسم واللقب</th>
+                    <th style="width:15%;">الرتبة</th>
+                    <th style="width:15%;">التخصص</th>
+                    <th style="width:8%;">الفوج</th>
+                    <th style="width:18%;">مكان العمل</th>
+                    <th style="width:8%;">الوضعية</th>
+                    <th style="width:8%;">الوقت</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    let counter = 1;
+    centerData.forEach(item => {
+        let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
+        
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchStatus = filterStatus === "الكل" || record.status === filterStatus;
+        const matchGroup = selGroup === "الكل" || item.group === selGroup;
+
+        if (matchSearch && matchStatus && matchGroup) {
+            let printStatus = record.status === 'غير محدد' ? '-' : record.status;
+            let printTime = record.time ? record.time : '-';
+
+            html += `<tr>
+                <td class="center-text">${counter++}</td>
+                <td class="nowrap"><b>${item.name || '-'}</b></td>
+                <td class="nowrap">${item.rank || '-'}</td>
+                <td class="nowrap">${item.specialty || '-'}</td>
+                <td class="center-text nowrap">${item.group || '-'}</td>
+                <td class="nowrap">${item.workplace || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${printStatus}</td>
+                <td class="center-text nowrap" style="direction:ltr;">${printTime}</td>
+            </tr>`;
+        }
+    });
+
+    html += `</tbody></table><script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); 
+    printWindow.document.close();
+}
+
+// فلترة الجدول من داخل النافذة
+function filterAttendanceTable() {
+    renderAttendanceTable();
+}
+
+// ================= تغيير حالة الحضور وحفظها يدوياً (محدثة لتصفير الوقت) =================
+async function changeRecordStatus(empId, newStatus, selectElement) {
+    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    
+    // تحديد الوقت: إذا اخترنا "غير محدد" نتركه فارغاً، وإلا نسجل الوقت الحالي بالثواني
+    let timeString = '';
+    
+    if (newStatus !== 'غير محدد') {
+        const d = new Date();
+        timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    }
+
+    try {
+        // إرسال التحديث الصريح للفايربيز: سيقوم بمسح الوقت القديم واستبداله بفراغ
+        await db.collection('attendance_daily').doc(docId).set({
+            records: {
+                [empId]: { status: newStatus, time: timeString }
+            }
+        }, { merge: true });
+        
+    } catch (error) {
+        console.error("خطأ في الحفظ:", error);
+        Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: 'فشل حفظ التغيير', showConfirmButton: false, timer: 3000 });
+    }
+}
+
+// ================= دالة إدراج الغياب الشامل (محدثة) =================
+function markAllAbsent() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+
+    Swal.fire({
+        title: 'تأكيد إدراج الغياب؟',
+        text: "سيتم تسجيل (غائب) مع الوقت الحالي لكل متكون لم تُحدد وضعيته (لم يمسح بطاقته).",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، إدراج الغياب',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+            const d = new Date();
+            const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            
+            let newRecords = {}; // تجميع التحديثات في كائن واحد
+            let count = 0;
+
+            centerData.forEach(item => {
+                let record = attendanceRecords[item.empId];
+                if (!record || !record.time || record.time.trim() === '') {
+                    newRecords[item.empId] = { status: 'غائب', time: timeString };
+                    count++;
+                }
+            });
+
+            if (count > 0) {
+                try {
+                    // دمج الكائن بالكامل داخل السجل الرئيسي
+                    await db.collection('attendance_daily').doc(docId).set({ records: newRecords }, { merge: true });
+                    Swal.fire('نجاح', `تم إدراج الغياب لـ ${count} متكون(ين) بنجاح.`, 'success');
+                } catch (error) {
+                    Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات', 'error');
+                }
+            } else {
+                Swal.fire('معلومة', 'جميع المتكونين تم تحديد وضعيتهم مسبقاً، لا يوجد من ندرجه كغائب!', 'info');
+            }
+        }
+    });
+}
+
+// ================= دالة إدراج الحضور الشامل (محدثة) =================
+function markAllPresent() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+
+    Swal.fire({
+        title: 'تأكيد إدراج الحضور؟',
+        text: "سيتم تسجيل (حاضر) مع الوقت الحالي لكل متكون لم تُحدد وضعيته (لم يمسح بطاقته).",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#1E68E8',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، إدراج الحضور',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+            const d = new Date();
+            const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            
+            let newRecords = {}; // تجميع التحديثات
+            let count = 0;
+
+            centerData.forEach(item => {
+                let record = attendanceRecords[item.empId];
+                if (!record || !record.time || record.time.trim() === '') {
+                    newRecords[item.empId] = { status: 'حاضر', time: timeString };
+                    count++;
+                }
+            });
+
+            if (count > 0) {
+                try {
+                    await db.collection('attendance_daily').doc(docId).set({ records: newRecords }, { merge: true });
+                    Swal.fire('نجاح', `تم إدراج الحضور لـ ${count} متكون(ين) بنجاح.`, 'success');
+                } catch (error) {
+                    Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات', 'error');
+                }
+            } else {
+                Swal.fire('معلومة', 'جميع المتكونين تم تحديد وضعيتهم مسبقاً، لا يوجد من ندرجه كحاضر!', 'info');
+            }
+        }
+    });
+}
+
+</script>
+</body>
+</html>

@@ -12,229 +12,33 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <style>
-    /* ===========================
-       1. إعدادات أساسية للتجاوب
-       =========================== */
-    * { 
-        box-sizing: border-box; 
-        -webkit-tap-highlight-color: transparent; 
-    }
-
-    body {
-      font-family: 'Cairo', sans-serif;
-      margin: 0;
-      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-      text-align: center;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      overflow-x: hidden;
-      padding: 15px;
-    }
-
-    /* ===========================
-       2. الحاوية الرئيسية
-       =========================== */
-    .container {
-      background: white;
-      padding: 30px 25px;
-      border-radius: 20px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-      text-align: center;
-      width: 100%;
-      max-width: 480px; 
-      margin: 0 auto;
-      position: relative;
-      transition: all 0.3s ease;
-    }
-
-    /* ===========================
-       3. النصوص والعناوين
-       =========================== */
-    .header-text {
-        margin-bottom: 20px;
-        border-bottom: 2px solid #f0f0f0;
-        padding-bottom: 15px;
-    }
-
-    .header-text p {
-        margin: 3px 0;
-        font-size: 16px;
-        font-weight: 700;
-        color: #444;
-        line-height: 1.5;
-    }
-
-    .login-title {
-        color: #1E68E8;
-        margin-bottom: 5px;
-        font-size: 20px;
-        font-weight: 700;
-        margin-top: 20px;
-    }
-
-    /* تنسيق عنوان لوحة التحكم */
-    .sub-title {
-        color: #d32f2f; /* أحمر */
-        margin-top: 0;
-        margin-bottom: 25px;
-        font-size: 18px;
-        font-weight: 700;
-        border: 1px dashed #d32f2f;
-        display: inline-block;
-        padding: 5px 15px;
-        border-radius: 8px;
-        background-color: #ffebee;
-    }
-
-    /* ===========================
-       4. الشعار وحركته
-       =========================== */
-    .login-logo-wrapper {
-        position: relative;
-        width: 130px;
-        height: 130px;
-        margin: 10px auto;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .login-logo {
-        width: 150px;
-        height: 150px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid #fff;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        position: relative;
-        z-index: 2;
-    }
-
-    .login-logo-ring {
-        position: absolute;
-        width: 155px;
-        height: 155px;
-        border: 2px dashed #1E68E8;
-        border-radius: 50%;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        animation: rotateRing 15s linear infinite;
-        z-index: 1;
-    }
-
-    @keyframes rotateRing {
-      from { transform: translate(-50%, -50%) rotate(0deg); }
-      to { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-
-    /* ===========================
-       5. حقول الإدخال والأزرار
-       =========================== */
-    
-    /* حاوية الحقل لجعل الأيقونة بداخله */
-    .input-wrapper {
-        position: relative;
-        width: 100%;
-        margin-bottom: 15px;
-    }
-
-    input {
-        width: 100%;
-        padding: 14px 14px 14px 45px; /* زيادة التباعد من اليسار للأيقونة */
-        border-radius: 12px;
-        border: 2px solid #e0e0e0;
-        font-size: 16px;
-        text-align: center;
-        font-family: 'Cairo', sans-serif;
-        transition: 0.3s;
-        background: #fafafa;
-        direction: ltr; /* لجعل الكود اللاتيني يظهر بشكل صحيح */
-    }
-
-    input:focus {
-        outline: none;
-        border-color: #1E68E8;
-        background: #fff;
-        box-shadow: 0 0 0 4px rgba(30, 104, 232, 0.1);
-    }
-
-    /* تنسيق أيقونة العين */
-    .toggle-password {
-        position: absolute;
-        left: 15px; /* تثبيت في الجهة اليسرى */
-        top: 50%;
-        transform: translateY(-50%);
-        color: #aaa;
-        cursor: pointer;
-        font-size: 18px;
-        z-index: 10;
-        padding: 5px;
-    }
-
-    .toggle-password:hover {
-        color: #1E68E8;
-    }
-
-    button {
-        background: #1E68E8;
-        color: white;
-        border: none;
-        padding: 14px 0;
-        border-radius: 12px;
-        font-size: 16px;
-        cursor: pointer;
-        font-weight: 700;
-        width: 100%;
-        font-family: 'Cairo', sans-serif;
-        transition: 0.3s;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-
-    button:hover, button:active {
-        background: #1557c0;
-        transform: translateY(-1px);
-    }
-
-    /* ===========================
-       6. تنبيهات SweetAlert
-       =========================== */
-    .swal2-popup {
-        border-radius: 20px !important;
-        font-family: 'Cairo', sans-serif !important;
-    }
-    
-    .swal2-confirm {
-        background: #1E68E8 !important;
-        box-shadow: 0 4px 10px rgba(30, 104, 232, 0.3) !important;
-        border-radius: 10px !important;
-    }
-
-    /* ===========================
-       7. استعلامات الوسائط
-       =========================== */
-    @media (max-width: 380px) {
-        .container { padding: 20px 15px; }
-        .header-text p { font-size: 12px; }
-        .login-logo-wrapper { width: 100px; height: 100px; }
-        .login-logo { width: 80px; height: 80px; }
-        .login-logo-ring { width: 95px; height: 95px; }
-        .login-title { font-size: 18px; }
-        button, input { font-size: 14px; }
-    }
+    /* الإعدادات الأساسية */
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Cairo', sans-serif; margin: 0; background: linear-gradient(135deg, #e3f2fd, #bbdefb); text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-x: hidden; padding: 15px; }
+    .container { background: white; padding: 30px 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 480px; margin: 0 auto; position: relative; transition: all 0.3s ease; }
+    .header-text { margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; }
+    .header-text p { margin: 3px 0; font-size: 16px; font-weight: 700; color: #444; line-height: 1.5; }
+    .login-title { color: #1E68E8; margin-bottom: 5px; font-size: 20px; font-weight: 700; margin-top: 20px; }
+    .sub-title { color: #d32f2f; margin-top: 0; margin-bottom: 25px; font-size: 18px; font-weight: 700; border: 1px dashed #d32f2f; display: inline-block; padding: 5px 15px; border-radius: 8px; background-color: #ffebee; }
+    .login-logo-wrapper { position: relative; width: 130px; height: 130px; margin: 10px auto; display: flex; justify-content: center; align-items: center; }
+    .login-logo { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; z-index: 2; }
+    .login-logo-ring { position: absolute; width: 155px; height: 155px; border: 2px dashed #1E68E8; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: rotateRing 15s linear infinite; z-index: 1; }
+    @keyframes rotateRing { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+    .input-wrapper { position: relative; width: 100%; margin-bottom: 15px; }
+    input { width: 100%; padding: 14px 14px 14px 45px; border-radius: 12px; border: 2px solid #e0e0e0; font-size: 16px; text-align: center; font-family: 'Cairo', sans-serif; transition: 0.3s; background: #fafafa; direction: ltr; }
+    input:focus { outline: none; border-color: #1E68E8; background: #fff; box-shadow: 0 0 0 4px rgba(30, 104, 232, 0.1); }
+    .toggle-password { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #aaa; cursor: pointer; font-size: 18px; z-index: 10; padding: 5px; }
+    .toggle-password:hover { color: #1E68E8; }
+    button { background: #1E68E8; color: white; border: none; padding: 14px 0; border-radius: 12px; font-size: 16px; cursor: pointer; font-weight: 700; width: 100%; font-family: 'Cairo', sans-serif; transition: 0.3s; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    button:hover, button:active { background: #1557c0; transform: translateY(-1px); }
+    .swal2-popup { border-radius: 20px !important; font-family: 'Cairo', sans-serif !important; }
+    .swal2-confirm { background: #1E68E8 !important; box-shadow: 0 4px 10px rgba(30, 104, 232, 0.3) !important; border-radius: 10px !important; }
+    @media (max-width: 380px) { .container { padding: 20px 15px; } .header-text p { font-size: 12px; } .login-logo-wrapper { width: 100px; height: 100px; } .login-logo { width: 80px; height: 80px; } .login-logo-ring { width: 95px; height: 95px; } .login-title { font-size: 18px; } button, input { font-size: 14px; } }
   </style>
 </head>
 
 <body>
   <div class="container" id="mainContainer">
-    
       <div class="header-text">
         <p>الجمهورية الجزائرية الديمقراطية الشعبية</p>
         <p>وزارة التربية الوطنية</p>
@@ -247,7 +51,6 @@
       </div>
 
       <h2 class="login-title">الفضاء الرقمي للتكوين البيداغوجي توقرت</h2>
-      
       <h3 class="sub-title">لوحة التحكم</h3>
       
       <div class="input-wrapper">
@@ -256,119 +59,120 @@
       </div>
       
       <button onclick="checkAccessCode()">
-        <i class="fa-solid fa-right-to-bracket"></i>
-        تسجيل الدخول
+        <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
       </button>
-
   </div>
 
 <script>
-// ================= إعدادات Firebase =================
+// ================= إعدادات Firebase المحدثة للمشروع الأساسي =================
 const firebaseConfig = {
-  apiKey: "AIzaSyAkQz9pB2ZNlYIvdlTRvi4try3D8LLXS4g",
-  authDomain: "databaseemploye.firebaseapp.com",
-  projectId: "databaseemploye",
-  storageBucket: "databaseemploye.firebasestorage.app",
-  messagingSenderId: "408231477466",
-  appId: "1:408231477466:web:e3bf5bd3eaca7cdcd3a5e3",
-  measurementId: "G-DW8QJ5B231"
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61",
+  measurementId: "G-TTJT4LQ65L"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// 🔴🔴 رابط صفحة الداشبورد 🔴🔴
-const DASHBOARD_PAGE = "dashboard_finale_upload.html"; 
+// 🔑 أكواد الدخول السرية للإدارة المركزية
+const CODE_FILES = "feh@2026"; 
+const CODE_ADMIN = "admin@2026"; 
 
-// 🔑 كود الدخول السري المطلوب
-const SECRET_CODE = "feh@2026";
-
-// ================= دالة إظهار/إخفاء كلمة المرور =================
 function togglePasswordVisibility() {
     const inputField = document.getElementById("accessCode");
     const icon = document.getElementById("toggleIcon");
-
     if (inputField.type === "password") {
-        inputField.type = "text";
-        icon.classList.remove("fa-eye");
-        icon.classList.add("fa-eye-slash"); // تغيير الأيقونة إلى عين مشطوبة
+        inputField.type = "text"; icon.classList.remove("fa-eye"); icon.classList.add("fa-eye-slash");
     } else {
-        inputField.type = "password";
-        icon.classList.remove("fa-eye-slash");
-        icon.classList.add("fa-eye"); // العودة إلى أيقونة العين
+        inputField.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye");
     }
 }
 
-// ================= دالة التحقق =================
-function checkAccessCode() {
+async function checkAccessCode() {
   const inputVal = document.getElementById("accessCode").value.trim();
 
   if (!inputVal) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'تنبيه',
-      text: 'يرجى إدخال كود الدخول',
-      confirmButtonText: 'حسناً'
-    });
+    Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى إدخال كود الدخول', confirmButtonText: 'حسناً' });
     return;
   }
 
-  Swal.fire({ 
-    title: 'جاري التحقق...', 
-    allowOutsideClick: false, 
-    didOpen: () => Swal.showLoading() 
-  });
+  Swal.fire({ title: 'جاري التحقق...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-  setTimeout(() => {
-      if (inputVal === SECRET_CODE) {
-          Swal.close();
+  // 1. التحقق من كود إدارة الملفات (الإدارة العليا)
+  if (inputVal === CODE_FILES) {
+      sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
+      sessionStorage.setItem("userName", "مسؤول الملفات"); 
+      sessionStorage.setItem("isLoggedIn", "true");
+      Swal.fire({ icon: 'success', title: 'مرحباً بك', text: 'جاري التوجيه إلى لوحة إدارة الملفات...', timer: 1500, showConfirmButton: false })
+      .then(() => window.location.href = "dashboard_finale_upload.html");
+      return;
+  } 
+  
+  // 2. التحقق من كود الإدارة (الإدارة العليا)
+  if (inputVal === CODE_ADMIN) {
+      sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
+      sessionStorage.setItem("userName", "مدير النظام"); 
+      sessionStorage.setItem("isLoggedIn", "true");
+      Swal.fire({ icon: 'success', title: 'مرحباً بك', text: 'جاري التوجيه إلى لوحة تحكم المديرية...', timer: 1500, showConfirmButton: false })
+      .then(() => window.location.href = "admin_dashboard.html");
+      return;
+  }
+
+  // 3. التحقق من قاعدة بيانات رؤساء المراكز (المفتشين/المدراء)
+  try {
+      const querySnapshot = await db.collection("center_admins").where("password", "==", inputVal).get();
+      
+      if (!querySnapshot.empty) {
+          const adminData = querySnapshot.docs[0].data();
           
-          sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
-          sessionStorage.setItem("userName", "مسؤول النظام"); 
+          // التحقق إذا كان الحساب معطلاً من قبل الإدارة
+          if (adminData.disabled === true) {
+              Swal.fire({ icon: 'error', title: 'حساب معطل', text: 'عذراً، تم تعطيل هذا الحساب من قبل الإدارة المركزية.', confirmButtonText: 'حسناً' });
+              return;
+          }
+
+          // تسجيل بيانات المشرف في الجلسة ليتم استخدامها في لوحة المفتش
+          sessionStorage.setItem("userEmpId", adminData.id); 
+          sessionStorage.setItem("userName", adminData.name); 
+          sessionStorage.setItem("inspectorCenter", adminData.center); // المركز المعين له
           sessionStorage.setItem("isLoggedIn", "true");
 
           Swal.fire({
             icon: 'success',
-            title: 'مرحباً بك',
-            text: 'تم تسجيل الدخول بنجاح',
-            timer: 1500,
-            showConfirmButton: false,
-            willClose: () => {
-                window.location.href = DASHBOARD_PAGE;
-            }
+            title: `مرحباً بك ${adminData.name}`,
+            text: `جاري توجيهك إلى مركزك: ${adminData.center}`,
+            timer: 2000,
+            showConfirmButton: false
+          }).then(() => {
+            window.location.href = "inspector_dashboard.html";
           });
 
       } else {
-          Swal.close();
-          Swal.fire({
-            icon: "error",
-            title: "كود خاطئ",
-            text: "يرجى التأكد من كود الدخول والمحاولة مرة أخرى",
-            confirmButtonText: "حسناً"
-          });
+          // لم يتم العثور على الكود في أي مكان
+          Swal.fire({ icon: "error", title: "كود خاطئ", text: "يرجى التأكد من الرقم السري والمحاولة مرة أخرى", confirmButtonText: "حسناً" });
       }
-  }, 800);
+  } catch (error) {
+      console.error("Error connecting to DB:", error);
+      Swal.fire({ icon: 'error', title: 'خطأ في الاتصال', text: 'يرجى التحقق من جودة الإنترنت لديك.' });
+  }
 }
 
 // 🔒 تحكم في فتح وغلق الموقع
 const registrationOpen = true; 
-
 window.onload = function() {
     if (!registrationOpen) {
-        document.querySelector(".input-wrapper").style.display = "none"; // إخفاء الحاوية بالكامل
+        document.querySelector(".input-wrapper").style.display = "none";
         const buttons = document.querySelectorAll("button");
         buttons.forEach(btn => btn.style.display = "none");
-
         const msg = document.createElement("div");
-        msg.innerHTML = `
-        <div style="background: #cce5ff; color: #004085; border: 1px solid #b8daff; border-radius: 10px; padding: 15px; margin-bottom: 20px; font-size: 18px; font-weight: 600;">
-            الموقع مغلق حاليًا<br>
-        </div>`;
+        msg.innerHTML = `<div style="background: #cce5ff; color: #004085; border: 1px solid #b8daff; border-radius: 10px; padding: 15px; margin-bottom: 20px; font-size: 18px; font-weight: 600;">الموقع مغلق حاليًا<br></div>`;
         document.querySelector(".header-text").appendChild(msg);
     }
 };    
-
 </script>
 </body>
 </html>
-

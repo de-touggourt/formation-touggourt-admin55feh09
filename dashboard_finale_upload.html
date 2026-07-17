@@ -3,540 +3,124 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>فضاء التكوين البيداغوجي توقرت</title>
+<title>فضاء التكوين البيداغوجي توقرت - إدارة الملفات</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<!-- ربط قاعدة البيانات (إن لزم الأمر في الصفحة الموالية) -->
+<script src="database.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-/* 1. تنسيقات الجسم */
-* {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-}
-
-body{
-  font-family:'Cairo',sans-serif;
-  margin:0;
-  background:linear-gradient(135deg,#e3f2fd,#bbdefb);
-  text-align:center;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-  padding: 0;
-}
+/* ============================================================
+   1. تنسيقات الجسم الأساسية
+   ============================================================ */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { font-family:'Cairo',sans-serif; margin:0; background:linear-gradient(135deg,#e3f2fd,#bbdefb); text-align:center; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; padding: 0; }
 
 /* شريط الأخبار */
-.news-ticker-container {
-    background-color: #0d47a1;
-    color: #fff;
-    width: 100%;
-    min-height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    z-index: 1000;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    padding: 10px 15px;
-}
-
-.typewriter-text {
-    font-size: 17px;
-    font-weight: 700;
-    display: inline-block;
-    opacity: 1;
-    transition: opacity 1s ease-in-out;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
-    max-width: 95%;
-    line-height: 1.4;
-    text-align: center;
-}
-
+.news-ticker-container { background-color: #0d47a1; color: #fff; width: 100%; min-height: 50px; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1000; box-shadow: 0 4px 8px rgba(0,0,0,0.3); padding: 10px 15px; }
+.typewriter-text { font-size: 17px; font-weight: 700; display: inline-block; opacity: 1; transition: opacity 1s ease-in-out; text-shadow: 0 2px 4px rgba(0,0,0,0.3); white-space: normal; overflow: visible; text-overflow: clip; max-width: 95%; line-height: 1.4; text-align: center; }
 .typewriter-text.fade-out { opacity: 0; }
 
 /* الشعار */
-.logo-container {
-  position: relative;
-  display: inline-block;
-  width: 160px;
-  height: 160px;
-  margin-bottom: 0px; 
-  transition: transform 0.3s ease;
-}
+.logo-container { position: relative; display: inline-block; width: 160px; height: 160px; margin-bottom: 0px; transition: transform 0.3s ease; }
+.logo-container img { width: 130px; height: 130px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; z-index: 2; animation: pulseLogo 2.5s ease-in-out infinite; }
+.logo-ring { position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; border-radius: 50%; border: 3px dashed #fff; background: transparent; transform: translate(-50%, -50%); animation: rotateRing 10s linear infinite; z-index: 1; }
+@keyframes rotateRing { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes pulseLogo { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } }
 
-.logo-container img {
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  object-fit: cover;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: #fff; 
-  z-index: 2;
-  animation: pulseLogo 2.5s ease-in-out infinite;
-}
+/* الهيدر وزر الرجوع */
+header { background:#1E68E8; color:#fff; padding:30px 15px; border-bottom-left-radius:25px; border-bottom-right-radius:25px; box-shadow:0 4px 10px rgba(0,0,0,.2); width: 100%; position: relative; }
+header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 10px; line-height: 1.5; }
+.btn-back { position: absolute; top: 20px; right: 20px; background: #fff; color: #1E68E8; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; z-index: 10; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.3s; }
+.btn-back:hover { background: #f0f7ff; transform: translateY(-2px); }
 
-.logo-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  border: 3px dashed #fff; 
-  background: transparent;
-  transform: translate(-50%, -50%);
-  animation: rotateRing 10s linear infinite;
-  z-index: 1;
-}
+/* الخدمات (المراكز) */
+.services { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:25px; padding:40px 20px; max-width:1000px; margin:auto; justify-content: center; flex: 1; width: 100%; }
+.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; }
+.service:hover { transform:translateY(-8px) scale(1.05); box-shadow:0 8px 20px rgba(30,104,232,.2); border: 2px solid #1E68E8; }
+.service:active { transform:scale(0.98); }
+.service i { font-size:55px; color:#1E68E8; margin-bottom:15px; transition: 0.3s;}
+.service:hover i { transform: scale(1.1); }
+.service h3 { color:#1557c0; font-size: 1.1rem; margin: 0; line-height: 1.6; }
 
-@keyframes rotateRing {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-@keyframes pulseLogo {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.05); }
-}
-
-/* الهيدر */
-header{
-  background:#1E68E8;
-  color:#fff;
-  padding:30px 15px;
-  border-bottom-left-radius:25px;
-  border-bottom-right-radius:25px;
-  box-shadow:0 4px 10px rgba(0,0,0,.2);
-  width: 100%;
-}
-
-header h1 {
-    margin-top: 5px;
-    margin-bottom: 10px;
-    font-size: 1.8rem;
-    padding: 0 10px;
-    line-height: 1.5;
-}
-
-/* الخدمات */
-.services{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:25px;
-  padding:40px 20px;
-  max-width:1000px;
-  margin:auto;
-  justify-content: center;
-  flex: 1;
-  width: 100%;
-}
-
-.service{
-  background:#fff;
-  border-radius:20px;
-  padding:30px 15px;
-  cursor:pointer;
-  box-shadow:0 4px 10px rgba(0,0,0,.1);
-  transition:.4s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 150px;
-}
-.service:hover{transform:translateY(-8px) scale(1.05);}
-.service:active{transform:scale(0.98);}
-
-.service i{
-  font-size:55px;
-  color:#1E68E8;
-  margin-bottom:15px;
-}
-
-.service h3{
-  color:#1557c0;
-  font-size: 1.1rem;
-  margin: 0;
-  line-height: 1.6;
-}
-
-/* تحسين عرض النوافذ (Grid System) */
-.icon-container{
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 15px;
-  width: 100%;
-  padding: 10px;
-}
-
-.icon-btn{
-  width: 100%;
-  height: 140px;
-  border-radius: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  border: 2px solid #1E68E8; 
-  background: #f0f7ff; 
-  color: #000;
-  cursor: pointer;
-  transition: .3s;
-  text-align: center;
-  padding: 10px;
-  font-size: 0.95rem;
-}
-
-.icon-btn i {
-    font-size: 30px;
-    margin-bottom: 10px;
-    color: #1E68E8;
-}
-
-.icon-btn:hover, .icon-btn:active {
-  background: #1E68E8;
-  color: #fff;
-  transform: scale(1.05);
-}
-.icon-btn:hover i, .icon-btn:active i {
-    color: #fff;
-}
+/* الأيقونات المنبثقة (Grid System) */
+.icon-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; padding: 10px; }
+.icon-btn { width: 100%; height: 140px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; border: 2px solid #1E68E8; background: #f0f7ff; color: #000; cursor: pointer; transition: .3s; text-align: center; padding: 10px; font-size: 0.95rem; }
+.icon-btn i { font-size: 30px; margin-bottom: 10px; color: #1E68E8; }
+.icon-btn:hover, .icon-btn:active { background: #1E68E8; color: #fff; transform: scale(1.05); }
+.icon-btn:hover i, .icon-btn:active i { color: #fff; }
 
 /* تنسيقات SweetAlert */
-.swal2-popup {
-    border-radius: 20px !important;
-    padding: 1.5em !important;
-    max-width: 95vw !important;
-    width: auto !important;
-}
+.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; }
+.swal2-title { font-size: 1.3rem !important; padding: 15px 10px !important; line-height: 1.5 !important; }
+.swal2-html-container { padding: 10px !important; }
+.swal2-confirm { background:#102a43 !important; color:#fff !important; border-radius:20px !important; padding:10px 30px !important; font-family:'Cairo',sans-serif; font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,.15); margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; }
+.swal2-confirm:hover { background: #243b53 !important; }
+.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 20px !important; padding: 10px 30px !important; font-family: 'Cairo', sans-serif; margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; }
+.swal2-deny:hover { background: #1557c0 !important; }
+.swal2-actions { flex-wrap: wrap !important; gap: 10px !important; padding: 10px !important; }
 
-.swal2-title {
-    font-size: 1.3rem !important;
-    padding: 15px 10px !important;
-    line-height: 1.5 !important;
-}
-
-.swal2-html-container {
-    padding: 10px !important;
-}
-
-.swal2-confirm{
-  background:#939393 !important;
-  color:#fff !important;
-  border-radius:20px !important;
-  padding:10px 30px !important;
-  font-family:'Cairo',sans-serif;
-  font-weight:600;
-  box-shadow:0 2px 6px rgba(0,0,0,.15);
-  margin: 5px !important;
-  transition: background 0.3s ease;
-  font-size: 0.95rem !important;
-}
-
-.swal2-confirm:hover {
-  background: #d6d6d6 !important;
-}
-
-.swal2-deny {
-    background: #1E68E8 !important;
-    color: #fff !important;
-    border-radius: 20px !important;
-    padding: 10px 30px !important;
-    font-family: 'Cairo', sans-serif;
-    margin: 5px !important;
-    transition: background 0.3s ease;
-    font-size: 0.95rem !important;
-}
-
-.swal2-deny:hover {
-    background: #1557c0 !important;
-}
-
-.swal2-actions {
-    flex-wrap: wrap !important;
-    gap: 10px !important;
-    padding: 10px !important;
-}
-
-footer{
-  background:#1E68E8;
-  color:#fff;
-  padding:15px;
-  border-top-left-radius:25px;
-  border-top-right-radius:25px;
-  width: 100%;
-  margin-top: auto;
-  position: relative;
-  font-size: 0.9rem;
-}
+footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25px; border-top-right-radius:25px; width: 100%; margin-top: auto; position: relative; font-size: 0.9rem; }
 
 /* ============================================================
    📱 تحسينات التجاوب (Media Queries)
    ============================================================ */
-
-/* للشاشات الصغيرة جداً (أقل من 400px) */
 @media (max-width: 400px) {
-    .news-ticker-container {
-        min-height: 60px;
-        padding: 8px 10px;
-    }
-
-    .typewriter-text {
-        font-size: 12px;
-        line-height: 1.3;
-    }
-
-    .logo-container {
-        width: 110px;
-        height: 110px;
-        margin-bottom: 5px;
-    }
-    
-    .logo-container img {
-        width: 85px;
-        height: 85px;
-    }
-    
-    .logo-ring {
-        width: 100px;
-        height: 100px;
-        border-width: 2px;
-    }
-
-    header {
-        padding: 20px 10px;
-    }
-
-    header h1 {
-        font-size: 1.1rem;
-        line-height: 1.4;
-        padding: 0 5px;
-    }
-
-    .services {
-        padding: 15px 10px;
-        gap: 12px;
-        grid-template-columns: 1fr;
-    }
-
-    .service {
-        flex-direction: row;
-        text-align: right;
-        padding: 15px;
-        gap: 12px;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 80px;
-    }
-
-    .service i {
-        font-size: 32px;
-        margin-bottom: 0;
-        min-width: 40px;
-        text-align: center;
-    }
-
-    .service h3 {
-        font-size: 0.9rem;
-        text-align: right;
-        line-height: 1.4;
-    }
-
-    .icon-container {
-        gap: 10px;
-        padding: 5px;
-    }
-
-    .icon-btn {
-        width: 100%;
-        height: 70px;
-        flex-direction: row;
-        gap: 12px;
-        justify-content: flex-start;
-        padding: 10px 15px;
-        font-size: 0.9rem;
-    }
-    
-    .icon-btn i {
-        font-size: 24px;
-        margin-bottom: 0;
-        min-width: 35px;
-    }
-
-    .swal2-popup {
-        padding: 15px !important;
-    }
-
-    .swal2-title {
-        font-size: 1.1rem !important;
-    }
-
-    .swal2-confirm, .swal2-deny {
-        padding: 8px 20px !important;
-        font-size: 0.85rem !important;
-    }
-    
-    footer {
-        font-size: 0.75rem;
-        padding: 10px;
-    }
+    .news-ticker-container { min-height: 60px; padding: 8px 10px; }
+    .typewriter-text { font-size: 12px; line-height: 1.3; }
+    .logo-container { width: 110px; height: 110px; margin-bottom: 5px; }
+    .logo-container img { width: 85px; height: 85px; }
+    .logo-ring { width: 100px; height: 100px; border-width: 2px; }
+    header { padding: 20px 10px; }
+    header h1 { font-size: 1.1rem; line-height: 1.4; padding: 0 5px; }
+    .btn-back { top: 15px; right: 15px; padding: 6px 12px; font-size: 13px; }
+    .services { padding: 15px 10px; gap: 12px; grid-template-columns: 1fr; }
+    .service { flex-direction: row; text-align: right; padding: 15px; gap: 12px; align-items: center; justify-content: flex-start; min-height: 80px; }
+    .service i { font-size: 32px; margin-bottom: 0; min-width: 40px; text-align: center; }
+    .service h3 { font-size: 0.9rem; text-align: right; line-height: 1.4; }
+    .icon-container { gap: 10px; padding: 5px; }
+    .icon-btn { width: 100%; height: 70px; flex-direction: row; gap: 12px; justify-content: flex-start; padding: 10px 15px; font-size: 0.9rem; }
+    .icon-btn i { font-size: 24px; margin-bottom: 0; min-width: 35px; }
+    .swal2-popup { padding: 15px !important; }
+    .swal2-title { font-size: 1.1rem !important; }
+    .swal2-confirm, .swal2-deny { padding: 8px 20px !important; font-size: 0.85rem !important; }
+    footer { font-size: 0.75rem; padding: 10px; }
 }
-
-/* للشاشات المتوسطة (400px - 768px) */
 @media (min-width: 401px) and (max-width: 768px) {
-    .news-ticker-container {
-        min-height: 55px;
-    }
-
-    .typewriter-text {
-        font-size: 14px;
-    }
-
-    .logo-container {
-        width: 130px;
-        height: 130px;
-        margin-bottom: 5px;
-    }
-    
-    .logo-container img {
-        width: 100px;
-        height: 100px;
-    }
-    
-    .logo-ring {
-        width: 120px;
-        height: 120px;
-    }
-
-    header h1 {
-        font-size: 1.4rem;
-        line-height: 1.4;
-    }
-
-    .services {
-        padding: 25px 15px;
-        gap: 15px;
-        grid-template-columns: 1fr;
-    }
-
-    .service {
-        flex-direction: row;
-        text-align: right;
-        padding: 20px;
-        gap: 15px;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 100px;
-    }
-
-    .service i {
-        font-size: 40px;
-        margin-bottom: 0;
-        min-width: 50px;
-        text-align: center;
-    }
-
-    .service h3 {
-        font-size: 1rem;
-        text-align: right;
-    }
-
-    .icon-container {
-        gap: 15px;
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .icon-btn {
-        height: 120px;
-        font-size: 0.9rem;
-    }
-    
-    .icon-btn i {
-        font-size: 28px;
-    }
-
-    .swal2-title {
-        font-size: 1.2rem !important;
-    }
-    
-    footer {
-        font-size: 0.85rem;
-        padding: 12px;
-    }
+    .news-ticker-container { min-height: 55px; }
+    .typewriter-text { font-size: 14px; }
+    .logo-container { width: 130px; height: 130px; margin-bottom: 5px; }
+    .logo-container img { width: 100px; height: 100px; }
+    .logo-ring { width: 120px; height: 120px; }
+    header h1 { font-size: 1.4rem; line-height: 1.4; }
+    .services { padding: 25px 15px; gap: 15px; grid-template-columns: 1fr; }
+    .service { flex-direction: row; text-align: right; padding: 20px; gap: 15px; align-items: center; justify-content: flex-start; min-height: 100px; }
+    .service i { font-size: 40px; margin-bottom: 0; min-width: 50px; text-align: center; }
+    .service h3 { font-size: 1rem; text-align: right; }
+    .icon-container { gap: 15px; grid-template-columns: repeat(2, 1fr); }
+    .icon-btn { height: 120px; font-size: 0.9rem; }
+    .icon-btn i { font-size: 28px; }
+    .swal2-title { font-size: 1.2rem !important; }
+    footer { font-size: 0.85rem; padding: 12px; }
 }
-
-/* للأجهزة اللوحية والشاشات الكبيرة */
 @media (min-width: 800px) and (max-width: 1200px) {
-    .services {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-        padding: 30px 20px;
-    }
-
-    .icon-btn {
-        width: 100%;
-    }
+    .services { grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 30px 20px; }
+    .icon-btn { width: 100%; }
 }
-
-/* تحسينات للمناظر الأفقية على الهواتف */
 @media (max-height: 500px) and (orientation: landscape) {
-    header {
-        padding: 15px 10px;
-    }
-
-    .logo-container {
-        width: 100px;
-        height: 100px;
-    }
-
-    .logo-container img {
-        width: 75px;
-        height: 75px;
-    }
-
-    .logo-ring {
-        width: 90px;
-        height: 90px;
-    }
-
-    header h1 {
-        font-size: 1.2rem;
-    }
-
-    .services {
-        padding: 20px 15px;
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .service {
-        padding: 15px;
-        min-height: 80px;
-    }
+    header { padding: 15px 10px; }
+    .logo-container { width: 100px; height: 100px; }
+    .logo-container img { width: 75px; height: 75px; }
+    .logo-ring { width: 90px; height: 90px; }
+    header h1 { font-size: 1.2rem; }
+    .services { padding: 20px 15px; grid-template-columns: repeat(2, 1fr); }
+    .service { padding: 15px; min-height: 80px; }
 }
-
-
-/* ====== إصلاح عرض أيقونات مركز أحمد زبانة ولحسيني محمد فقط ====== */
 @media (min-width: 769px) {
-
-  .swal2-popup .icon-container {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
-  }
-
+  .swal2-popup .icon-container { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
 }
-
-
 </style>
 </head>
 
@@ -547,16 +131,17 @@ footer{
 </div>
 
 <header>
+  <!-- زر العودة للوحة التحكم -->
+  <button class="btn-back" onclick="goBack()"><i class="fa-solid fa-arrow-right"></i> رجوع للوحة التحكم</button>
+
   <div class="logo-container">
     <div class="logo-ring"></div>
-    <img 
-      src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
-      onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'"
-      alt="شعار"
-    >
+    <img src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
+         onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'" alt="شعار">
   </div>
 
-  <h1>فضاء التكوين البيداغوجي توقرت</h1>
+  <h1>إدارة الملفات والمقاييس</h1>
+  <p style="margin:0; font-size:14px; color:#bbdefb; font-weight:600;">الرجاء اختيار المركز لإدارة ملفاته</p>
 </header>
 
 <section class="services">
@@ -586,10 +171,36 @@ footer{
   </div>
 </section>
 
-<footer>© 2025 مديرية التربية لولاية توقرت | فضاؤ التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
+<footer>© 2025 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
 
 <script>
-/* كود الكتابة السلسة */
+// ==================== 1. الحماية وإعدادات الجلسة ====================
+const userEmpId = sessionStorage.getItem("userEmpId");
+const inspectorCenter = sessionStorage.getItem("inspectorCenter");
+
+if (!userEmpId) {
+    window.location.href = "index_2.html";
+}
+
+// دالة الرجوع للوحة
+function goBack() {
+    if (userEmpId === "ADMIN_ACCESS") {
+         window.location.href = "admin_dashboard.html";
+    } else {
+         window.location.href = "inspector_dashboard.html";
+    }
+}
+
+// خريطة أسماء المراكز لمقارنتها مع مركز المفتش للحماية
+const centerNamesMap = {
+    1: "ثانوية عبد الرحمان الكواكبي",
+    2: "متوسطة دقعة الطاهر بن الزاوي",
+    3: "ثانوية البشير الإبراهيمي",
+    4: "متوسطة أحمد زبانة",
+    5: "ثانوية لحسيني محمد"
+};
+
+// ==================== 2. تأثير الكتابة السلسة ====================
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
 let charIndex = 0;
@@ -616,23 +227,45 @@ function startFadeOut() {
 
 window.onload = function() { typeWriter(); };
 
-/* الروابط */
-const centerLinks = {
-    1: { 'arabic': 'kawakibi-arabic.html', 'french': 'kawakibi-french.html' },
-    2: { 'english': 'dagaa_english_ap_import2.html', 'sport': 'dagaa_sport_ap_import2.html' },
-    3: { 'french': 'ibrahimi-french.html', 'english': 'ibrahimi-english.html', 'sport': 'ibrahimi-sport.html', 'others': 'ibrahimi-others.html' },
-    4: {
-        'primary': { 'arabic': 'zabana-prim-arabic.html', 'french': 'zabana-prim-french.html', 'english': 'zabana-prim-english.html', 'sport': 'zabana-prim-sport.html' },
-        'middle_secondary': { 'french': 'zabana-ms-french.html', 'english': 'zabana-ms-english.html', 'sport': 'zabana-ms-sport.html', 'others': 'zabana-ms-others.html' }
-    },
-    5: {
-        'primary': { 'arabic': 'lahsini-prim-arabic.html', 'french': 'lahsini-prim-french.html', 'english': 'lahsini-prim-english.html', 'sport': 'lahsini-prim-sport.html' },
-        'middle_secondary': { 'french': 'lahsini-ms-french.html', 'english': 'lahsini-ms-english.html', 'sport': 'lahsini-ms-sport.html', 'others': 'lahsini-ms-others.html' }
-    }
-};
 
-/* دوال الفتح */
+// ==================== 3. دوال الفتح والحماية ====================
 function openCenter(centerId) {
+  
+  // -- الجدار الأمني: فحص صلاحيات المفتش فور النقر --
+  const selectedCenterName = centerNamesMap[centerId];
+  if (userEmpId !== "ADMIN_ACCESS" && selectedCenterName !== inspectorCenter) {
+      // إظهار التنبيه الاحترافي المنسق
+      Swal.fire({
+          icon: 'warning',
+          title: '<h3 style="color:#d32f2f; margin:0; font-weight:700; font-family:\'Cairo\';"><i class="fa-solid fa-shield-halved"></i> صلاحيات مقيدة</h3>',
+          html: `
+              <div style="font-size: 15px; line-height: 1.8; color: #444; padding: 5px 0; font-family:\'Cairo\';">
+                  عذراً أستاذي الكريم، النظام يمنع وصولك إلى ملفات هذا المركز لعدم امتلاكك الصلاحيات الإدارية اللازمة.
+                  
+                  <div style="color: #d32f2f; font-size: 16px; font-weight: bold; margin: 15px 0; padding: 10px; background: #ffebee; border-radius: 8px; border: 1px dashed #d32f2f;">
+                      <i class="fa-solid fa-ban"></i> ${selectedCenterName}
+                  </div>
+                  
+                  <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+                  
+                  <div style="font-size: 14px; color: #666; margin-bottom: 10px;">
+                      تقتصر صلاحياتك الحالية بصفتك مشرفاً على إدارة ملفات مركزك فقط:
+                  </div>
+                  
+                  <div>
+                      <span style="background: #e8fbf0; color: #0FBA50; padding: 8px 15px; border-radius: 8px; font-weight: bold; border: 1px solid #0FBA50; display: inline-block;">
+                          <i class="fa-solid fa-check-circle"></i> ${inspectorCenter}
+                      </span>
+                  </div>
+              </div>
+          `,
+          confirmButtonText: '<i class="fa-solid fa-check"></i> حسناً، فهمت',
+          confirmButtonColor: '#102a43'
+      });
+      return; // يتم إيقاف التنفيذ ولا تظهر نوافذ التخصصات
+  }
+
+  // -- إذا كانت الصلاحية سليمة، تظهر النوافذ المنبثقة بشكل طبيعي --
   let html = '<div class="icon-container">';
   let popupTitle = '';
 
@@ -672,26 +305,14 @@ function openCenter(centerId) {
             <i class="fa-solid fa-layer-group"></i> باقي التخصصات
         </div>`;
   } 
-  else if (centerId === 4) {
+  else if (centerId === 4 || centerId === 5) {
       popupTitle = 'اختر الطور:';
       html += `
-        <div class="icon-btn" onclick="openSubMenu('primary', 4)">
+        <div class="icon-btn" onclick="openSubMenu('primary', ${centerId})">
           <i class="fa-solid fa-child-reaching"></i>
           الطور الابتدائي
         </div>
-        <div class="icon-btn" onclick="openSubMenu('middle_secondary', 4)">
-          <i class="fa-solid fa-user-graduate"></i>
-          الطور المتوسط والثانوي
-        </div>`;
-  }
-  else if (centerId === 5) {
-      popupTitle = 'اختر الطور:';
-      html += `
-        <div class="icon-btn" onclick="openSubMenu('primary', 5)">
-          <i class="fa-solid fa-child-reaching"></i>
-          الطور الابتدائي
-        </div>
-        <div class="icon-btn" onclick="openSubMenu('middle_secondary', 5)">
+        <div class="icon-btn" onclick="openSubMenu('middle_secondary', ${centerId})">
           <i class="fa-solid fa-user-graduate"></i>
           الطور المتوسط والثانوي
         </div>`;
@@ -768,31 +389,20 @@ function openSubMenu(level, parentId) {
     });
 }
 
+// التوجيه الديناميكي لصفحة إدارة المقاييس
 function openLink(centerId, type, level = null) {
-    let url = '';
-    const centerData = centerLinks[centerId];
-
-    if (centerData) {
-        if (level && centerData[level]) {
-            url = centerData[level][type];
-        } else if (!level && centerData[type]) {
-            url = centerData[type];
+    // تعيين الأطوار الافتراضية للمراكز التي لا تحتوي على خيار الطور
+    if (!level) {
+        if (centerId === 1 || centerId === 2) {
+            level = 'primary';
+        } else if (centerId === 3) {
+            level = 'middle_secondary';
         }
     }
-
-    if(url && url !== '#') {
-        window.location.href = url;
-    } else {
-        Swal.fire({
-            icon: 'info',
-            title: 'قريباً',
-            text: 'سيتم إضافة الرابط قريباً',
-            confirmButtonColor: '#1E68E8'
-        });
-    }
+    // التوجيه لصفحة رفع الملفات مع تمرير المعطيات
+    window.location.href = `manage_courses.html?c=${centerId}&l=${level}&s=${type}`;
 }
 </script>
 
 </body>
 </html>
-

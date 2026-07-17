@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة تحكم المديرية - فضاء التكوين البيداغوجي</title>
+
+  <!-- الخطوط والأيقونات والمكتبات -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  
+  <!-- ملف قاعدة بيانات الموقع -->
+  <script src="database.js"></script>
+
+  <style>
+    /* =========================================
+       1. الأساسيات والهوية البصرية
+       ========================================= */
+    * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+    body {
+      margin: 0; background: linear-gradient(135deg, #e8fbf0, #dcf7e6); color: #333;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+
+    /* الشريط العلوي */
+    .top-nav {
+      background: #0FBA50; color: white; padding: 15px 30px; display: flex;
+      justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .top-nav h2 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+    .logout-btn { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+    .logout-btn:hover { background: #c82333; }
+
+    .dashboard-container { padding: 20px; flex: 1; max-width: 100%; margin: 0 auto; width: 100%; }
+
+    /* =========================================
+       2. البطاقات الإحصائية
+       ========================================= */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .stat-card {
+      background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      display: flex; align-items: center; justify-content: space-between; border-right: 5px solid #0FBA50;
+    }
+    .stat-card.blue { border-right-color: #1E68E8; }
+    .stat-card.pink { border-right-color: #e91e63; }
+    
+    .stat-info h3 { margin: 0; font-size: 14px; color: #777; }
+    .stat-info p { margin: 5px 0 0; font-size: 28px; font-weight: 700; color: #333; }
+    .stat-icon { font-size: 40px; color: #0FBA50; opacity: 0.8; }
+    .stat-card.blue .stat-icon { color: #1E68E8; }
+    .stat-card.pink .stat-icon { color: #e91e63; }
+
+    /* =========================================
+       3. الفلاتر والبحث
+       ========================================= */
+    .filters-section {
+      background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px;
+      display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;
+    }
+    .filters-header {
+      width: 100%; display: flex; justify-content: space-between; align-items: center; 
+      margin-bottom: 10px; border-bottom: 2px dashed #eee; padding-bottom: 15px; flex-wrap: wrap; gap: 15px;
+    }
+    
+    .btn-print {
+      background: #1E68E8; color: white; border: none; padding: 6px 15px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-family: 'Cairo'; font-size: 14px; transition: 0.3s;
+    }
+    .btn-print:hover { background: #1557c0; transform: translateY(-2px); }
+
+    .filter-group { flex: 1; min-width: 180px; display: flex; flex-direction: column; position: relative; }
+    .filter-group label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px; }
+    .filter-group select, .filter-group input {
+      padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; outline: none; transition: 0.3s;
+    }
+    .filter-group select:focus, .filter-group input:focus { border-color: #0FBA50; box-shadow: 0 0 5px rgba(15,186,80,0.2); }
+
+    .multi-select-box {
+      padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; background: white;
+      cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 42px;
+    }
+    .multi-select-box:hover { border-color: #0FBA50; }
+    .multi-select-options {
+      position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #0FBA50;
+      border-radius: 8px; z-index: 100; max-height: 250px; overflow-y: auto; display: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-top: 5px; padding: 5px;
+    }
+    .multi-select-options label {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 0; border-radius: 5px;
+    }
+    .multi-select-options label:hover { background: #f0fdf4; }
+    .multi-select-options input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #0FBA50; }
+
+    /* =========================================
+       4. شريط الإجراءات الجماعية
+       ========================================= */
+    .bulk-action-bar {
+      background: #f0fdf4; border: 2px dashed #0FBA50; padding: 15px; border-radius: 12px; margin-bottom: 20px;
+      display: flex; gap: 15px; align-items: center; flex-wrap: wrap;
+    }
+    .bulk-action-bar select { padding: 8px; border-radius: 6px; border: 1px solid #0FBA50; outline: none; min-width: 200px; }
+    .btn-assign-bulk { background: #0FBA50; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+    .btn-assign-bulk:hover { background: #0a8a3a; }
+
+    /* =========================================
+       5. الجدول الاحترافي ونظام الصفحات
+       ========================================= */
+    .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; min-width: 1300px; }
+    thead { background: #0FBA50; color: white; }
+    th, td { padding: 12px 15px; text-align: right; border-bottom: 1px solid #eee; font-size: 14px; }
+    tbody tr:hover { background: #f9f9f9; }
+    
+    .center-select { padding: 5px; border-radius: 5px; border: 1px solid #ccc; outline: none; font-family: 'Cairo'; max-width: 160px; }
+    .btn-assign-single { background: #1E68E8; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; margin-right: 5px; font-family: 'Cairo';}
+    .btn-assign-single:hover { background: #1557c0; }
+
+    .action-btns { display: flex; gap: 5px; }
+    .btn-icon { width: 30px; height: 30px; border-radius: 5px; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .btn-info { background: #17a2b8; } .btn-info:hover { background: #138496; }
+    .btn-edit { background: #ffc107; color: #000; } .btn-edit:hover { background: #e0a800; }
+    .btn-delete { background: #dc3545; } .btn-delete:hover { background: #c82333; }
+
+    .pagination-container { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; flex-wrap: wrap; gap: 10px; }
+    .pagination-info { font-weight: 600; color: #555; font-size: 14px; }
+    .pagination-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
+    .page-btn { background: #f0fdf4; color: #0FBA50; border: 1px solid #0FBA50; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-family: 'Cairo'; }
+    .page-btn:hover:not(:disabled) { background: #0FBA50; color: white; }
+    .page-btn.active { background: #0FBA50; color: white; }
+    .page-btn:disabled { background: #eee; color: #aaa; border-color: #ddd; cursor: not-allowed; }
+
+    #loader { display: flex; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:9999; justify-content:center; align-items:center; flex-direction:column; }
+    .spinner { border: 5px solid #f3f3f3; border-top: 5px solid #0FBA50; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* جداول رؤساء المراكز المنبثقة */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: right; }
+    .admin-table th { background: #1E68E8; color: white; padding: 10px; border: 1px solid #ddd; text-align: center; }
+    .admin-table td { padding: 10px; border: 1px solid #ddd; }
+    .admin-table tr:nth-child(even) { background: #f9f9f9; }
+
+    @media (max-width: 900px) {
+      .dashboard-container { padding: 10px; }
+      .top-nav { flex-direction: column; gap: 15px; padding: 15px 10px; text-align: center; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .filters-section { flex-direction: column; gap: 10px; padding: 15px; }
+      .filter-group { width: 100%; min-width: 100%; }
+      .bulk-action-bar { flex-direction: column; align-items: stretch; gap: 10px; padding: 15px; }
+      .bulk-action-bar select, .btn-assign-bulk { width: 100%; justify-content: center; }
+      th, td { padding: 8px 10px; }
+      .pagination-container { flex-direction: column; text-align: center; }
+      .filters-header { justify-content: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- شاشة التحميل -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h3 style="color: #0FBA50; margin-top: 15px;">جاري تحميل البيانات...</h3>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <div class="top-nav">
+    <h2><i class="fa-solid fa-shield-halved"></i> لوحة تحكم المديرية</h2>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+      <!-- زر حسابات رؤساء المراكز -->
+      <button class="logout-btn" style="background: #ff9800; color: white;" onclick="manageCenterAdmins()">
+        <i class="fa-solid fa-user-tie"></i> حسابات رؤساء المراكز
+      </button>
+      <button class="logout-btn" style="background: #1E68E8;" onclick="window.location.href='dashboard_finale_upload.html'">
+        <i class="fa-solid fa-folder-open"></i> إدارة الملفات
+      </button>
+      <button class="logout-btn" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    
+    <!-- البطاقات الإحصائية الرئيسية -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-info">
+          <h3>إجمالي المسجلين</h3>
+          <p id="stat-total">0</p>
+        </div>
+        <i class="fa-solid fa-users stat-icon"></i>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-info">
+          <h3>الذكور</h3>
+          <p id="stat-male">0</p>
+        </div>
+        <i class="fa-solid fa-person stat-icon"></i>
+      </div>
+      <div class="stat-card pink">
+        <div class="stat-info">
+          <h3>الإناث</h3>
+          <p id="stat-female">0</p>
+        </div>
+        <i class="fa-solid fa-person-dress stat-icon"></i>
+      </div>
+    </div>
+
+    <!-- البطاقات الإحصائية للمراكز -->
+    <div class="stats-grid" id="centersStatsContainer" style="margin-bottom: 25px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));"></div>
+
+    <!-- الفلاتر -->
+    <div class="filters-section">
+      <div class="filters-header">
+         <h3 style="margin: 0; color: #333; font-size: 16px;"><i class="fa-solid fa-filter" style="color: #0FBA50;"></i> فلاتر البحث المتقدمة</h3>
+         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+             <button class="btn-print" onclick="printFilteredList()">
+               <i class="fa-solid fa-print"></i> طباعة القوائم
+             </button>
+             <span style="background: #ff9800; color: white; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+               العدد: <span id="stat-filtered">0</span>
+             </span>
+         </div>
+      </div>
+      
+      <div class="filter-group">
+        <label>بحث شامل (رقم، اسم)</label>
+        <input type="text" id="searchInput" placeholder="ابحث هنا..." oninput="applyFilters()">
+      </div>
+      
+      <div class="filter-group">
+        <label>الدائرة</label>
+        <select id="filterDaira" onchange="applyFilters()">
+          <option value="الكل">الكل</option>
+          <option value="توقرت">توقرت</option>
+          <option value="تماسين">تماسين</option>
+          <option value="المقارين">المقارين</option>
+          <option value="الطيبات">الطيبات</option>
+          <option value="الحجيرة">الحجيرة</option>
+          <option value="البرمة">البرمة</option>
+        </select>
+      </div>
+
+      <div class="filter-group" id="multiSelectRankContainer">
+        <label>الرتبة / الطور</label>
+        <div class="multi-select-box" onclick="toggleRankMenu()">
+           <span id="rank-selected-text">الكل</span>
+           <i class="fa-solid fa-chevron-down" style="color:#0FBA50;"></i>
+        </div>
+        <div class="multi-select-options" id="rankOptions"></div>
+      </div>
+
+      <div class="filter-group" id="multiSelectContainer">
+        <label>مادة التخصص (تتحدث حسب الرتبة)</label>
+        <div class="multi-select-box" onclick="toggleSpecMenu()">
+           <span id="spec-selected-text">الكل</span>
+           <i class="fa-solid fa-chevron-down" style="color:#0FBA50;"></i>
+        </div>
+        <div class="multi-select-options" id="specOptions"></div>
+      </div>
+
+      <div class="filter-group">
+        <label>مركز التكوين الحالي</label>
+        <select id="filterCenter" onchange="applyFilters()">
+          <option value="الكل">الكل</option>
+          <option value="غير محدد">غير محدد</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- الإدراج الجماعي -->
+    <div class="bulk-action-bar">
+      <span><i class="fa-solid fa-layer-group"></i> إدراج جماعي:</span>
+      <select id="bulkCenterSelect">
+        <option value="">-- اختر المركز لتسجيلهم فيه --</option>
+      </select>
+      <button class="btn-assign-bulk" onclick="bulkAssignCenter()">
+        <i class="fa-solid fa-check-double"></i> إدراج المحددين
+      </button>
+    </div>
+
+    <!-- الجدول -->
+    <div class="table-responsive" id="table-section">
+      <table id="traineesTable">
+        <thead>
+          <tr>
+            <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+            <th>الرقم الوظيفي</th>
+            <th>الاسم واللقب</th>
+            <th>تاريخ الميلاد</th>
+            <th>الدائرة</th>
+            <th>العنوان</th>
+            <th>رقم الهاتف</th>
+            <th>الرتبة / مكان العمل</th>
+            <th>مادة التخصص</th>
+            <th style="min-width: 250px;">مركز التكوين (تعيين)</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- البيانات ستظهر هنا -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- نظام الصفحات -->
+    <div id="pagination-controls" class="pagination-container" style="display: none;"></div>
+
+  </div>
+
+<script>
+// ================= إعدادات Firebase المحدثة =================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61",
+  measurementId: "G-TTJT4LQ65L"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// المتغيرات العامة
+let allData = [];
+let filteredData = [];
+let currentPage = 1;
+const rowsPerPage = 10;
+
+window.onload = function() {
+    if(sessionStorage.getItem("userEmpId") !== "ADMIN_ACCESS") {
+        window.location.href = "index_2.html"; 
+        return;
+    }
+    initCentersStats();
+    populateCentersDropdowns();
+    fetchData();
+};
+
+function logout() {
+    sessionStorage.clear();
+    window.location.href = "index_2.html";
+}
+
+// ================= دوال الفلاتر المتعددة =================
+function toggleRankMenu() {
+    const menu = document.getElementById("rankOptions");
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+function toggleSpecMenu() {
+    const menu = document.getElementById("specOptions");
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+document.addEventListener('click', function(e) {
+    if(!e.target.closest('#multiSelectRankContainer')) document.getElementById("rankOptions").style.display = "none";
+    if(!e.target.closest('#multiSelectContainer')) document.getElementById("specOptions").style.display = "none";
+});
+
+function handleRankAll() {
+    document.querySelectorAll('.rank-checkbox').forEach(cb => cb.checked = false); 
+    updateRankText();
+    updateDynamicSpecs();
+}
+function handleRankChange() {
+    const anyChecked = Array.from(document.querySelectorAll('.rank-checkbox')).some(cb => cb.checked);
+    document.getElementById('rank-all').checked = !anyChecked;
+    updateRankText();
+    updateDynamicSpecs();
+}
+function updateRankText() {
+    if(document.getElementById('rank-all').checked) {
+        document.getElementById('rank-selected-text').innerText = "الكل";
+        return;
+    }
+    const checkedBoxes = document.querySelectorAll('.rank-checkbox:checked');
+    if(checkedBoxes.length === 1) {
+        document.getElementById('rank-selected-text').innerText = checkedBoxes[0].value;
+    } else {
+        document.getElementById('rank-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`;
+    }
+}
+
+function updateDynamicSpecs() {
+    let selectedRanks = [];
+    if(!document.getElementById('rank-all').checked) {
+        selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value);
+    }
+    
+    let validSpecs = new Set();
+    allData.forEach(item => {
+        if (selectedRanks.length === 0 || selectedRanks.includes(item.rank)) {
+            if (item.specialty && item.specialty.trim() !== "") validSpecs.add(item.specialty);
+        }
+    });
+
+    const specOptionsDiv = document.getElementById("specOptions");
+    specOptionsDiv.innerHTML = `<label><input type="checkbox" id="spec-all" value="الكل" checked onchange="handleSpecAll()"> الكل</label>`;
+    validSpecs.forEach(val => {
+        specOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="spec-checkbox" value="${val}" onchange="handleSpecChange()"> ${val}</label>`);
+    });
+
+    document.getElementById('spec-selected-text').innerText = "الكل";
+    applyFilters();
+}
+
+function handleSpecAll() {
+    document.querySelectorAll('.spec-checkbox').forEach(cb => cb.checked = false); 
+    updateSpecText();
+    applyFilters();
+}
+function handleSpecChange() {
+    const anyChecked = Array.from(document.querySelectorAll('.spec-checkbox')).some(cb => cb.checked);
+    document.getElementById('spec-all').checked = !anyChecked;
+    updateSpecText();
+    applyFilters();
+}
+function updateSpecText() {
+    if(document.getElementById('spec-all').checked) {
+        document.getElementById('spec-selected-text').innerText = "الكل";
+        return;
+    }
+    const checkedBoxes = document.querySelectorAll('.spec-checkbox:checked');
+    if(checkedBoxes.length === 1) {
+        document.getElementById('spec-selected-text').innerText = checkedBoxes[0].value;
+    } else {
+        document.getElementById('spec-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`;
+    }
+}
+
+// ================= دوال المراكز =================
+function initCentersStats() {
+    const container = document.getElementById("centersStatsContainer");
+    const centers = UI_NAMES.centers;
+    let html = '';
+    for (let key in centers) {
+        html += `
+        <div class="stat-card" style="border-right-color: #9c27b0; padding: 15px;">
+          <div class="stat-info">
+            <h3 style="font-size: 13px; color: #555;">${centers[key]}</h3>
+            <p id="stat-center-${key}" style="font-size: 24px; color: #9c27b0;">0</p>
+          </div>
+          <i class="fa-solid fa-school stat-icon" style="color: #9c27b0; font-size: 28px; opacity: 0.3;"></i>
+        </div>`;
+    }
+    container.innerHTML = html;
+}
+
+function populateCentersDropdowns() {
+    const centers = UI_NAMES.centers;
+    let optionsHtml = '';
+    for (let key in centers) {
+        optionsHtml += `<option value="${centers[key]}">${centers[key]}</option>`;
+    }
+    document.getElementById("filterCenter").insertAdjacentHTML('beforeend', optionsHtml);
+    document.getElementById("bulkCenterSelect").insertAdjacentHTML('beforeend', optionsHtml);
+}
+
+function getCenterOptionsHtml(selectedCenter) {
+    const centers = UI_NAMES.centers;
+    let html = `<option value="">-- اختر المركز --</option>`;
+    for (let key in centers) {
+        const centerName = centers[key];
+        const isSelected = (selectedCenter === centerName) ? 'selected' : '';
+        html += `<option value="${centerName}" ${isSelected}>${centerName}</option>`;
+    }
+    return html;
+}
+
+// ================= جلب البيانات وبناء الفلاتر =================
+async function fetchData() {
+    try {
+        const snapshot = await db.collection("employeescomnew").get();
+        allData = [];
+        let ranks = new Set();
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            let item = {
+                docId: doc.id,
+                empId: data.id || doc.id,
+                name: data.name || "",
+                gender: data.gnr || "",
+                dob: data.diz || "",
+                rank: data.grade || "",
+                specialty: data.maty || "",
+                workplace: data.place || "",
+                address: data.adrs || "",
+                daira: data.daira || "-",         
+                phone: data.phone || data.tel || "-", 
+                pob: data.pob || "-", 
+                center: data.center || ""
+            };
+
+            if (item.dob && typeof item.dob.toDate === 'function') {
+                let d = item.dob.toDate();
+                let day = ("0" + d.getDate()).slice(-2);
+                let month = ("0" + (d.getMonth() + 1)).slice(-2);
+                let year = d.getFullYear();
+                item.dob = `${day}-${month}-${year}`; 
+            } else if (typeof item.dob === 'string') {
+                item.dob = item.dob.replace(/\//g, '-');
+            }
+
+            allData.push(item);
+            if(item.rank) ranks.add(item.rank);
+        });
+
+        const rankOptionsDiv = document.getElementById("rankOptions");
+        rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
+        ranks.forEach(val => { 
+            if(val.trim() !== "") {
+                rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); 
+            }
+        });
+
+        document.getElementById("loader").style.display = "none";
+        updateDynamicSpecs(); 
+
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        document.getElementById("loader").style.display = "none";
+        Swal.fire('خطأ', 'تعذر جلب البيانات من قاعدة البيانات', 'error');
+    }
+}
+
+// ================= الفلترة وعرض الجدول =================
+function applyFilters() {
+    const search = document.getElementById("searchInput").value.toLowerCase();
+    const filterDaira = document.getElementById("filterDaira").value;
+    const filterCenter = document.getElementById("filterCenter").value;
+
+    let selectedRanks = [];
+    if(!document.getElementById('rank-all').checked) {
+        selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value);
+    }
+
+    let selectedSpecs = [];
+    if(!document.getElementById('spec-all').checked) {
+        selectedSpecs = Array.from(document.querySelectorAll('.spec-checkbox:checked')).map(cb => cb.value);
+    }
+
+    filteredData = allData.filter(item => {
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchDaira = (filterDaira === "الكل") || (item.daira === filterDaira);
+        const matchRank = selectedRanks.length === 0 || selectedRanks.includes(item.rank);
+        const matchSpec = selectedSpecs.length === 0 || selectedSpecs.includes(item.specialty);
+        
+        let matchCenter = true;
+        if(filterCenter !== "الكل") {
+            if(filterCenter === "غير محدد") matchCenter = (!item.center || item.center.trim() === "");
+            else matchCenter = (item.center === filterCenter);
+        }
+        return matchSearch && matchDaira && matchRank && matchSpec && matchCenter;
+    });
+
+    currentPage = 1; 
+    updateStats();
+    renderTable();
+}
+
+function updateStats() {
+    document.getElementById("stat-total").innerText = allData.length;
+    const males = allData.filter(i => (i.gender || '').includes('ذكر') || (i.gender || '').toUpperCase() === 'M').length;
+    const females = allData.filter(i => (i.gender || '').includes('نث') || (i.gender || '').toUpperCase() === 'F').length;
+    
+    document.getElementById("stat-male").innerText = males;
+    document.getElementById("stat-female").innerText = females;
+    document.getElementById("stat-filtered").innerText = filteredData.length;
+
+    const centers = UI_NAMES.centers;
+    for (let key in centers) {
+        const count = filteredData.filter(i => i.center === centers[key]).length;
+        const el = document.getElementById(`stat-center-${key}`);
+        if(el) el.innerText = count;
+    }
+}
+
+function renderTable() {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    document.getElementById("selectAll").checked = false;
+
+    if(filteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة للبحث</td></tr>`;
+        renderPagination(0);
+        return;
+    }
+
+    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    const paginatedData = filteredData.slice(start, end);
+
+    paginatedData.forEach(item => {
+        const tr = document.createElement("tr");
+        const rankPlaceHtml = `
+            <div style="line-height: 1.4;">
+                <strong>${item.rank || '-'}</strong><br>
+                <span style="font-size: 12px; color: #555;">${item.workplace || '-'}</span>
+            </div>
+        `;
+
+        tr.innerHTML = `
+            <td><input type="checkbox" class="row-checkbox" value="${item.docId}"></td>
+            <td><strong>${item.empId || '-'}</strong></td>
+            <td>${item.name || '-'}</td>
+            <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
+            
+            <td style="font-weight:600; color:#1E68E8;">${item.daira || '-'}</td>
+            <td>${item.address || '-'}</td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
+            
+            <td>${rankPlaceHtml}</td>
+            <td style="font-weight:600; color:#555;">${item.specialty || '-'}</td>
+            
+            <td>
+                <div style="display:flex; align-items:center; gap: 5px;">
+                    <select id="center-select-${item.docId}" class="center-select">
+                        ${getCenterOptionsHtml(item.center)}
+                    </select>
+                    <button class="btn-assign-single" onclick="assignSingleCenter('${item.docId}')">إدراج</button>
+                </div>
+            </td>
+            <td>
+                <div class="action-btns">
+                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="بطاقة المعلومات"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon btn-edit" onclick="editRecord('${item.docId}')" title="تعديل"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon btn-delete" onclick="deleteRecord('${item.docId}')" title="حذف"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    renderPagination(totalPages);
+}
+
+// ================= دالة طباعة القوائم =================
+function printFilteredList() {
+    if (filteredData.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning');
+        return;
+    }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet);
+    let phaseText = "الكل";
+    if (phasesArr.length === 1) {
+        phaseText = phasesArr[0]; 
+    } else if (phasesArr.length === 2) {
+        phaseText = phasesArr.join(" و "); 
+    } else if (phasesArr.length === 3) {
+        phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+    }
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    const centerFilter = document.getElementById("filterCenter").value;
+
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`);
+    if (centerFilter !== "الكل") subTitlesArr.push(`المركز: ${centerFilter}`);
+    
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة قوائم المسجلين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .print-subheader { text-align: right; font-weight: bold; font-size: 15px; margin-bottom: 30px; line-height: 1.5; }
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: center; font-size: 14px; }
+            th { background-color: #eee; font-weight: bold; }
+            td { text-align: right; }
+            td.center-text { text-align: center; }
+            td.ltr-text { direction: ltr; text-align: right; }
+            @media print {
+                body { padding: 0; }
+                .sub-titles { background: transparent; border: none; padding: 0; }
+                th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="print-subheader">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+        <div class="main-title">قوائم الأساتذة المتكونين</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 15%;">رقم الهاتف</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 20%;">مكان العمل</th>
+                    <th style="width: 15%;">المركز</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    filteredData.forEach((item, index) => {
+        html += `
+                <tr>
+                    <td class="center-text">${index + 1}</td>
+                    <td><b>${item.name || '-'}</b></td>
+                    <td class="ltr-text">${item.phone || '-'}</td>
+                    <td>${item.rank || '-'}</td>
+                    <td>${item.workplace || '-'}</td>
+                    <td class="center-text">${item.center || 'غير محدد'}</td>
+                </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+        <script>
+            window.onload = function() { 
+                setTimeout(function(){ window.print(); window.close(); }, 500); 
+            }
+        <\/script>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+// ================= بناء نظام الصفحات =================
+function renderPagination(totalPages) {
+    const container = document.getElementById("pagination-controls");
+    if (totalPages <= 1) { container.innerHTML = ""; container.style.display = "none"; return; }
+    
+    container.style.display = "flex";
+    let startItem = (currentPage - 1) * rowsPerPage + 1;
+    let endItem = Math.min(currentPage * rowsPerPage, filteredData.length);
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${filteredData.length} مسجل</div>`;
+    html += `<div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">السابق</button>`;
+
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) { startPage = Math.max(1, endPage - 4); }
+
+    if (startPage > 1) {
+        html += `<button class="page-btn" onclick="changePage(1)">1</button>`;
+        if (startPage > 2) html += `<span style="align-self:center; color:#777;">...</span>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += `<span style="align-self:center; color:#777;">...</span>`;
+        html += `<button class="page-btn" onclick="changePage(${totalPages})">${totalPages}</button>`;
+    }
+
+    html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">التالي</button>`;
+    html += `</div>`;
+    container.innerHTML = html;
+}
+
+function changePage(page) {
+    currentPage = page;
+    renderTable();
+    document.getElementById("table-section").scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ================= الإدراج، العرض، التعديل، والحذف =================
+function toggleSelectAll() {
+    const isChecked = document.getElementById("selectAll").checked;
+    const checkboxes = document.querySelectorAll(".row-checkbox");
+    checkboxes.forEach(cb => cb.checked = isChecked);
+}
+
+async function assignSingleCenter(docId) {
+    const selectedCenter = document.getElementById(`center-select-${docId}`).value;
+    if(!selectedCenter) { Swal.fire('تنبيه', 'الرجاء اختيار المركز أولاً', 'warning'); return; }
+    updateFirebaseCenter([docId], selectedCenter);
+}
+
+async function bulkAssignCenter() {
+    const selectedCenter = document.getElementById("bulkCenterSelect").value;
+    if(!selectedCenter) { Swal.fire('تنبيه', 'الرجاء اختيار المركز من شريط الإدراج الجماعي', 'warning'); return; }
+
+    const checkedBoxes = document.querySelectorAll(".row-checkbox:checked");
+    if(checkedBoxes.length === 0) { Swal.fire('تنبيه', 'الرجاء تحديد أستاذ واحد على الأقل من الجدول', 'warning'); return; }
+
+    const docIds = Array.from(checkedBoxes).map(cb => cb.value);
+    Swal.fire({
+        title: 'تأكيد الإدراج', text: `سيتم إدراج عدد (${docIds.length}) أستاذ في: ${selectedCenter}`,
+        icon: 'question', showCancelButton: true, confirmButtonColor: '#0FBA50',
+        confirmButtonText: 'نعم، قم بالإدراج', cancelButtonText: 'إلغاء'
+    }).then((result) => {
+        if (result.isConfirmed) { updateFirebaseCenter(docIds, selectedCenter); }
+    });
+}
+
+async function updateFirebaseCenter(docIdsArray, centerName) {
+    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const batch = db.batch();
+        docIdsArray.forEach(id => {
+            const docRef = db.collection("employeescomnew").doc(id);
+            batch.update(docRef, { center: centerName });
+            const localData = allData.find(d => d.docId === id);
+            if(localData) localData.center = centerName;
+        });
+        await batch.commit();
+        Swal.fire('تم بنجاح', 'تم حفظ التغييرات في قاعدة البيانات', 'success');
+        applyFilters(); 
+    } catch (error) {
+        console.error("Update Error:", error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء الحفظ في الفايربيز', 'error');
+    }
+}
+
+function viewInfo(docId) {
+    const item = allData.find(d => d.docId === docId);
+    if(!item) return;
+    Swal.fire({
+        title: 'بطاقة معلومات الأستاذ',
+        html: `
+            <div style="text-align:right; line-height:2.2; font-size:15px; padding: 10px;">
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee;">
+                    <b>الرقم الوظيفي:</b> ${item.empId || '-'} <br>
+                    <b>الاسم واللقب:</b> ${item.name || '-'} <br>
+                    <b>الجنس:</b> ${item.gender || '-'} <br>
+                    <b>تاريخ الميلاد:</b> <span dir="ltr">${item.dob || '-'}</span> <br>
+                    <b>مكان الميلاد:</b> ${item.pob || '-'} <br>
+                    <b>الدائرة:</b> ${item.daira || '-'} <br>
+                    <b>العنوان:</b> ${item.address || '-'} <br>
+                    <b>رقم الهاتف:</b> <span dir="ltr">${item.phone || '-'}</span> <br>
+                    <hr style="border:0; border-top:1px dashed #ccc; margin: 10px 0;">
+                    <b>الرتبة:</b> ${item.rank || '-'} <br>
+                    <b>مادة التخصص:</b> ${item.specialty || '-'} <br>
+                    <b>مكان العمل:</b> ${item.workplace || '-'} <br>
+                </div>
+                <div style="margin-top: 15px; background: #e8fbf0; padding: 10px; border-radius: 8px; border: 1px solid #0FBA50;">
+                    <b>مركز التكوين:</b> <span style="color:#0FBA50; font-weight:bold;">${item.center || 'غير محدد'}</span>
+                </div>
+            </div>
+        `, confirmButtonText: 'إغلاق', confirmButtonColor: '#0FBA50'
+    });
+}
+
+function editRecord(docId) {
+    const item = allData.find(d => d.docId === docId);
+    if(!item) return;
+
+    Swal.fire({
+        title: 'تعديل بيانات الأستاذ',
+        html: `
+            <div style="text-align:right; font-size:15px; padding: 5px;">
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 15px; font-size:14px; line-height:1.6;">
+                    <b>الاسم:</b> ${item.name || '-'} <br>
+                    <b>الرقم الوظيفي:</b> ${item.empId || '-'} <br>
+                    <b>الرتبة:</b> ${item.rank || '-'} <br>
+                    <b>مادة التخصص:</b> <span style="color:#1E68E8; font-weight:bold;">${item.specialty || '-'}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap: 10px;">
+                    <div>
+                        <label style="font-weight:bold; color:#0FBA50; font-size:13px;">مكان الميلاد:</label>
+                        <input type="text" id="edit-pob" class="swal2-input" value="${item.pob !== '-' ? item.pob : ''}" style="margin: 0; width: 100%; height: 40px; font-size:14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#0FBA50; font-size:13px;">دائرة الإقامة:</label>
+                        <select id="edit-daira" class="swal2-select" style="margin: 0; width: 100%; height: 40px; font-size:14px; padding: 0 10px;">
+                            <option value="-" ${item.daira === '-' ? 'selected' : ''}>غير محدد</option>
+                            <option value="توقرت" ${item.daira === 'توقرت' ? 'selected' : ''}>توقرت</option>
+                            <option value="تماسين" ${item.daira === 'تماسين' ? 'selected' : ''}>تماسين</option>
+                            <option value="المقارين" ${item.daira === 'المقارين' ? 'selected' : ''}>المقارين</option>
+                            <option value="الطيبات" ${item.daira === 'الطيبات' ? 'selected' : ''}>الطيبات</option>
+                            <option value="الحجيرة" ${item.daira === 'الحجيرة' ? 'selected' : ''}>الحجيرة</option>
+                            <option value="البرمة" ${item.daira === 'البرمة' ? 'selected' : ''}>البرمة</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#0FBA50; font-size:13px;">العنوان:</label>
+                        <input type="text" id="edit-address" class="swal2-input" value="${item.address !== '-' ? item.address : ''}" style="margin: 0; width: 100%; height: 40px; font-size:14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#0FBA50; font-size:13px;">رقم الهاتف:</label>
+                        <input type="text" id="edit-phone" class="swal2-input" value="${item.phone !== '-' ? item.phone : ''}" dir="ltr" style="margin: 0; width: 100%; height: 40px; font-size:14px; text-align:right;">
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
+        preConfirm: () => {
+            return {
+                pob: document.getElementById('edit-pob').value.trim(), daira: document.getElementById('edit-daira').value,
+                address: document.getElementById('edit-address').value.trim(), phone: document.getElementById('edit-phone').value.trim()
+            }
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const newValues = result.value;
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("employeescomnew").doc(docId).update({ pob: newValues.pob, daira: newValues.daira, adrs: newValues.address, phone: newValues.phone });
+                item.pob = newValues.pob || '-'; item.daira = newValues.daira; item.address = newValues.address || '-'; item.phone = newValues.phone || '-';
+                applyFilters(); 
+                Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات الأستاذ بنجاح!', confirmButtonColor: '#0FBA50' });
+            } catch (error) {
+                console.error("Update Error:", error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء حفظ التعديلات في قاعدة البيانات', 'error');
+            }
+        }
+    });
+}
+
+function deleteRecord(docId) {
+    Swal.fire({
+        title: 'هل أنت متأكد؟', text: "لن تتمكن من التراجع عن الحذف!", icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                await db.collection("employeescomnew").doc(docId).delete();
+                allData = allData.filter(d => d.docId !== docId); 
+                applyFilters();
+                Swal.fire('تم الحذف!', 'تم حذف السجل بنجاح.', 'success');
+            } catch (err) { Swal.fire('خطأ', 'فشل الحذف.', 'error'); }
+        }
+    });
+}
+
+// ================= نظام إدارة حسابات رؤساء المراكز =================
+
+function manageCenterAdmins() {
+    Swal.fire({
+        title: 'إدارة حسابات رؤساء المراكز',
+        html: `
+            <div style="margin-bottom: 20px; text-align: center;">
+                <button onclick="promptForAdminId()" style="background: #0FBA50; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-family: 'Cairo'; cursor: pointer; font-weight: bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <i class="fa-solid fa-plus"></i> إنشاء حساب رئيس مركز جديد
+                </button>
+            </div>
+            <div id="admins-list-container">
+                <div style="text-align: center; color: #777;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب الحسابات المسجلة...</div>
+            </div>
+        `,
+        width: '950px', showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#939393',
+        didOpen: () => { loadAdminsList(); }
+    });
+}
+
+async function loadAdminsList() {
+    const container = document.getElementById('admins-list-container');
+    try {
+        const snap = await db.collection("center_admins").get();
+        if(snap.empty) {
+            container.innerHTML = '<p style="color: #777; text-align: center; font-weight: bold;">لا توجد حسابات مدراء/مفتشين مسجلة حالياً.</p>';
+            return;
+        }
+        let html = `
+        <div style="max-height: 400px; overflow-y: auto;">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">الرقم الوظيفي</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">المركز المشرف عليه</th>
+                    <th style="width: 15%;">الرقم السري</th>
+                    <th style="width: 25%;">إجراء</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        snap.forEach(doc => {
+            const data = doc.data();
+            let statusBadge = data.disabled ? '<span style="color:#dc3545; font-size:12px;"><i class="fa-solid fa-circle-xmark"></i> معطل</span>' : '<span style="color:#28a745; font-size:12px;"><i class="fa-solid fa-circle-check"></i> مفعل</span>';
+            let toggleIcon = data.disabled ? 'fa-toggle-off' : 'fa-toggle-on';
+            let toggleColor = data.disabled ? '#6c757d' : '#28a745';
+            let toggleTitle = data.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب مؤقتاً';
+
+            html += `
+                <tr style="${data.disabled ? 'background:#f8d7da; opacity:0.8;' : ''}">
+                    <td style="font-weight: bold; text-align:center;">${doc.id} <br> ${statusBadge}</td>
+                    <td style="font-weight: bold; color: #1E68E8;">${data.name}</td>
+                    <td style="color: #0FBA50; font-weight: bold;">${data.center}</td>
+                    <td style="direction: ltr; text-align: center; font-family: monospace; font-size: 16px;">${data.password}</td>
+                    <td style="text-align: center; display:flex; gap:8px; justify-content:center; align-items:center; height: 100%;">
+                        <button onclick="toggleAdminStatus('${doc.id}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;" title="${toggleTitle}"><i class="fa-solid ${toggleIcon}"></i></button>
+                        <button onclick="changeAdminCenter('${doc.id}', '${data.center}')" style="background: #ffc107; color: #000; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;" title="تغيير المركز"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="deleteAdminAccount('${doc.id}')" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;" title="حذف الحساب نهائياً"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch(e) {
+        container.innerHTML = '<p style="color: red; text-align: center;">خطأ في الاتصال بقاعدة البيانات لجلب الحسابات.</p>';
+    }
+}
+
+// دالة تعطيل / تفعيل الحساب
+async function toggleAdminStatus(docId, isDisabled) {
+    try {
+        await db.collection("center_admins").doc(docId).update({ disabled: !isDisabled });
+        loadAdminsList(); 
+    } catch (e) {
+        Swal.fire('خطأ', 'تعذر تحديث حالة الحساب', 'error');
+    }
+}
+
+// دالة تغيير المركز من داخل النافذة
+function changeAdminCenter(docId, currentCenter) {
+    const centerOptionsHtml = getCenterOptionsHtml(currentCenter);
+    Swal.fire({
+        title: 'تغيير المركز للمشرف',
+        html: `
+            <select id="new-admin-center" class="swal2-select" style="width:100%; font-family:'Cairo';">
+                ${centerOptionsHtml}
+            </select>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التغيير', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
+        preConfirm: () => {
+            const newCenter = document.getElementById('new-admin-center').value;
+            if(!newCenter) { Swal.showValidationMessage('الرجاء اختيار المركز الجديد'); return false; }
+            return newCenter;
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.fire({ title: 'جاري تحديث المركز...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // تحديث في مجموعة المشرفين
+                await db.collection("center_admins").doc(docId).update({ center: res.value });
+                
+                // تحديث في مجموعة المستخدمين إذا أردت (اختياري)
+                await db.collection("employeescomplus").doc(docId).update({ center: res.value }).catch(e => console.log("Profile not found in employeescomplus"));
+                await db.collection("employeescomnew").doc(docId).update({ center: res.value }).catch(e => console.log("Profile not found in employeescomnew"));
+                
+                loadAdminsList();
+                applyFilters(); // تحديث الجدول الرئيسي في الخلفية
+                Swal.close();
+            } catch(e) {
+                Swal.fire('خطأ', 'تعذر تغيير المركز.', 'error');
+            }
+        }
+    });
+}
+
+function promptForAdminId() {
+    Swal.fire({
+        title: 'إنشاء حساب جديد', text: 'الرجاء إدخال الرقم الوظيفي (رقم التعريف) للمدير أو المفتش للتحقق منه:',
+        input: 'text', inputPlaceholder: 'أدخل رقم التعريف هنا...', showCancelButton: true, confirmButtonText: 'بحث وتحقق',
+        cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: (id) => {
+            if (!id) { Swal.showValidationMessage('الرجاء إدخال رقم التعريف للبحث!'); return false; }
+            return id;
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) { verifyAndCreateAdmin(result.value); }
+    });
+}
+
+async function verifyAndCreateAdmin(empId) {
+    Swal.fire({ title: 'جاري التحقق من قاعدة البيانات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        let userData = null;
+        
+        // البحث والتحقق تم تغييره إلى employeescomplus كما طلبت
+        let docSnap = await db.collection("employeescomplus").doc(empId).get();
+        if (docSnap.exists) {
+            userData = docSnap.data(); userData.id = docSnap.id;
+        } else {
+            let querySnap = await db.collection("employeescomplus").where("id", "==", empId).get();
+            if (!querySnap.empty) { userData = querySnap.docs[0].data(); userData.id = querySnap.docs[0].id; }
+        }
+
+        if (!userData) {
+            Swal.fire('غير موجود', 'لم يتم العثور على أي شخص بهذا الرقم الوظيفي في قاعدة بيانات المستخدمين (employeescomplus).', 'error')
+            .then(() => promptForAdminId());
+            return;
+        }
+
+        const centerOptionsHtml = getCenterOptionsHtml('');
+
+        Swal.fire({
+            title: 'تكوين حساب رئيس المركز',
+            html: `
+                <div style="text-align:right; font-size:14px; line-height: 1.8;">
+                    <div style="background: #f0fdf4; padding: 10px; border: 1px solid #0FBA50; border-radius: 8px; margin-bottom: 15px;">
+                        <b>الاسم واللقب:</b> ${userData.name || '-'} <br>
+                        <b>الرتبة:</b> ${userData.grade || userData.rank || '-'} <br>
+                        <b>رقم التعريف:</b> ${userData.id}
+                    </div>
+                    
+                    <label style="font-weight:bold; color:#333;">حدد المركز الذي سيشرف عليه:</label>
+                    <select id="admin-center" class="swal2-select" style="width: 100%; margin: 5px 0 15px; font-size:14px; font-family:'Cairo'; padding: 5px;">
+                        ${centerOptionsHtml}
+                    </select>
+
+                    <label style="font-weight:bold; color:#333;">الرقم السري (للدخول كمسؤول مركز):</label>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                        <input type="text" id="admin-password" class="swal2-input" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:18px;" placeholder="أدخل الرقم السري">
+                        <button onclick="document.getElementById('admin-password').value = Math.floor(100000 + Math.random() * 900000)" style="width: 30%; background: #1E68E8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family:'Cairo'; padding: 11px; font-weight: bold;">
+                            توليد عشوائي
+                        </button>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true, confirmButtonText: 'حفظ واعتماد الحساب', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+            preConfirm: () => {
+                const center = document.getElementById('admin-center').value;
+                const password = document.getElementById('admin-password').value.trim();
+                if (!center || !password) { Swal.showValidationMessage('الرجاء اختيار المركز وإدخال الرقم السري!'); return false; }
+                return { center, password, name: userData.name, rank: userData.grade || userData.rank || '-' };
+            }
+        }).then(async (res) => {
+            if (res.isConfirmed) {
+                Swal.fire({ title: 'جاري تسجيل الحساب...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                try {
+                    await db.collection("center_admins").doc(userData.id).set({
+                        id: userData.id, name: res.value.name, rank: res.value.rank, center: res.value.center, password: res.value.password, role: "inspector", disabled: false
+                    });
+                    
+                    Swal.fire('تم بنجاح', 'تم تسجيل حساب رئيس المركز بنجاح.', 'success')
+                    .then(() => manageCenterAdmins()); 
+                } catch (e) {
+                    Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error');
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
+    }
+}
+
+function deleteAdminAccount(docId) {
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'هل أنت متأكد من سحب الصلاحيات وحذف حساب هذا المشرف؟ (لن يتم حذف بياناته الأصلية كموظف)', icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'نعم، قم بالحذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                await db.collection("center_admins").doc(docId).delete();
+                loadAdminsList(); 
+            } catch(e) { Swal.fire('خطأ', 'تعذر عملية الحذف', 'error'); }
+        }
+    });
+}
+</script>
+</body>
+</html>

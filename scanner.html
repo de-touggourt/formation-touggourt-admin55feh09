@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الماسح الشامل للحضور</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- مكتبة ماسح الباركود -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <!-- إعدادات Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; font-family: 'Cairo', sans-serif; margin: 0; padding: 0; }
+    body { 
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
+        color: white; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center; 
+        min-height: 100vh; 
+        overflow: hidden; 
+    }
+    
+    .header { text-align: center; margin-bottom: 30px; z-index: 10; }
+    .header h1 { font-size: 26px; color: #4facfe; font-weight: 900; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+    .header p { font-size: 14px; color: #e0e0e0; margin-top: 5px; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px; display: inline-block; }
+
+    /* الحاوية الرئيسية للماسح */
+    .scanner-container {
+        position: relative;
+        width: 90%;
+        max-width: 350px;
+        aspect-ratio: 1 / 1;
+        border-radius: 30px;
+        overflow: hidden;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 20px rgba(79, 172, 254, 0.4);
+        background: #000;
+        border: 4px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+
+    #reader { width: 100%; height: 100%; }
+    #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 26px; }
+    
+    /* إخفاء عناصر المكتبة الافتراضية إن وجدت */
+    #reader__dashboard_section_csr, #reader__dashboard_section_swaplink { display: none !important; }
+
+    /* تأثير خط الليزر */
+    .laser-line {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: #0FBA50;
+        box-shadow: 0 0 15px 5px rgba(15, 186, 80, 0.5);
+        animation: scan 2s infinite linear;
+        z-index: 10;
+    }
+
+    /* إطارات التوجيه في الزوايا */
+    .scan-guide {
+        position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: 5;
+    }
+    .scan-guide::before, .scan-guide::after, .scan-guide .bottom-guides::before, .scan-guide .bottom-guides::after {
+        content: ''; position: absolute; width: 40px; height: 40px; border-color: rgba(255,255,255,0.8); border-style: solid;
+    }
+    .scan-guide::before { top: 20px; left: 20px; border-width: 4px 0 0 4px; border-radius: 10px 0 0 0; }
+    .scan-guide::after { top: 20px; right: 20px; border-width: 4px 4px 0 0; border-radius: 0 10px 0 0; }
+    .scan-guide .bottom-guides::before { bottom: 20px; left: 20px; border-width: 0 0 4px 4px; border-radius: 0 0 0 10px; }
+    .scan-guide .bottom-guides::after { bottom: 20px; right: 20px; border-width: 0 4px 4px 0; border-radius: 0 0 10px 0; }
+
+    @keyframes scan {
+        0% { top: 10%; opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { top: 90%; opacity: 0; }
+    }
+
+    .status-panel { 
+        margin-top: 30px; 
+        background: rgba(255, 255, 255, 0.1); 
+        padding: 15px 25px; 
+        border-radius: 20px; 
+        text-align: center; 
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        z-index: 10;
+    }
+    
+    .status-panel i { font-size: 20px; color: #4facfe; }
+
+    .btn-back { 
+        position: absolute; top: 20px; right: 20px; 
+        background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); 
+        color: white; padding: 10px 20px; border-radius: 15px; 
+        cursor: pointer; font-weight: bold; font-family: 'Cairo';
+        transition: 0.3s; backdrop-filter: blur(5px); z-index: 20;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .btn-back:hover { background: #d90429; box-shadow: 0 0 15px rgba(217, 4, 41, 0.5); border-color: transparent;}
+    
+    /* تصميم النافذة الترحيبية */
+    .swal-welcome-card { text-align: right; line-height: 2; font-size: 15px; }
+    .swal-welcome-card b { color: #1E68E8; }
+    .swal-badge { display: inline-block; padding: 6px 15px; border-radius: 20px; color: white; font-weight: bold; margin-bottom: 15px; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
+    .badge-present { background: linear-gradient(45deg, #0FBA50, #0a8a3a); }
+    .badge-late { background: linear-gradient(45deg, #ff9800, #e65100); }
+  </style>
+</head>
+<body>
+
+  <button class="btn-back" onclick="window.close()"><i class="fa-solid fa-arrow-right"></i> رجوع</button>
+
+  <div class="header">
+    <h1><i class="fa-solid fa-camera-rotate"></i> نظام مسح البطاقات</h1>
+    <p id="dateInfo">جاري تهيئة النظام...</p>
+  </div>
+
+  <!-- حاوية الكاميرا مع التصميم المخصص -->
+  <div class="scanner-container">
+    <div id="reader"></div>
+    <div class="laser-line"></div>
+    <div class="scan-guide">
+        <div class="bottom-guides"></div>
+    </div>
+  </div>
+
+  <div class="status-panel">
+    <i class="fa-solid fa-qrcode"></i> 
+    <span>قم بتوجيه الكاميرا نحو باركود البطاقة</span>
+  </div>
+
+<script>
+// إعدادات Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let html5QrCode;
+let todayDate = "";
+let isScanningPaused = false; 
+
+window.onload = function() {
+    const d = new Date();
+    todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    document.getElementById("dateInfo").innerText = `تاريخ السجل: ${todayDate}`;
+
+    startScanner();
+};
+
+function startScanner() {
+    // استخدام Html5Qrcode للتحكم الكامل بدلاً من Scanner الجاهز
+    html5QrCode = new Html5Qrcode("reader");
+    
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    // إجبار المتصفح على استخدام الكاميرا الخلفية (environment)
+    html5QrCode.start(
+        { facingMode: "environment" }, 
+        config, 
+        onScanSuccess,
+        onScanFailure
+    ).catch(err => {
+        console.error("Camera Error:", err);
+        Swal.fire('خطأ في الكاميرا', 'يرجى السماح للمتصفح بالوصول إلى كاميرا الهاتف.', 'error');
+    });
+}
+
+async function onScanSuccess(decodedText, decodedResult) {
+    if (isScanningPaused) return; 
+    let scannedId = decodedText.trim();
+    isScanningPaused = true; 
+
+    // تشغيل صوت المسح
+    let audio = new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
+    audio.play().catch(e=>console.log(e));
+
+    try {
+        let snapshot = await db.collection("employeescomnew").where("id", "==", scannedId).get();
+        
+        if (snapshot.empty) {
+            Swal.fire({ icon: 'error', title: 'غير معروف', text: `الرقم (${scannedId}) غير مسجل!`, confirmButtonText: 'حسناً', confirmButtonColor: '#203a43' }).then(() => { isScanningPaused = false; });
+            return;
+        }
+
+        let trainee = { empId: snapshot.docs[0].data().id, ...snapshot.docs[0].data() };
+        let centerName = trainee.center;
+
+        if (!centerName) {
+            Swal.fire({ icon: 'warning', title: 'خطأ في البيانات', text: `المتكون غير مرتبط بمركز تكوين!`, confirmButtonText: 'حسناً' }).then(() => { isScanningPaused = false; });
+            return;
+        }
+
+        const docId = `${centerName}_${todayDate}`;
+        let attDoc = await db.collection('attendance_daily').doc(docId).get();
+        let sysMode = "closed"; 
+
+        if (attDoc.exists && attDoc.data().systemMode) {
+            sysMode = attDoc.data().systemMode;
+        }
+
+        if (sysMode === "closed") {
+            Swal.fire({
+                icon: 'error',
+                title: 'النظام مغلق',
+                text: `تسجيل الحضور لمركز (${centerName}) مغلق حالياً.`,
+                confirmButtonText: 'استمرار المسح',
+                confirmButtonColor: '#d90429'
+            }).then(() => { isScanningPaused = false; }); 
+            return;
+        }
+
+        const d = new Date();
+        const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+        let status = sysMode === "open" ? "حاضر" : "متأخر";
+        let badgeClass = status === "حاضر" ? "badge-present" : "badge-late";
+        let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
+
+        await db.collection('attendance_daily').doc(docId).set({
+            center: centerName,
+            date: todayDate,
+            [`records.${trainee.empId}`]: { status: status, time: timeString }
+        }, { merge: true });
+
+        Swal.fire({
+            title: 'تم التسجيل بنجاح!',
+            html: `
+                <div class="swal-welcome-card">
+                    <div style="text-align:center;">
+                        <span class="swal-badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> تم تسجيله: ${status} (${timeString})</span>
+                    </div>
+                    <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
+                    <b>المركز:</b> ${centerName}<br>
+                    <b>الاسم واللقب:</b> ${trainee.name || '-'}<br>
+                    <b>الرتبة:</b> ${trainee.grade || trainee.rank || '-'}<br>
+                    <b>مادة التخصص:</b> ${trainee.maty || trainee.specialty || '-'}
+                </div>
+            `,
+            icon: 'success',
+            confirmButtonText: 'مسح البطاقة التالية',
+            confirmButtonColor: '#203a43',
+            timer: 2500,
+            timerProgressBar: true
+        }).then(() => { isScanningPaused = false; });
+
+    } catch (error) {
+        console.error("Error:", error);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات', 'error').then(() => { isScanningPaused = false; });
+    }
+}
+
+function onScanFailure(error) { 
+    // يتم تجاهل الأخطاء الصامتة (حين لا يجد الباركود في الإطار)
+}
+</script>
+</body>
+</html>
