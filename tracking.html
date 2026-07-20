@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الإحصاء الشامل للحضور - المركز</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  
+  <style>
+    body { margin: 0; background: #f0f4f8; font-family: 'Cairo', sans-serif; color: #333; }
+    .header { background: #102a43; color: white; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .header h1 { margin: 0; font-size: 24px; color: #62b0e8; }
+    .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    
+    .stats-cards { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;}
+    .card { flex: 1; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; border-bottom: 4px solid #ccc; min-width: 150px;}
+    .card h3 { margin: 0 0 10px 0; font-size: 16px; color: #555; }
+    .card p { margin: 0; font-size: 28px; font-weight: bold; color: #102a43; }
+    .card.blue { border-color: #1E68E8; } .card.green { border-color: #0FBA50; }
+    .card.red { border-color: #d90429; } .card.orange { border-color: #ff9800; }
+
+    .table-container { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow-x: auto;}
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
+    thead { background: #334e68; color: white; }
+    th, td { padding: 12px 15px; text-align: right; border-bottom: 1px solid #eee; font-size: 14px; }
+    tbody tr:hover { background: #f8fbff; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 13px; color: white; }
+    .b-green { background: #0FBA50; } .b-red { background: #d90429; } .b-orange { background: #ff9800; }
+    .search-box { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 20px; font-family: 'Cairo'; outline: none; font-size: 15px;}
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1><i class="fa-solid fa-chart-line"></i> الإحصاء الشامل للغيابات والتأخرات</h1>
+    <p id="centerTitle" style="margin: 5px 0 0 0; color: #bcccdc;">جاري التحميل...</p>
+  </div>
+
+  <div class="container">
+    <div class="stats-cards">
+      <div class="card blue"><h3>إجمالي المتكونين</h3><p id="t-total">0</p></div>
+      <div class="card green"><h3>إجمالي الحضور</h3><p id="t-present">0</p></div>
+      <div class="card orange"><h3>إجمالي التأخرات</h3><p id="t-late">0</p></div>
+      <div class="card red"><h3>إجمالي الغيابات</h3><p id="t-absent">0</p></div>
+    </div>
+
+    <input type="text" id="searchInput" class="search-box" placeholder="بحث بالاسم أو الرقم الوظيفي..." onkeyup="filterTable()">
+
+    <div class="table-container">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th>الرقم الوظيفي</th>
+            <th>الاسم واللقب</th>
+            <th>الرتبة</th>
+            <th>مادة التخصص</th>
+            <th style="text-align: center;">إجمالي الحضور</th>
+            <th style="text-align: center;">إجمالي التأخرات</th>
+            <th style="text-align: center;">إجمالي الغيابات</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="8" style="text-align:center;">جاري المعالجة...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+let trackingData = [];
+
+window.onload = async function() {
+    if (!INSPECTOR_CENTER) { Swal.fire('خطأ', 'الرجاء تسجيل الدخول أولاً', 'error'); return; }
+    document.getElementById("centerTitle").innerText = `المركز: ${INSPECTOR_CENTER}`;
+    await processTrackingData();
+};
+
+async function processTrackingData() {
+    try {
+        // 1. جلب بيانات الأساتذة
+        const empSnap = await db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).get();
+        let employees = {};
+        empSnap.forEach(doc => {
+            let data = doc.data();
+            employees[data.id || doc.id] = { 
+                empId: data.id || doc.id, name: data.name, rank: data.grade, specialty: data.maty,
+                present: 0, late: 0, absent: 0 
+            };
+        });
+
+        // 2. جلب جميع سجلات الحضور الخاصة بهذا المركز لكل الأيام
+        const attSnap = await db.collection('attendance_daily').where("center", "==", INSPECTOR_CENTER).get();
+        
+        let sumP = 0, sumL = 0, sumA = 0;
+
+        attSnap.forEach(doc => {
+            const records = doc.data().records || {};
+            // المرور على كل أستاذ، إذا لم يكن مسجلاً في اليوم يعتبر غائباً (أو حسب رغبتك)
+            Object.keys(employees).forEach(empId => {
+                let status = records[empId] ? records[empId].status : 'غائب';
+                if (status === 'حاضر') { employees[empId].present++; sumP++; }
+                else if (status === 'متأخر') { employees[empId].late++; sumL++; }
+                else { employees[empId].absent++; sumA++; }
+            });
+        });
+
+        trackingData = Object.values(employees);
+        
+        // التحديث في البطاقات
+        document.getElementById('t-total').innerText = trackingData.length;
+        document.getElementById('t-present').innerText = sumP;
+        document.getElementById('t-late').innerText = sumL;
+        document.getElementById('t-absent').innerText = sumA;
+
+        renderTable(trackingData);
+
+    } catch (error) { console.error(error); Swal.fire('خطأ', 'فشل في تحميل الإحصائيات', 'error'); }
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    data.forEach((item, index) => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${index + 1}</td>
+                <td><strong>${item.empId}</strong></td>
+                <td><b>${item.name || '-'}</b></td>
+                <td>${item.rank || '-'}</td>
+                <td>${item.specialty || '-'}</td>
+                <td style="text-align: center;"><span class="badge b-green">${item.present}</span></td>
+                <td style="text-align: center;"><span class="badge b-orange">${item.late}</span></td>
+                <td style="text-align: center;"><span class="badge b-red">${item.absent}</span></td>
+            </tr>
+        `;
+    });
+}
+
+function filterTable() {
+    const term = document.getElementById('searchInput').value.toLowerCase();
+    const filtered = trackingData.filter(item => 
+        (item.name || "").toLowerCase().includes(term) || (item.empId || "").toLowerCase().includes(term)
+    );
+    renderTable(filtered);
+}
+</script>
+</body>
+</html>

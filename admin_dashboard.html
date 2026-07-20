@@ -155,6 +155,22 @@
       .pagination-container { flex-direction: column; text-align: center; }
       .filters-header { justify-content: center; text-align: center; }
     }
+
+    /* ================= تنسيقات نظام الأفواج المنقولة ================= */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 186, 80, 0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+.modal-content { background: #f0f4f8; width: 98%; height: 98%; border-radius: 15px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-header { background: #8e44ad; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.close-modal { background: #d90429; color: white; border: none; width: 35px; height: 35px; border-radius: 8px; cursor: pointer; font-size: 18px; transition: 0.3s; }
+.close-modal:hover { background: #ef233c; transform: scale(1.05); }
+.att-controls { background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-bottom: 2px solid #d9e2ec; }
+.att-filters { padding: 15px; display: flex; gap: 15px; background: #fff; }
+.att-filters input, .att-filters select { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Cairo'; outline: none; flex: 1; }
+.att-table-container { flex: 1; overflow-y: auto; background: white; padding: 0 15px 15px 15px; }
+.att-table { width: 100%; border-collapse: collapse; }
+.att-table th { background: #334e68; color:white; position: sticky; top: 0; z-index: 10; }
+
+
   </style>
 </head>
 <body>
@@ -217,6 +233,9 @@
          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
              <button class="btn-print" onclick="printFilteredList()">
                <i class="fa-solid fa-print"></i> طباعة القوائم
+             </button>
+             <button class="btn-print" style="background: #8e44ad;" onclick="openGroupingModal()">
+               <i class="fa-solid fa-users-viewfinder"></i> إدارة الأفواج للمركز المحدد
              </button>
              <span style="background: #ff9800; color: white; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                العدد: <span id="stat-filtered">0</span>
@@ -309,6 +328,99 @@
 
   </div>
 
+<!-- ================= نافذة إدارة وتشكيل الأفواج ================= -->
+  <div class="modal-overlay" id="groupingModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-users-viewfinder"></i> نظام تشكيل وإدارة الأفواج</h2>
+        <button class="close-modal" onclick="closeGroupingModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="att-controls">
+        <div style="display: flex; gap: 15px; align-items: center; background: #f8fbff; padding: 10px 15px; border-radius: 8px; border: 1px solid #cce5ff;">
+            <label style="font-weight: bold; color: #102a43;">العدد المعتمد في الفوج:</label>
+            <input type="number" id="maxGroupSize" value="25" min="5" max="100" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-weight: bold; text-align: center;">
+            <button class="btn-print" style="background: #ff9800; color: white;" onclick="autoGroupTrainees()">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> التفويج الآلي
+            </button>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn-print" style="background: #34495e;" onclick="openGroupNamesManager()">
+                <i class="fa-solid fa-gears"></i> إعداد أسماء الأفواج
+            </button>
+            <button class="btn-print" style="background: #17a2b8;" onclick="printGroupsList()">
+                <i class="fa-solid fa-print"></i> طباعة القوائم حسب الفوج
+            </button>
+            <button class="btn-print" style="background: #d90429;" onclick="clearGroupings()">
+                <i class="fa-solid fa-eraser"></i> تفريغ الأفواج
+            </button>
+        </div>
+      </div>
+
+     <!-- فلاتر نافذة الأفواج -->
+      <div class="att-filters" style="flex-wrap: wrap;">
+        <input type="text" id="grpSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="resetGroupPageAndRender()">
+        
+        <!-- فلتر المركز -->
+        <select id="grpCenterFilter" onchange="resetGroupPageAndRender()" style="border-color: #0FBA50; border-width: 2px;">
+            <option value="الكل">كل المراكز</option>
+        </select>
+        
+        <!-- فلتر الجنس (جديد) -->
+        <select id="grpGenderFilter" onchange="resetGroupPageAndRender()">
+            <option value="الكل">كل الأجناس</option>
+            <option value="ذكر">ذكر</option>
+            <option value="أنثى">أنثى</option>
+        </select>
+
+        <select id="grpRankFilter" onchange="resetGroupPageAndRender()">
+            <option value="الكل">كل الرتب</option>
+        </select>
+        <select id="grpSpecFilter" onchange="resetGroupPageAndRender()">
+            <option value="الكل">كل التخصصات</option>
+        </select>
+        <select id="grpNameFilter" onchange="resetGroupPageAndRender()">
+            <option value="الكل">كل الأفواج</option>
+        </select>
+      </div>
+
+      <!-- شريط الإدراج الجماعي (جديد) -->
+      <div class="bulk-action-bar" style="margin: 0 15px 15px 15px; padding: 10px; background: #fff; border: 1px solid #ccc; justify-content: flex-start;">
+          <span style="font-weight:bold; color:#102a43;"><i class="fa-solid fa-layer-group"></i> إدراج جماعي:</span>
+          <select id="bulkGroupSelect" style="padding: 6px; border-radius: 6px; border: 1px solid #0FBA50; outline: none; min-width: 150px;">
+              <option value="">-- اختر الفوج --</option>
+          </select>
+          <button class="btn-print" style="background: #0FBA50; color: white; border-radius: 6px;" onclick="bulkAssignGroups()">
+              <i class="fa-solid fa-check-double"></i> تطبيق على المحددين
+          </button>
+          <span style="margin-right:auto; font-weight:bold; color:#d90429; font-size: 14px;">عدد نتائج الفلترة: <span id="grpFilterCount">0</span></span>
+      </div>
+
+      <!-- جدول الأفواج -->
+      <div class="att-table-container">
+        <table class="att-table" id="grpTable">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllGroups" onchange="toggleSelectAllGroups()"></th>
+              <th>الرقم الوظيفي</th>
+              <th>الاسم واللقب</th>
+              <th style="width: 60px; text-align: center;">الجنس</th>
+              <th>الرتبة</th>
+              <th>التخصص</th>
+              <th>المركز</th>
+              <th style="width: 150px; text-align: center;">الفوج (قابل للتعديل)</th>
+            </tr>
+          </thead>
+          <tbody id="grpTableBody">
+            <!-- سيتم توليد البيانات هنا -->
+          </tbody>
+        </table>
+        
+        <!-- حاوية نظام الصفحات (جديد) -->
+        <div id="group-pagination-controls" class="pagination-container" style="display: none; margin-top:10px; background:#f8fbff; border: 1px solid #eee;"></div>
+      </div>
+
 <script>
 // ================= إعدادات Firebase المحدثة =================
 const firebaseConfig = {
@@ -329,6 +441,9 @@ let allData = [];
 let filteredData = [];
 let currentPage = 1;
 const rowsPerPage = 10;
+let selectedTrainees = new Set();       
+let selectedGroupsTrainees = new Set(); 
+
 
 window.onload = function() {
     if(sessionStorage.getItem("userEmpId") !== "ADMIN_ACCESS") {
@@ -431,18 +546,25 @@ function updateSpecText() {
 }
 
 // ================= دوال المراكز =================
+// ================= دوال المراكز (محدثة بالذكور والإناث) =================
 function initCentersStats() {
     const container = document.getElementById("centersStatsContainer");
     const centers = UI_NAMES.centers;
     let html = '';
     for (let key in centers) {
         html += `
-        <div class="stat-card" style="border-right-color: #9c27b0; padding: 15px;">
-          <div class="stat-info">
-            <h3 style="font-size: 13px; color: #555;">${centers[key]}</h3>
-            <p id="stat-center-${key}" style="font-size: 24px; color: #9c27b0;">0</p>
+        <div class="stat-card" style="border-right-color: #9c27b0; padding: 15px; flex-direction: column; align-items: stretch; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div class="stat-info">
+                <h3 style="font-size: 13px; color: #555; font-weight: bold;">${centers[key]}</h3>
+                <p id="stat-center-${key}" style="font-size: 24px; color: #9c27b0; margin-top: 2px;">0</p>
+              </div>
+              <i class="fa-solid fa-school stat-icon" style="color: #9c27b0; font-size: 28px; opacity: 0.3;"></i>
           </div>
-          <i class="fa-solid fa-school stat-icon" style="color: #9c27b0; font-size: 28px; opacity: 0.3;"></i>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; border-top: 1px dashed #eee; padding-top: 8px;">
+              <span style="color: #1E68E8;"><i class="fa-solid fa-person"></i> ذكور: <span id="stat-center-m-${key}">0</span></span>
+              <span style="color: #e91e63;"><i class="fa-solid fa-person-dress"></i> إناث: <span id="stat-center-f-${key}">0</span></span>
+          </div>
         </div>`;
     }
     container.innerHTML = html;
@@ -557,9 +679,13 @@ function applyFilters() {
     });
 
     currentPage = 1; 
+    selectedTrainees.clear(); // مسح التحديدات القديمة عند فلترة جديدة
+    document.getElementById("selectAll").checked = false;
+    
     updateStats();
     renderTable();
 }
+
 
 function updateStats() {
     document.getElementById("stat-total").innerText = allData.length;
@@ -570,18 +696,27 @@ function updateStats() {
     document.getElementById("stat-female").innerText = females;
     document.getElementById("stat-filtered").innerText = filteredData.length;
 
+    // تحديث إحصائيات المراكز مع الذكور والإناث
     const centers = UI_NAMES.centers;
     for (let key in centers) {
-        const count = filteredData.filter(i => i.center === centers[key]).length;
-        const el = document.getElementById(`stat-center-${key}`);
-        if(el) el.innerText = count;
+        const centerData = filteredData.filter(i => i.center === centers[key]);
+        const totalCount = centerData.length;
+        const cMales = centerData.filter(i => (i.gender || '').includes('ذكر') || (i.gender || '').toUpperCase() === 'M').length;
+        const cFemales = centerData.filter(i => (i.gender || '').includes('نث') || (i.gender || '').toUpperCase() === 'F').length;
+        
+        const elTotal = document.getElementById(`stat-center-${key}`);
+        const elMale = document.getElementById(`stat-center-m-${key}`);
+        const elFemale = document.getElementById(`stat-center-f-${key}`);
+        
+        if(elTotal) elTotal.innerText = totalCount;
+        if(elMale) elMale.innerText = cMales;
+        if(elFemale) elFemale.innerText = cFemales;
     }
 }
 
 function renderTable() {
     const tbody = document.getElementById("tableBody");
     tbody.innerHTML = "";
-    document.getElementById("selectAll").checked = false;
 
     if(filteredData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة للبحث</td></tr>`;
@@ -605,8 +740,11 @@ function renderTable() {
             </div>
         `;
 
+        // التحقق مما إذا كان العنصر موجوداً في الذاكرة لتحديده بصرياً
+        const isChecked = selectedTrainees.has(item.docId) ? 'checked' : '';
+
         tr.innerHTML = `
-            <td><input type="checkbox" class="row-checkbox" value="${item.docId}"></td>
+            <td><input type="checkbox" class="row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleSelect(this, '${item.docId}')"></td>
             <td><strong>${item.empId || '-'}</strong></td>
             <td>${item.name || '-'}</td>
             <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
@@ -637,6 +775,8 @@ function renderTable() {
         tbody.appendChild(tr);
     });
 
+    // تحديث حالة زر تحديد الكل العام
+    document.getElementById("selectAll").checked = (filteredData.length > 0 && selectedTrainees.size === filteredData.length);
     renderPagination(totalPages);
 }
 
@@ -795,8 +935,21 @@ function changePage(page) {
 // ================= الإدراج، العرض، التعديل، والحذف =================
 function toggleSelectAll() {
     const isChecked = document.getElementById("selectAll").checked;
-    const checkboxes = document.querySelectorAll(".row-checkbox");
-    checkboxes.forEach(cb => cb.checked = isChecked);
+    if (isChecked) {
+        filteredData.forEach(item => selectedTrainees.add(item.docId));
+    } else {
+        selectedTrainees.clear();
+    }
+    document.querySelectorAll(".row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedTrainees.add(docId);
+    } else {
+        selectedTrainees.delete(docId);
+        document.getElementById("selectAll").checked = false;
+    }
 }
 
 async function assignSingleCenter(docId) {
@@ -807,12 +960,11 @@ async function assignSingleCenter(docId) {
 
 async function bulkAssignCenter() {
     const selectedCenter = document.getElementById("bulkCenterSelect").value;
-    if(!selectedCenter) { Swal.fire('تنبيه', 'الرجاء اختيار المركز من شريط الإدراج الجماعي', 'warning'); return; }
+    if(!selectedCenter) { Swal.fire('تنبيه', 'الرجاء اختيار المركز أولاً', 'warning'); return; }
 
-    const checkedBoxes = document.querySelectorAll(".row-checkbox:checked");
-    if(checkedBoxes.length === 0) { Swal.fire('تنبيه', 'الرجاء تحديد أستاذ واحد على الأقل من الجدول', 'warning'); return; }
+    if(selectedTrainees.size === 0) { Swal.fire('تنبيه', 'الرجاء تحديد أستاذ واحد على الأقل', 'warning'); return; }
 
-    const docIds = Array.from(checkedBoxes).map(cb => cb.value);
+    const docIds = Array.from(selectedTrainees);
     Swal.fire({
         title: 'تأكيد الإدراج', text: `سيتم إدراج عدد (${docIds.length}) أستاذ في: ${selectedCenter}`,
         icon: 'question', showCancelButton: true, confirmButtonColor: '#0FBA50',
@@ -833,6 +985,8 @@ async function updateFirebaseCenter(docIdsArray, centerName) {
             if(localData) localData.center = centerName;
         });
         await batch.commit();
+        selectedTrainees.clear();
+        document.getElementById("selectAll").checked = false;
         Swal.fire('تم بنجاح', 'تم حفظ التغييرات في قاعدة البيانات', 'success');
         applyFilters(); 
     } catch (error) {
@@ -967,9 +1121,142 @@ function manageCenterAdmins() {
                 <div style="text-align: center; color: #777;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب الحسابات المسجلة...</div>
             </div>
         `,
-        width: '950px', showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#939393',
+        // تم تكبير عرض النافذة إلى 1200 بكسل لتتسع لأعمدة الجدول براحة
+        width: '1200px', 
+        showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#939393',
         didOpen: () => { loadAdminsList(); }
     });
+}
+
+// ... (تُترك دالة loadAdminsList, toggleAdminStatus, و changeAdminCenter كما هي بدون تغيير)
+
+function promptForAdminId() {
+    Swal.fire({
+        title: 'إنشاء حساب جديد', text: 'الرجاء إدخال الرقم الوظيفي (رقم التعريف) للمدير أو المفتش للتحقق منه:',
+        input: 'text', inputPlaceholder: 'أدخل رقم التعريف هنا...', showCancelButton: true, confirmButtonText: 'بحث وتحقق',
+        cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: (id) => {
+            if (!id) { Swal.showValidationMessage('الرجاء إدخال رقم التعريف للبحث!'); return false; }
+            return id;
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) { verifyAndCreateAdmin(result.value); }
+    });
+}
+
+// دالة توليد الرقم السري القوي (أحرف كبيرة وصغيرة، أرقام، ورموز)
+window.generateStrongPassword = function() {
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()_+~-=[];,./";
+    let pwd = "";
+    
+    // ضمان وجود حرف كبير، حرف صغير، رقم، ورمز على الأقل
+    pwd += upper[Math.floor(Math.random() * upper.length)];
+    pwd += lower[Math.floor(Math.random() * lower.length)];
+    pwd += numbers[Math.floor(Math.random() * numbers.length)];
+    pwd += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    // إكمال باقي الأحرف (اخترنا طول 12 خانة كطول مثالي وقوي يقع بين 8 و 20)
+    const all = upper + lower + numbers + symbols;
+    for(let i = 0; i < 8; i++) { // 4 الأساسية + 8 إضافية = 12 خانة
+        pwd += all[Math.floor(Math.random() * all.length)];
+    }
+    
+    // خلط كلمة المرور لضمان العشوائية المطلقة
+    return pwd.split('').sort(() => 0.5 - Math.random()).join('');
+};
+
+async function verifyAndCreateAdmin(empId) {
+    Swal.fire({ title: 'جاري التحقق من قاعدة البيانات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        let userData = null;
+        
+        let docSnap = await db.collection("employeescomplus").doc(empId).get();
+        if (docSnap.exists) {
+            userData = docSnap.data(); userData.id = docSnap.id;
+        } else {
+            let querySnap = await db.collection("employeescomplus").where("id", "==", empId).get();
+            if (!querySnap.empty) { userData = querySnap.docs[0].data(); userData.id = querySnap.docs[0].id; }
+        }
+
+        if (!userData) {
+            Swal.fire('غير موجود', 'لم يتم العثور على أي شخص بهذا الرقم الوظيفي في قاعدة بيانات المستخدمين.', 'error')
+            .then(() => promptForAdminId());
+            return;
+        }
+
+        const centerOptionsHtml = getCenterOptionsHtml('');
+
+        Swal.fire({
+            title: 'تكوين حساب رئيس المركز',
+            html: `
+                <div style="text-align:right; font-size:14px; line-height: 1.8;">
+                    <div style="background: #f0fdf4; padding: 10px; border: 1px solid #0FBA50; border-radius: 8px; margin-bottom: 15px;">
+                        <b>الاسم واللقب:</b> ${userData.name || '-'} <br>
+                        <b>الرتبة:</b> ${userData.grade || userData.rank || '-'} <br>
+                        <b>رقم التعريف:</b> ${userData.id}
+                    </div>
+                    
+                    <label style="font-weight:bold; color:#333;">حدد المركز الذي سيشرف عليه:</label>
+                    <select id="admin-center" class="swal2-select" style="width: 100%; margin: 5px 0 15px; font-size:14px; font-family:'Cairo'; padding: 5px;">
+                        ${centerOptionsHtml}
+                    </select>
+
+                    <label style="font-weight:bold; color:#333;">الرقم السري (للدخول كمسؤول مركز):</label>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                        <!-- الفلترة اللحظية (oninput) للسماح بالأرقام، الأحرف الفرنسية، والرموز فقط -->
+                        <input type="text" id="admin-password" class="swal2-input" minlength="8" maxlength="20" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:16px;" placeholder="من 8 إلى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\-=\\[\\]{}:;<>?,./]/g, '')">
+                        <button onclick="document.getElementById('admin-password').value = generateStrongPassword()" style="width: 30%; background: #1E68E8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family:'Cairo'; padding: 11px; font-weight: bold;">
+                            توليد عشوائي
+                        </button>
+                    </div>
+                    <span style="font-size:12px; color:#d90429;">ملاحظة: يقبل النظام من 8 إلى 20 خانة تتكون من أحرف فرنسية (كبيرة وصغيرة)، أرقام، ورموز فقط.</span>
+                </div>
+            `,
+            showCancelButton: true, confirmButtonText: 'حفظ واعتماد الحساب', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+            preConfirm: () => {
+                const center = document.getElementById('admin-center').value;
+                const password = document.getElementById('admin-password').value;
+                
+                if (!center || !password) { Swal.showValidationMessage('الرجاء اختيار المركز وإدخال الرقم السري!'); return false; }
+                
+                // شرط: يجب أن يكون الطول بين 8 و 20
+                if (password.length < 8 || password.length > 20) {
+                    Swal.showValidationMessage('الرقم السري يجب أن يكون بين 8 و 20 خانة!');
+                    return false;
+                }
+
+                // التأكد النهائي من التركيبة (أحرف وأرقام ورموز فقط)
+                const validRegex = /^[a-zA-Z0-9!@#$%^&*()_+~\-=\[\]{}:;<>?,./]{8,20}$/;
+                if (!validRegex.test(password)) {
+                    Swal.showValidationMessage('الرقم السري غير صالح! تأكد من استخدام أحرف فرنسية، أرقام، ورموز فقط.');
+                    return false;
+                }
+
+                return { center, password, name: userData.name, rank: userData.grade || userData.rank || '-' };
+            }
+        }).then(async (res) => {
+            if (res.isConfirmed) {
+                Swal.fire({ title: 'جاري تسجيل الحساب...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                try {
+                    await db.collection("center_admins").doc(userData.id).set({
+                        id: userData.id, name: res.value.name, rank: res.value.rank, center: res.value.center, password: res.value.password, role: "inspector", disabled: false
+                    });
+                    
+                    Swal.fire('تم بنجاح', 'تم تسجيل حساب رئيس المركز بنجاح.', 'success')
+                    .then(() => manageCenterAdmins()); 
+                } catch (e) {
+                    Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error');
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
+    }
 }
 
 async function loadAdminsList() {
@@ -1083,80 +1370,7 @@ function promptForAdminId() {
     });
 }
 
-async function verifyAndCreateAdmin(empId) {
-    Swal.fire({ title: 'جاري التحقق من قاعدة البيانات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    try {
-        let userData = null;
-        
-        // البحث والتحقق تم تغييره إلى employeescomplus كما طلبت
-        let docSnap = await db.collection("employeescomplus").doc(empId).get();
-        if (docSnap.exists) {
-            userData = docSnap.data(); userData.id = docSnap.id;
-        } else {
-            let querySnap = await db.collection("employeescomplus").where("id", "==", empId).get();
-            if (!querySnap.empty) { userData = querySnap.docs[0].data(); userData.id = querySnap.docs[0].id; }
-        }
 
-        if (!userData) {
-            Swal.fire('غير موجود', 'لم يتم العثور على أي شخص بهذا الرقم الوظيفي في قاعدة بيانات المستخدمين (employeescomplus).', 'error')
-            .then(() => promptForAdminId());
-            return;
-        }
-
-        const centerOptionsHtml = getCenterOptionsHtml('');
-
-        Swal.fire({
-            title: 'تكوين حساب رئيس المركز',
-            html: `
-                <div style="text-align:right; font-size:14px; line-height: 1.8;">
-                    <div style="background: #f0fdf4; padding: 10px; border: 1px solid #0FBA50; border-radius: 8px; margin-bottom: 15px;">
-                        <b>الاسم واللقب:</b> ${userData.name || '-'} <br>
-                        <b>الرتبة:</b> ${userData.grade || userData.rank || '-'} <br>
-                        <b>رقم التعريف:</b> ${userData.id}
-                    </div>
-                    
-                    <label style="font-weight:bold; color:#333;">حدد المركز الذي سيشرف عليه:</label>
-                    <select id="admin-center" class="swal2-select" style="width: 100%; margin: 5px 0 15px; font-size:14px; font-family:'Cairo'; padding: 5px;">
-                        ${centerOptionsHtml}
-                    </select>
-
-                    <label style="font-weight:bold; color:#333;">الرقم السري (للدخول كمسؤول مركز):</label>
-                    <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-                        <input type="text" id="admin-password" class="swal2-input" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:18px;" placeholder="أدخل الرقم السري">
-                        <button onclick="document.getElementById('admin-password').value = Math.floor(100000 + Math.random() * 900000)" style="width: 30%; background: #1E68E8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family:'Cairo'; padding: 11px; font-weight: bold;">
-                            توليد عشوائي
-                        </button>
-                    </div>
-                </div>
-            `,
-            showCancelButton: true, confirmButtonText: 'حفظ واعتماد الحساب', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
-            preConfirm: () => {
-                const center = document.getElementById('admin-center').value;
-                const password = document.getElementById('admin-password').value.trim();
-                if (!center || !password) { Swal.showValidationMessage('الرجاء اختيار المركز وإدخال الرقم السري!'); return false; }
-                return { center, password, name: userData.name, rank: userData.grade || userData.rank || '-' };
-            }
-        }).then(async (res) => {
-            if (res.isConfirmed) {
-                Swal.fire({ title: 'جاري تسجيل الحساب...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-                try {
-                    await db.collection("center_admins").doc(userData.id).set({
-                        id: userData.id, name: res.value.name, rank: res.value.rank, center: res.value.center, password: res.value.password, role: "inspector", disabled: false
-                    });
-                    
-                    Swal.fire('تم بنجاح', 'تم تسجيل حساب رئيس المركز بنجاح.', 'success')
-                    .then(() => manageCenterAdmins()); 
-                } catch (e) {
-                    Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error');
-                }
-            }
-        });
-
-    } catch (error) {
-        console.error(error);
-        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
-    }
-}
 
 function deleteAdminAccount(docId) {
     Swal.fire({
@@ -1170,6 +1384,476 @@ function deleteAdminAccount(docId) {
             } catch(e) { Swal.fire('خطأ', 'تعذر عملية الحذف', 'error'); }
         }
     });
+}
+
+// ================= نظام إدارة الأفواج المدمج للمديرية (محدث) =================
+let availableGroups = ["الفوج الأول", "الفوج الثاني", "الفوج الثالث", "الفوج الرابع", "الفوج الخامس"];
+let currentGroupPage = 1;         // رقم الصفحة الحالية
+const groupsPerPage = 10;         // عدد الأسطر في الصفحة
+let currentFilteredGroupData = []; // البيانات المفلترة لتسهيل نظام الصفحات والإدراج الجماعي
+
+function openGroupingModal() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+    document.getElementById('groupingModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    filteredData.forEach(item => {
+        if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+            availableGroups.push(item.group);
+        }
+    });
+
+    populateGroupingFilters();
+    resetGroupPageAndRender();
+}
+
+function closeGroupingModal() {
+    document.getElementById('groupingModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    applyFilters(); // تحديث الجدول الرئيسي خلف النافذة
+}
+
+// === إعدادات أسماء الأفواج ===
+function openGroupNamesManager() {
+    let listHtml = availableGroups.map((g, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f8fbff; margin-bottom:8px; border-radius:6px; border:1px solid #d9e2ec;">
+            <strong style="color:#102a43;">${g}</strong>
+            <button onclick="removeGroupFromList(${i})" style="background:#d90429; color:white; border:none; border-radius:6px; width:30px; height:30px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-gears" style="color:#34495e;"></i> إعداد أسماء الأفواج',
+        html: `
+            <div style="text-align:right; margin-bottom:20px; display:flex; gap:10px;">
+                <input type="text" id="newSwalGroupName" placeholder="اكتب اسم فوج جديد..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:'Cairo'; font-weight:bold; outline:none;">
+                <button onclick="addGroupToList()" style="padding:10px 20px; background:#1E68E8; color:white; border:none; border-radius:6px; cursor:pointer; font-family:'Cairo'; font-weight:bold;">إضافة</button>
+            </div>
+            <div id="swalGroupList" style="max-height:250px; overflow-y:auto; border:2px dashed #eee; padding:10px; border-radius:8px;">
+                ${listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>'}
+            </div>
+        `,
+        showConfirmButton: true, confirmButtonText: 'تم وإغلاق', confirmButtonColor: '#0FBA50'
+    });
+}
+
+window.removeGroupFromList = function(index) {
+    availableGroups.splice(index, 1); updateSwalGroupList(); resetGroupPageAndRender(); 
+};
+window.addGroupToList = function() {
+    let val = document.getElementById('newSwalGroupName').value.trim();
+    if (val && !availableGroups.includes(val)) {
+        availableGroups.push(val); document.getElementById('newSwalGroupName').value = '';
+        updateSwalGroupList(); populateGroupingFilters(); resetGroupPageAndRender();
+    } else if (availableGroups.includes(val)) { Swal.showValidationMessage('هذا الفوج موجود مسبقاً!'); }
+};
+function updateSwalGroupList() {
+    let listHtml = availableGroups.map((g, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f8fbff; margin-bottom:8px; border-radius:6px; border:1px solid #d9e2ec;"><strong style="color:#102a43;">${g}</strong><button onclick="removeGroupFromList(${i})" style="background:#d90429; color:white; border:none; border-radius:6px; width:30px; height:30px; cursor:pointer;"><i class="fa-solid fa-trash"></i></button></div>
+    `).join('');
+    document.getElementById('swalGroupList').innerHTML = listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>';
+}
+
+// === تجهيز الفلاتر ===
+function populateGroupingFilters() {
+    let ranks = new Set(), specs = new Set(), groups = new Set();
+    
+    filteredData.forEach(i => {
+        if (i.rank) ranks.add(i.rank);
+        if (i.specialty && i.specialty !== '-') specs.add(i.specialty);
+        if (i.group && i.group !== '-') groups.add(i.group);
+    });
+
+    const rankSel = document.getElementById('grpRankFilter');
+    const specSel = document.getElementById('grpSpecFilter');
+    const grpSel = document.getElementById('grpNameFilter');
+    const centerSel = document.getElementById('grpCenterFilter');
+    const bulkGrpSel = document.getElementById('bulkGroupSelect');
+
+    rankSel.innerHTML = '<option value="الكل">كل الرتب</option>';
+    specSel.innerHTML = '<option value="الكل">كل التخصصات</option>';
+    grpSel.innerHTML = '<option value="الكل">كل الأفواج المشكلة</option>';
+    
+    // جلب أسماء المراكز الأصلية من القائمة الثابتة (UI_NAMES.centers)
+    centerSel.innerHTML = '<option value="الكل">كل المراكز</option>';
+    const centersList = UI_NAMES.centers;
+    for (let key in centersList) {
+        centerSel.innerHTML += `<option value="${centersList[key]}">${centersList[key]}</option>`;
+    }
+
+    bulkGrpSel.innerHTML = '<option value="">-- اختر الفوج للإدراج --</option><option value="-">-- تفريغ الفوج (حذف) --</option>';
+
+    ranks.forEach(v => rankSel.innerHTML += `<option value="${v}">${v}</option>`);
+    specs.forEach(v => specSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(groups).sort().forEach(v => grpSel.innerHTML += `<option value="${v}">${v}</option>`);
+    availableGroups.forEach(v => bulkGrpSel.innerHTML += `<option value="${v}">${v}</option>`);
+}
+
+// === الفلترة وإعادة الضبط للجدول ===
+function resetGroupPageAndRender() {
+    currentGroupPage = 1; 
+    selectedGroupsTrainees.clear(); // مسح التحديدات القديمة
+    document.getElementById("selectAllGroups").checked = false;
+    renderGroupingTable();
+}
+
+function renderGroupingTable() {
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const centerF = document.getElementById('grpCenterFilter').value;
+    const genderF = document.getElementById('grpGenderFilter').value;
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    const grpF = document.getElementById('grpNameFilter').value;
+    
+    currentFilteredGroupData = filteredData.filter(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchC = centerF === "الكل" || item.center === centerF;
+        
+        let itemGender = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') ? 'أنثى' : 'ذكر';
+        let matchGender = genderF === "الكل" || itemGender === genderF;
+
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        let matchG = grpF === "الكل" || item.group === grpF;
+
+        return matchS && matchC && matchGender && matchR && matchSp && matchG;
+    });
+
+    document.getElementById('grpFilterCount').innerText = currentFilteredGroupData.length;
+
+    const tbody = document.getElementById('grpTableBody');
+    tbody.innerHTML = '';
+
+    if (currentFilteredGroupData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; font-weight:bold;">لا توجد بيانات مطابقة للفلتر</td></tr>`;
+        renderGroupPagination(0);
+        return;
+    }
+
+    const totalPages = Math.ceil(currentFilteredGroupData.length / groupsPerPage);
+    if (currentGroupPage > totalPages) currentGroupPage = totalPages;
+
+    const start = (currentGroupPage - 1) * groupsPerPage;
+    const end = start + groupsPerPage;
+    const paginatedData = currentFilteredGroupData.slice(start, end);
+
+    paginatedData.forEach(item => {
+        let genderIcon = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') 
+                         ? '<i class="fa-solid fa-person-dress" style="color:#e91e63; font-size:18px;"></i>' 
+                         : '<i class="fa-solid fa-person" style="color:#1E68E8; font-size:18px;"></i>';
+
+        let optionsHtml = `<option value="-">-- بدون فوج --</option>`;
+        availableGroups.forEach(g => {
+            let selected = (item.group === g) ? 'selected' : '';
+            optionsHtml += `<option value="${g}" ${selected}>${g}</option>`;
+        });
+
+        if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+            optionsHtml += `<option value="${item.group}" selected>${item.group} (غير معتمد)</option>`;
+        }
+
+        const isChecked = selectedGroupsTrainees.has(item.docId) ? 'checked' : '';
+
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="text-align:center;"><input type="checkbox" class="grp-row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleGroupSelect(this, '${item.docId}')"></td>
+            <td><strong>${item.empId}</strong></td>
+            <td><b>${item.name}</b></td>
+            <td style="text-align:center;">${genderIcon}</td>
+            <td>${item.rank || '-'}</td>
+            <td>${item.specialty || '-'}</td>
+            <td style="font-weight:bold; color:#0FBA50;">${item.center || 'غير محدد'}</td>
+            <td>
+                <select onchange="updateGroupInstantly('${item.docId}', this.value)" 
+                        style="width:100%; padding:8px; border-radius:6px; border:1px solid #0FBA50; text-align:center; font-weight:bold; font-family:'Cairo'; outline:none; background:#f8fbff; cursor:pointer;">
+                    ${optionsHtml}
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById("selectAllGroups").checked = (currentFilteredGroupData.length > 0 && selectedGroupsTrainees.size === currentFilteredGroupData.length);
+    renderGroupPagination(totalPages);
+}
+
+
+// === نظام الصفحات (الترقيم) ===
+function renderGroupPagination(totalPages) {
+    const container = document.getElementById("group-pagination-controls");
+    if (totalPages <= 1) { container.innerHTML = ""; container.style.display = "none"; return; }
+    
+    container.style.display = "flex";
+    let startItem = (currentGroupPage - 1) * groupsPerPage + 1;
+    let endItem = Math.min(currentGroupPage * groupsPerPage, currentFilteredGroupData.length);
+    
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${currentFilteredGroupData.length} سجل</div>`;
+    html += `<div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${currentGroupPage === 1 ? 'disabled' : ''} onclick="changeGroupPage(${currentGroupPage - 1})">السابق</button>`;
+
+    let startPage = Math.max(1, currentGroupPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+    if (startPage > 1) { html += `<button class="page-btn" onclick="changeGroupPage(1)">1</button><span style="align-self:center;">...</span>`; }
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="page-btn ${i === currentGroupPage ? 'active' : ''}" onclick="changeGroupPage(${i})">${i}</button>`;
+    }
+    if (endPage < totalPages) { html += `<span style="align-self:center;">...</span><button class="page-btn" onclick="changeGroupPage(${totalPages})">${totalPages}</button>`; }
+
+    html += `<button class="page-btn" ${currentGroupPage === totalPages ? 'disabled' : ''} onclick="changeGroupPage(${currentGroupPage + 1})">التالي</button></div>`;
+    container.innerHTML = html;
+}
+
+function changeGroupPage(page) {
+    currentGroupPage = page;
+    renderGroupingTable();
+}
+
+// === أزرار التحديد والإدراج الجماعي للأفواج ===
+function toggleSelectAllGroups() {
+    const isChecked = document.getElementById("selectAllGroups").checked;
+    if (isChecked) {
+        currentFilteredGroupData.forEach(item => selectedGroupsTrainees.add(item.docId));
+    } else {
+        selectedGroupsTrainees.clear();
+    }
+    document.querySelectorAll(".grp-row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+
+
+function toggleSingleGroupSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedGroupsTrainees.add(docId);
+    } else {
+        selectedGroupsTrainees.delete(docId);
+        document.getElementById("selectAllGroups").checked = false;
+    }
+}
+
+
+async function bulkAssignGroups() {
+    const selectedGroup = document.getElementById("bulkGroupSelect").value;
+    if(!selectedGroup) { Swal.fire('تنبيه', 'الرجاء اختيار الفوج المراد إدراجه!', 'warning'); return; }
+
+    if(selectedGroupsTrainees.size === 0) { Swal.fire('تنبيه', 'الرجاء تحديد أستاذ واحد على الأقل', 'warning'); return; }
+
+    const docIds = Array.from(selectedGroupsTrainees);
+    let actionText = selectedGroup === '-' ? 'تفريغ الفوج (حذف)' : `الإدراج في: ${selectedGroup}`;
+
+    Swal.fire({
+        title: 'تأكيد الإجراء الجماعي', 
+        text: `سيتم تطبيق "${actionText}" على عدد (${docIds.length}) متكون/ة محدد.`,
+        icon: 'question', showCancelButton: true, confirmButtonColor: '#0FBA50', confirmButtonText: 'نعم، طبق الإجراء', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ في القاعدة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const batch = db.batch();
+                docIds.forEach(id => {
+                    const docRef = db.collection("employeescomnew").doc(id);
+                    batch.update(docRef, { group: selectedGroup, fawj: selectedGroup });
+                    
+                    const localData = allData.find(d => d.docId === id);
+                    if(localData) localData.group = selectedGroup;
+                });
+                
+                await batch.commit();
+                selectedGroupsTrainees.clear();
+                document.getElementById("selectAllGroups").checked = false;
+                
+                populateGroupingFilters(); 
+                renderGroupingTable();
+                Swal.fire('تم بنجاح', 'تم تحديث الأفواج للأشخاص المحددين.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
+}
+
+// === التفويج الآلي (يطبق على نتائج الفلتر الحالي فقط) ===
+function autoGroupTrainees() {
+    let maxSize = parseInt(document.getElementById('maxGroupSize').value);
+    if (isNaN(maxSize) || maxSize < 5) maxSize = 25;
+
+    if(currentFilteredGroupData.length === 0) {
+        Swal.fire('تنبيه', 'لا يوجد أساتذة مطابقين لعملية التفويج في نتائج البحث الحالية.', 'warning'); return;
+    }
+
+    Swal.fire({
+        title: 'تأكيد التفويج الآلي', 
+        text: `سيتم التوزيع آلياً لعدد (${currentFilteredGroupData.length}) أستاذ معروضين حالياً في نتائج الفلترة.`,
+        icon: 'question', showCancelButton: true, confirmButtonText: 'نعم، ابدأ التفويج', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التفويج والحفظ...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            let groupCounter = 1;
+            let categories = {};
+            
+            currentFilteredGroupData.forEach(item => {
+                let key = `${item.rank}_${item.specialty}`;
+                if (!categories[key]) categories[key] = { m: [], f: [] };
+                let isMale = !((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F');
+                if (isMale) categories[key].m.push(item); else categories[key].f.push(item);
+            });
+
+            for (let key in categories) {
+                let males = categories[key].m; let females = categories[key].f;
+                let total = males.length + females.length;
+                if (total === 0) continue;
+
+                let numBuckets = Math.ceil(total / maxSize);
+                let buckets = Array.from({length: numBuckets}, () => []);
+
+                males.forEach((m, i) => buckets[i % numBuckets].push(m));
+                females.forEach((f, i) => buckets[i % numBuckets].push(f));
+
+                buckets.forEach(bucket => {
+                    if (bucket.length > 0) {
+                        let groupName = availableGroups[groupCounter - 1]; 
+                        if (!groupName) { groupName = `الفوج ${groupCounter}`; availableGroups.push(groupName); }
+                        bucket.forEach(trainee => { trainee.group = groupName; });
+                        groupCounter++;
+                    }
+                });
+            }
+
+            let batches = []; let currentBatch = db.batch(); let opCount = 0;
+            currentFilteredGroupData.forEach(item => {
+                if (item.group && item.group !== '-') {
+                    let ref = db.collection('employeescomnew').doc(item.docId);
+                    currentBatch.update(ref, { group: item.group, fawj: item.group });
+                    opCount++;
+                    if (opCount >= 400) { batches.push(currentBatch); currentBatch = db.batch(); opCount = 0; }
+                }
+            });
+            if (opCount > 0) batches.push(currentBatch);
+
+            try {
+                for (let b of batches) await b.commit();
+                populateGroupingFilters(); renderGroupingTable(); 
+                Swal.fire('نجاح', 'تم التوزيع العشوائي المنظم وحفظه بنجاح.', 'success');
+            } catch (error) { Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال.', 'error'); }
+        }
+    });
+}
+
+// === التفريغ الشامل للأفواج للأساتذة المعروضين ===
+function clearGroupings() {
+    let affectedItems = currentFilteredGroupData.filter(item => item.group && item.group !== '-');
+    if (affectedItems.length === 0) { Swal.fire('معلومة', 'لا يوجد أساتذة في القائمة المعروضة لديهم فوج.', 'info'); return; }
+
+    Swal.fire({
+        title: 'تأكيد الحذف', text: `هل أنت متأكد من تفريغ (حذف) الفوج لـ (${affectedItems.length}) أستاذ؟`,
+        icon: 'warning', showCancelButton: true, confirmButtonColor: '#d90429', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحذف...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            let batches = []; let currentBatch = db.batch(); let opCount = 0;
+
+            affectedItems.forEach(item => {
+                item.group = '-'; 
+                let ref = db.collection('employeescomnew').doc(item.docId);
+                currentBatch.update(ref, { group: '-', fawj: '-' });
+                opCount++;
+                if (opCount >= 400) { batches.push(currentBatch); currentBatch = db.batch(); opCount = 0; }
+            });
+            if (opCount > 0) batches.push(currentBatch);
+
+            try {
+                for (let b of batches) await b.commit();
+                populateGroupingFilters(); renderGroupingTable();
+                Swal.fire('نجاح', `تم تفريغ الأفواج بنجاح.`, 'success');
+            } catch (error) { Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال.', 'error'); }
+        }
+    });
+}
+
+// التحديث اللحظي المنفرد
+async function updateGroupInstantly(docId, val) {
+    let item = allData.find(d => d.docId === docId);
+    if (item) { 
+        item.group = val; 
+        try {
+            await db.collection('employeescomnew').doc(docId).update({ group: val, fawj: val });
+            Swal.fire({ toast: true, position: 'bottom-start', icon: 'success', title: 'تم تحديث الفوج', showConfirmButton: false, timer: 1500 });
+        } catch (error) { Swal.fire('خطأ', 'حدث مشكل في الاتصال، لم يتم الحفظ.', 'error'); }
+    }
+}
+
+// طباعة القوائم المنظمة للأفواج
+function printGroupsList() {
+    let grpsData = {}; let hasData = false;
+    currentFilteredGroupData.forEach(item => {
+        if (item.group && item.group !== '-' && item.group.trim() !== '') {
+            if (!grpsData[item.group]) grpsData[item.group] = [];
+            grpsData[item.group].push(item);
+            hasData = true;
+        }
+    });
+
+    if (!hasData) { Swal.fire('تنبيه', 'لا توجد بيانات أفواج لطباعتها في نتائج الفلترة الحالية.', 'warning'); return; }
+
+    let sortedGroupNames = Object.keys(grpsData).sort();
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>قوائم الأفواج</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 0; color: #000; margin: 0; background: #fff;}
+            .group-page { page-break-after: always; padding: 20px; box-sizing: border-box; }
+            .group-page:last-child { page-break-after: auto; }
+            .print-header { text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+            .main-title { text-align: center; font-size: 20px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 16px; margin-bottom: 25px; font-weight: bold; padding: 8px; border: 2px solid #000; display: inline-block; background: #f9f9f9;}
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12px; }
+            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 13px; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+            .nowrap { white-space: nowrap; }
+            td.center-text { text-align: center; }
+        </style>
+    </head>
+    <body>`;
+    
+    sortedGroupNames.forEach(grpName => {
+        let members = grpsData[grpName];
+        let ranksSet = new Set(); let specsSet = new Set();
+        members.forEach(m => { if(m.rank) ranksSet.add(m.rank); if(m.specialty) specsSet.add(m.specialty); });
+        let rText = Array.from(ranksSet).join(' / '); let sText = Array.from(specsSet).join(' / ');
+
+        html += `
+        <div class="group-page">
+            <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+            <div class="header-flex">
+                <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            </div>
+            
+            <div class="main-title">القائمة الاسمية للمتكونين</div>
+            <div style="text-align: center;"><div class="sub-titles">${grpName} &nbsp; | &nbsp; العدد: ${members.length} متكون</div></div>
+            <div style="margin-bottom: 10px; font-weight: bold; font-size: 13px;">الرتبة: ${rText} &nbsp;&nbsp;|&nbsp;&nbsp; مادة التخصص: ${sText}</div>
+            
+            <table>
+                <thead>
+                    <tr><th style="width:5%;">الرقم</th><th style="width:25%;">الاسم واللقب</th><th style="width:10%;">الجنس</th><th style="width:20%;">الرتبة</th><th style="width:20%;">التخصص</th><th style="width:20%;">مكان العمل</th></tr>
+                </thead>
+                <tbody>`;
+        
+        members.forEach((m, idx) => {
+            let genderText = ((m.gender||'').includes('نث') || (m.gender||'').toUpperCase() === 'F') ? 'أنثى' : 'ذكر';
+            html += `<tr><td class="center-text">${idx + 1}</td><td class="nowrap"><b>${m.name || '-'}</b></td><td class="center-text nowrap">${genderText}</td><td class="nowrap">${m.rank || '-'}</td><td class="nowrap">${m.specialty || '-'}</td><td>${m.workplace || '-'}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    });
+
+    html += `<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
 }
 </script>
 </body>

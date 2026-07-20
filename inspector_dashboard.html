@@ -58,6 +58,7 @@
     .action-btns { display: flex; gap: 5px; }
     .btn-icon { width: 35px; height: 35px; border-radius: 8px; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-size: 16px;}
     .btn-info { background: #17a2b8; } .btn-info:hover { background: #138496; }
+    .btn-edit { background: #ffc107; color: #000; } .btn-edit:hover { background: #e0a800; }
     .pagination-container { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; flex-wrap: wrap; gap: 10px; }
     .pagination-info { font-weight: 600; color: #555; font-size: 14px; }
     .pagination-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -134,6 +135,13 @@
 
 /* لون القائمة المنسدلة لحالة غير محدد */
 .sel-unspecified { color: #777; font-weight: normal; }
+
+/* ================= تنسيقات نظام الرخص ================= */
+.row-limit-reached { background-color: #ffeaea !important; } /* لون أحمر عند تجاوز الحد */
+.row-limit-reached td { border-bottom: 1px solid #ffc6c6; color: #d90429; font-weight: bold; }
+
+.perm-badge { background: #1E68E8; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; }
+.perm-badge.danger { background: #d90429; }
 
  </style>
 </head>
@@ -212,8 +220,16 @@
                <i class="fa-solid fa-id-badge"></i> طباعة البطاقات
              </button>
 
+             <button class="btn-print" style="background: #8e44ad;" onclick="openGroupingModal()">
+               <i class="fa-solid fa-users-viewfinder"></i> إدارة الأفواج
+             </button>
+
              <button class="btn-print" style="background: #e91e63;" onclick="openAttendanceModal()">
                <i class="fa-solid fa-clipboard-user"></i> متابعة الحضور
+             </button>
+
+             <button class="btn-print" style="background: #e67e22;" onclick="openPermissionModal()">
+               <i class="fa-solid fa-file-signature"></i> نظام الرخص والاستفسارات
              </button>
              
              <span style="background: #e2e8f0; color: #334e68; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; border: 1px solid #cbd5e1;">
@@ -377,6 +393,134 @@
       </div>
     </div>
   </div>
+
+<!-- ================= نافذة إدارة وتشكيل الأفواج ================= -->
+  <div class="modal-overlay" id="groupingModal">
+    <div class="modal-content" style="width: 98%; height: 98%;">
+      <div class="modal-header" style="background: #8e44ad;">
+        <h2><i class="fa-solid fa-users-viewfinder"></i> نظام تشكيل وإدارة الأفواج</h2>
+        <button class="close-modal" onclick="closeGroupingModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+   <div class="att-controls" style="background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; border-bottom: 2px solid #d9e2ec; justify-content: space-between;">
+        
+        <div style="display: flex; gap: 15px; align-items: center; background: #f8fbff; padding: 10px 15px; border-radius: 8px; border: 1px solid #cce5ff;">
+            <label style="font-weight: bold; color: #102a43;">العدد المعتمد في الفوج:</label>
+            <input type="number" id="maxGroupSize" value="25" min="5" max="100" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-weight: bold; text-align: center;">
+            <button class="btn-print" style="background: #ff9800; color: white;" onclick="autoGroupTrainees()">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> التفويج الآلي
+            </button>
+            <span style="font-weight:bold; color:#d90429; font-size: 14px; background: #ffeaea; padding: 6px 12px; border-radius: 6px; border: 1px solid #ffc6c6; margin-right: 10px;">
+                عدد الفلترة: <span id="grpFilterCount">0</span>
+            </span>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn-print" style="background: #34495e;" onclick="openGroupNamesManager()">
+                <i class="fa-solid fa-gears"></i> إعداد أسماء الأفواج
+            </button>
+            <!-- الزر الجديد للبطاقة الإحصائية -->
+            <button class="btn-print" style="background: #27ae60;" onclick="showGroupStatistics()">
+                <i class="fa-solid fa-chart-pie"></i> إحصائيات الأفواج
+            </button>
+            <button class="btn-print" style="background: #17a2b8;" onclick="printGroupsList()">
+                <i class="fa-solid fa-print"></i> طباعة القوائم حسب الفوج
+            </button>
+            <button class="btn-print" style="background: #d90429;" onclick="clearGroupings()">
+                <i class="fa-solid fa-eraser"></i> تفريغ الأفواج
+            </button>
+        </div>
+
+      </div>
+
+      <div class="att-filters">
+        <!-- ربط الفلاتر بالدالة الديناميكية -->
+        <input type="text" id="grpSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="updateDynamicGroupsAndRender()">
+        <select id="grpRankFilter" onchange="updateDynamicGroupsAndRender()">
+            <option value="الكل">كل الرتب</option>
+        </select>
+        <select id="grpSpecFilter" onchange="updateDynamicGroupsAndRender()">
+            <option value="الكل">كل التخصصات</option>
+        </select>
+        <!-- قائمة الأفواج تعتمد على الفلترة السابقة -->
+        <select id="grpNameFilter" onchange="renderGroupingTable()">
+            <option value="الكل">كل الأفواج (المشكلة حالياً)</option>
+        </select>
+      </div>
+      <div class="att-table-container">
+        <table class="att-table" id="grpTable">
+          <thead>
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th>الرقم الوظيفي</th>
+              <th>الاسم واللقب</th>
+              <th style="width: 60px;">الجنس</th>
+              <th>الرتبة</th>
+              <th>التخصص</th>
+              <th>مكان العمل</th>
+              <th style="width: 150px; text-align: center;">الفوج (قابل للتعديل)</th>
+            </tr>
+          </thead>
+          <tbody id="grpTableBody">
+            <!-- سيتم توليد البيانات هنا -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<!-- ================= نافذة نظام الرخص والاستفسارات ================= -->
+  <div class="modal-overlay" id="permissionModal">
+    <div class="modal-content" style="width: 95%; height: 95%;">
+      <div class="modal-header" style="background: #e67e22;">
+        <h2><i class="fa-solid fa-file-signature"></i> نظام تسيير الرخص والاستفسارات</h2>
+        <button class="close-modal" onclick="closePermissionModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="att-controls" style="background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; border-bottom: 2px solid #d9e2ec; justify-content: space-between;">
+        <div style="display: flex; gap: 15px; align-items: center; background: #fff8eb; padding: 10px 15px; border-radius: 8px; border: 1px solid #ffe0b2;">
+            <label style="font-weight: bold; color: #d35400;"><i class="fa-solid fa-bell"></i> الحد المسموح للرخص:</label>
+            <input type="number" id="permLimitInput" value="3" min="1" max="20" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-weight: bold; text-align: center;" onchange="renderPermissionTable()">
+            <span style="font-size: 12px; color: #777;">(تلوين السطر بالأحمر عند الوصول للحد)</span>
+        </div>
+      </div>
+
+     <!-- الفلاتر المحدثة -->
+      <div class="att-filters" style="flex-wrap: wrap;">
+        <input type="text" id="permSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="renderPermissionTable()">
+        <select id="permRankFilter" onchange="renderPermissionTable()">
+            <option value="الكل">كل الرتب</option>
+        </select>
+        <select id="permSpecFilter" onchange="renderPermissionTable()">
+            <option value="الكل">كل التخصصات</option>
+        </select>
+        <select id="permGroupFilter" onchange="renderPermissionTable()">
+            <option value="الكل">كل الأفواج</option>
+        </select>
+      </div>
+
+      <!-- الجدول المحدث (تم دمج بعض الأعمدة لتوفير مساحة لعدادات الرخص) -->
+      <div class="att-table-container">
+        <table class="att-table" id="permTable">
+          <thead>
+            <tr>
+              <th style="width: 30px;">#</th>
+              <th>الرقم والاسم</th>
+              <th>التخصص والفوج</th>
+              <th style="text-align: center; font-size: 12px; width: 60px;" title="رخصة خروج">ر.خروج</th>
+              <th style="text-align: center; font-size: 12px; width: 60px;" title="رخصة غياب">ر.غياب</th>
+              <th style="text-align: center; font-size: 12px; width: 60px;" title="استفسار عن تأخر">س.تأخر</th>
+              <th style="text-align: center; font-size: 12px; width: 60px;" title="استفسار عن غياب">س.غياب</th>
+              <th style="text-align: center; font-size: 12px; width: 60px;" title="رخصة دخول">ر.دخول</th>
+              <th style="width: 180px; text-align: center;">إجراءات الوثائق</th>
+            </tr>
+          </thead>
+          <tbody id="permTableBody">
+            <!-- سيتم توليد البيانات هنا -->
+          </tbody>
+        </table>
+      </div>
+
 
 <script>
 // ================= إعدادات Firebase المحدثة =================
@@ -580,7 +724,10 @@ function renderTable() {
             <td>${rankPlaceHtml}</td>
             <td style="font-weight:600; color:#555;">${item.specialty || '-'}</td>
             <td style="text-align:center;">
-                <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="معلومات المتكون"><i class="fa-solid fa-eye"></i></button>
+                <div class="action-btns" style="justify-content: center;">
+                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="معلومات المتكون"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon btn-edit" onclick="editRecord('${item.docId}')" title="تعديل"><i class="fa-solid fa-pen"></i></button>
+                </div>
             </td>
         `;
         tbody.appendChild(tr);
@@ -1576,6 +1723,1117 @@ function markAllPresent() {
         }
     });
 }
+
+// ================= نظام إدارة الأفواج (التفويج اللحظي) =================
+
+// القائمة الافتراضية لأسماء الأفواج
+let availableGroups = ["الفوج 1", "الفوج 2", "الفوج 3", "الفوج 4", "الفوج 5"];
+
+function openGroupingModal() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+    document.getElementById('groupingModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // سحب أسماء الأفواج من البيانات إن وجدت
+    centerData.forEach(item => {
+        if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+            availableGroups.push(item.group);
+        }
+    });
+
+    populateGroupingFilters();
+    renderGroupingTable();
+}
+
+function closeGroupingModal() {
+    document.getElementById('groupingModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    applyFilters(); 
+}
+
+// ================= نافذة إعداد أسماء الأفواج المدمجة =================
+function openGroupNamesManager() {
+    let listHtml = availableGroups.map((g, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f8fbff; margin-bottom:8px; border-radius:6px; border:1px solid #d9e2ec;">
+            <strong style="color:#102a43;">${g}</strong>
+            <button onclick="removeGroupFromList(${i})" style="background:#d90429; color:white; border:none; border-radius:6px; width:30px; height:30px; cursor:pointer; transition:0.3s;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-gears" style="color:#34495e;"></i> إعداد أسماء الأفواج',
+        html: `
+            <div style="text-align:right; margin-bottom:20px; display:flex; gap:10px;">
+                <input type="text" id="newSwalGroupName" placeholder="اكتب اسم فوج جديد..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:'Cairo'; font-weight:bold; outline:none;">
+                <button onclick="addGroupToList()" style="padding:10px 20px; background:#1E68E8; color:white; border:none; border-radius:6px; cursor:pointer; font-family:'Cairo'; font-weight:bold;">إضافة</button>
+            </div>
+            <div id="swalGroupList" style="max-height:250px; overflow-y:auto; border:2px dashed #eee; padding:10px; border-radius:8px;">
+                ${listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>'}
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'تم وإغلاق',
+        confirmButtonColor: '#102a43'
+    });
+}
+
+// دوال التحكم بالنافذة (مربوطة بـ window لتعمل داخل SweetAlert)
+window.removeGroupFromList = function(index) {
+    availableGroups.splice(index, 1);
+    updateSwalGroupList();
+    renderGroupingTable(); 
+};
+
+window.addGroupToList = function() {
+    let val = document.getElementById('newSwalGroupName').value.trim();
+    if (val && !availableGroups.includes(val)) {
+        availableGroups.push(val);
+        document.getElementById('newSwalGroupName').value = '';
+        updateSwalGroupList();
+        renderGroupingTable();
+    } else if (availableGroups.includes(val)) {
+        Swal.showValidationMessage('هذا الفوج موجود مسبقاً!');
+    }
+};
+
+function updateSwalGroupList() {
+    let listHtml = availableGroups.map((g, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f8fbff; margin-bottom:8px; border-radius:6px; border:1px solid #d9e2ec;">
+            <strong style="color:#102a43;">${g}</strong>
+            <button onclick="removeGroupFromList(${i})" style="background:#d90429; color:white; border:none; border-radius:6px; width:30px; height:30px; cursor:pointer; transition:0.3s;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+    const listDiv = document.getElementById('swalGroupList');
+    if(listDiv) listDiv.innerHTML = listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>';
+}
+
+// ================= الفلاتر والجدول =================
+// === تجهيز الفلاتر المبدئية ===
+function populateGroupingFilters() {
+    let ranks = new Set(), specs = new Set();
+    centerData.forEach(i => {
+        if (i.rank) ranks.add(i.rank);
+        if (i.specialty && i.specialty !== '-') specs.add(i.specialty);
+    });
+
+    const rankSel = document.getElementById('grpRankFilter');
+    const specSel = document.getElementById('grpSpecFilter');
+
+    rankSel.innerHTML = '<option value="الكل">كل الرتب</option>';
+    specSel.innerHTML = '<option value="الكل">كل التخصصات</option>';
+
+    Array.from(ranks).sort().forEach(v => rankSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(specs).sort().forEach(v => specSel.innerHTML += `<option value="${v}">${v}</option>`);
+    
+    // استدعاء التحديث الديناميكي للأفواج بدلاً من الحشو الثابت
+    updateDynamicGroupsAndRender();
+}
+
+// === الدالة الجديدة: تحديث قائمة الأفواج ديناميكياً حسب التخصص/الرتبة ===
+function updateDynamicGroupsAndRender() {
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    
+    let validGroups = new Set();
+    
+    // حصر الأفواج الموجودة فقط في النتائج المطابقة للفلتر
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        
+        if (matchS && matchR && matchSp && item.group && item.group !== '-') {
+            validGroups.add(item.group);
+        }
+    });
+
+    const grpSel = document.getElementById('grpNameFilter');
+    const currentSelection = grpSel.value;
+
+    // إعادة بناء قائمة الأفواج بناءً على ما وجدناه فقط
+    grpSel.innerHTML = '<option value="الكل">كل الأفواج (المشكلة حالياً)</option>';
+    Array.from(validGroups).sort().forEach(v => {
+        let selected = (v === currentSelection) ? 'selected' : '';
+        grpSel.innerHTML += `<option value="${v}" ${selected}>${v}</option>`;
+    });
+
+    // إذا كان الفوج المحدد مسبقاً غير موجود في التخصص الجديد، أعده لـ "الكل"
+    if (currentSelection !== "الكل" && !validGroups.has(currentSelection)) {
+        grpSel.value = "الكل";
+    }
+
+    renderGroupingTable();
+}
+
+// === الدالة الجديدة: عرض البطاقة الإحصائية الشاملة للأفواج ===
+function showGroupStatistics() {
+    let stats = {};
+    
+    // تجميع الإحصائيات (تخصص -> فوج -> ذكور، إناث، المجموع)
+    centerData.forEach(item => {
+        if (item.group && item.group !== '-') {
+            let sp = item.specialty || 'بدون تخصص';
+            let grp = item.group;
+            let isMale = !((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F');
+            
+            if (!stats[sp]) stats[sp] = {};
+            if (!stats[sp][grp]) stats[sp][grp] = { m: 0, f: 0, t: 0 };
+            
+            stats[sp][grp].t++;
+            if (isMale) stats[sp][grp].m++;
+            else stats[sp][grp].f++;
+        }
+    });
+
+    if (Object.keys(stats).length === 0) {
+        Swal.fire('معلومة', 'لا توجد أفواج مشكلة حالياً لعرض إحصائياتها.', 'info');
+        return;
+    }
+
+    let htmlContent = '<div style="text-align: right; font-family: Cairo; max-height: 450px; overflow-y: auto; padding: 10px; overflow-x: hidden;">';
+    
+    let sortedSpecs = Object.keys(stats).sort();
+    
+    sortedSpecs.forEach(sp => {
+        htmlContent += `<div style="background: #102a43; color: white; padding: 10px 15px; border-radius: 8px; margin-top: 15px; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: -10px; z-index: 5;"><i class="fa-solid fa-book-open"></i> التخصص: ${sp}</div>`;
+        htmlContent += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px;">`;
+        
+        let sortedGroups = Object.keys(stats[sp]).sort();
+        sortedGroups.forEach(grp => {
+            let d = stats[sp][grp];
+            htmlContent += `
+                <div style="background: #f8fbff; border: 1px solid #cce5ff; border-radius: 8px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                    <h4 style="margin: 0 0 10px 0; color: #1E68E8; text-align: center; border-bottom: 1px dashed #ccc; padding-bottom: 8px; font-size: 15px;">${grp}</h4>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+                        <span style="color: #1E68E8; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-person"></i> ذكور: ${d.m}</span>
+                        <span style="color: #e91e63; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-person-dress"></i> إناث: ${d.f}</span>
+                    </div>
+                    <div style="text-align: center; font-size: 14px; font-weight: 900; color: #102a43; background: #e2e8f0; padding: 6px; border-radius: 6px;">
+                        الإجمالي: ${d.t}
+                    </div>
+                </div>
+            `;
+        });
+        htmlContent += `</div>`;
+    });
+    htmlContent += '</div>';
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-chart-pie" style="color:#27ae60;"></i> البطاقة الإحصائية الشاملة للأفواج',
+        html: htmlContent,
+        width: '850px',
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
+    });
+}
+
+function renderGroupingTable() {
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    const grpF = document.getElementById('grpNameFilter').value;
+    const tbody = document.getElementById('grpTableBody');
+    tbody.innerHTML = '';
+
+    let counter = 1;
+    let matchCount = 0; // متغير جديد لحساب العدد
+    
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        let matchG = grpF === "الكل" || item.group === grpF;
+
+        if (matchS && matchR && matchSp && matchG) {
+            matchCount++; // زيادة العداد مع كل نتيجة مطابقة
+            
+            let genderIcon = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') 
+                             ? '<i class="fa-solid fa-person-dress" style="color:#e91e63; font-size:18px;"></i>' 
+                             : '<i class="fa-solid fa-person" style="color:#1E68E8; font-size:18px;"></i>';
+
+            let optionsHtml = `<option value="-">-- بدون فوج --</option>`;
+            availableGroups.forEach(g => {
+                let selected = (item.group === g) ? 'selected' : '';
+                optionsHtml += `<option value="${g}" ${selected}>${g}</option>`;
+            });
+
+            if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+                optionsHtml += `<option value="${item.group}" selected>${item.group} (غير معتمد)</option>`;
+            }
+
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="text-align:center;">${counter++}</td>
+                <td><strong>${item.empId}</strong></td>
+                <td><b>${item.name}</b></td>
+                <td style="text-align:center;">${genderIcon}</td>
+                <td>${item.rank || '-'}</td>
+                <td>${item.specialty || '-'}</td>
+                <td>${item.workplace || '-'}</td>
+                <td>
+                    <select onchange="updateGroupInstantly('${item.docId}', this.value)" 
+                            style="width:100%; padding:8px; border-radius:6px; border:1px solid #1E68E8; text-align:center; font-weight:bold; font-family:'Cairo'; outline:none; background:#f8fbff; cursor:pointer;">
+                        ${optionsHtml}
+                    </select>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    });
+
+    // تحديث رقم الفلترة في المربع الذي أضفناه
+    const countDisplay = document.getElementById('grpFilterCount');
+    if (countDisplay) { countDisplay.innerText = matchCount; }
+}
+
+// ================= الحفظ اللحظي (عند تغيير الفوج لأي أستاذ) =================
+async function updateGroupInstantly(docId, val) {
+    let item = centerData.find(d => d.docId === docId);
+    if (item) { 
+        item.group = val; // تحديث الواجهة محلياً
+        
+        try {
+            // حفظ التغيير مباشرة في قاعدة بيانات المتربص
+            await db.collection('employeescomnew').doc(docId).update({
+                group: val,
+                fawj: val
+            });
+
+            // إشعار صغير يظهر في الزاوية دون إزعاج
+            Swal.fire({
+                toast: true, position: 'bottom-start', icon: 'success', 
+                title: 'تم تحديث الفوج وحفظه', showConfirmButton: false, timer: 1500
+            });
+        } catch (error) {
+            console.error("خطأ في الحفظ:", error);
+            Swal.fire('خطأ', 'حدث مشكل في الاتصال، لم يتم الحفظ.', 'error');
+        }
+    }
+}
+
+// ================= التفويج الآلي (مع حفظ تلقائي لجميع التعديلات) =================
+// ================= التفويج الآلي (توزيع كل تخصص ابتداءً من الفوج الأول) =================
+function autoGroupTrainees() {
+    let maxSize = parseInt(document.getElementById('maxGroupSize').value);
+    if (isNaN(maxSize) || maxSize < 5) maxSize = 25;
+
+    Swal.fire({
+        title: 'تأكيد التفويج الآلي',
+        text: `سيتم التوزيع آلياً (كل تخصص يبدأ من الفوج 1) وحفظ النتائج في قاعدة البيانات فوراً.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، ابدأ التفويج والحفظ',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التفويج والحفظ...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            let categories = {};
+            
+            // تجميع الأساتذة حسب الرتبة والتخصص
+            centerData.forEach(item => {
+                let key = `${item.rank}_${item.specialty}`;
+                if (!categories[key]) categories[key] = { m: [], f: [] };
+                let isMale = !((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F');
+                if (isMale) categories[key].m.push(item); else categories[key].f.push(item);
+            });
+
+            // التوزيع
+            for (let key in categories) {
+                // السر هنا: تصفير العداد مع كل تخصص جديد ليبدأ دائماً من الفوج 1
+                let groupCounter = 1; 
+
+                let males = categories[key].m; let females = categories[key].f;
+                let total = males.length + females.length;
+                if (total === 0) continue;
+
+                let numBuckets = Math.ceil(total / maxSize);
+                let buckets = Array.from({length: numBuckets}, () => []);
+
+                males.forEach((m, i) => buckets[i % numBuckets].push(m));
+                females.forEach((f, i) => buckets[i % numBuckets].push(f));
+
+                buckets.forEach(bucket => {
+                    if (bucket.length > 0) {
+                        let groupName = availableGroups[groupCounter - 1]; 
+                        if (!groupName) {
+                            groupName = `الفوج ${groupCounter}`; 
+                            availableGroups.push(groupName); 
+                        }
+                        bucket.forEach(trainee => { trainee.group = groupName; });
+                        groupCounter++;
+                    }
+                });
+            }
+
+            // إرسال التغييرات للقاعدة (Batch)
+            let batches = [];
+            let currentBatch = db.batch();
+            let opCount = 0;
+
+            centerData.forEach(item => {
+                if (item.group && item.group !== '-') {
+                    let ref = db.collection('employeescomnew').doc(item.docId);
+                    currentBatch.update(ref, { group: item.group, fawj: item.group });
+                    opCount++;
+                    if (opCount >= 400) { batches.push(currentBatch); currentBatch = db.batch(); opCount = 0; }
+                }
+            });
+            if (opCount > 0) batches.push(currentBatch);
+
+            try {
+                for (let b of batches) await b.commit();
+                populateGroupingFilters(); 
+                renderGroupingTable(); 
+                Swal.fire('نجاح', 'تم توزيع الأفواج (ابتداءً من الفوج 1 لكل تخصص) وحفظها بنجاح.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
+}
+
+// ================= طباعة قوائم الأفواج =================
+function printGroupsList() {
+    let grpsData = {}; let hasData = false;
+
+    centerData.forEach(item => {
+        if (item.group && item.group !== '-' && item.group.trim() !== '') {
+            if (!grpsData[item.group]) grpsData[item.group] = [];
+            grpsData[item.group].push(item);
+            hasData = true;
+        }
+    });
+
+    if (!hasData) { Swal.fire('تنبيه', 'لا توجد بيانات أفواج لطباعتها.', 'warning'); return; }
+
+    let sortedGroupNames = Object.keys(grpsData).sort();
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>قوائم الأفواج</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 0; color: #000; margin: 0; background: #fff;}
+            .group-page { page-break-after: always; padding: 20px; box-sizing: border-box; }
+            .group-page:last-child { page-break-after: auto; }
+            .print-header { text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+            .main-title { text-align: center; font-size: 20px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 16px; margin-bottom: 25px; font-weight: bold; padding: 8px; border: 2px solid #000; display: inline-block; background: #f9f9f9;}
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12px; }
+            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 13px; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+            .nowrap { white-space: nowrap; }
+            td.center-text { text-align: center; }
+        </style>
+    </head>
+    <body>
+    `;
+    
+    sortedGroupNames.forEach(grpName => {
+        let members = grpsData[grpName];
+        let ranksSet = new Set(); let specsSet = new Set();
+        members.forEach(m => { if(m.rank) ranksSet.add(m.rank); if(m.specialty) specsSet.add(m.specialty); });
+        let rText = Array.from(ranksSet).join(' / '); let sText = Array.from(specsSet).join(' / ');
+
+        html += `
+        <div class="group-page">
+            <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+            <div class="header-flex">
+                <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                <div style="text-align:left;">مركز التكوين البيداغوجي:<br><span style="font-size: 14px; font-weight: bold;">${INSPECTOR_CENTER}</span></div>
+            </div>
+            
+            <div class="main-title">القائمة الاسمية للمتكونين</div>
+            <div style="text-align: center;"><div class="sub-titles">${grpName} &nbsp; | &nbsp; العدد: ${members.length} متكون</div></div>
+            <div style="margin-bottom: 10px; font-weight: bold; font-size: 13px;">الرتبة: ${rText} &nbsp;&nbsp;|&nbsp;&nbsp; مادة التخصص: ${sText}</div>
+            
+            <table>
+                <thead>
+                    <tr><th style="width:5%;">الرقم</th><th style="width:25%;">الاسم واللقب</th><th style="width:10%;">الجنس</th><th style="width:20%;">الرتبة</th><th style="width:20%;">التخصص</th><th style="width:20%;">مكان العمل</th></tr>
+                </thead>
+                <tbody>
+        `;
+        
+        members.forEach((m, idx) => {
+            let genderText = ((m.gender||'').includes('نث') || (m.gender||'').toUpperCase() === 'F') ? 'أنثى' : 'ذكر';
+            html += `<tr><td class="center-text">${idx + 1}</td><td class="nowrap"><b>${m.name || '-'}</b></td><td class="center-text nowrap">${genderText}</td><td class="nowrap">${m.rank || '-'}</td><td class="nowrap">${m.specialty || '-'}</td><td>${m.workplace || '-'}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    });
+
+    html += `<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// ================= تفريغ الأفواج (حسب الفلترة الحالية) =================
+function clearGroupings() {
+    // 1. قراءة الفلاتر الحالية لمعرفة من المعروض في الجدول
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    const grpF = document.getElementById('grpNameFilter').value;
+
+    let affectedItems = [];
+
+    // 2. حصر الأساتذة المطابقين للفلتر والذين لديهم فوج مسجل فعلاً
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        let matchG = grpF === "الكل" || item.group === grpF;
+
+        // إذا طابق الفلتر وكان لديه فوج (ليس فارغاً)
+        if (matchS && matchR && matchSp && matchG && item.group && item.group !== '-') {
+            affectedItems.push(item);
+        }
+    });
+
+    if (affectedItems.length === 0) {
+        Swal.fire('معلومة', 'لا يوجد أساتذة في القائمة الحالية لديهم فوج ليتم حذفه.', 'info');
+        return;
+    }
+
+    // 3. رسالة تأكيد الحذف
+    Swal.fire({
+        title: 'تأكيد الحذف',
+        text: `هل أنت متأكد أنك تريد تفريغ الفوج لـ (${affectedItems.length}) أستاذ معروض في الجدول حالياً؟ (سيتم الحذف من قاعدة البيانات نهائياً)`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، احذف التفويج',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحذف...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            let batches = [];
+            let currentBatch = db.batch();
+            let opCount = 0;
+
+            // 4. تنفيذ التحديث (تفريغ الحقل)
+            affectedItems.forEach(item => {
+                item.group = '-'; // تحديث الواجهة محلياً
+                
+                let ref = db.collection('employeescomnew').doc(item.docId);
+                // تفريغ الحقلين لضمان التوافق
+                currentBatch.update(ref, { group: '-', fawj: '-' });
+                opCount++;
+
+                // تقسيم الدفعات لأن Firebase يقبل 500 عملية كحد أقصى في الدفعة
+                if (opCount >= 400) {
+                    batches.push(currentBatch);
+                    currentBatch = db.batch();
+                    opCount = 0;
+                }
+            });
+
+            if (opCount > 0) batches.push(currentBatch);
+
+            try {
+                // إرسال البيانات للقاعدة
+                for (let b of batches) await b.commit();
+                
+                // تحديث الواجهة والفلاتر
+                populateGroupingFilters();
+                renderGroupingTable();
+                
+                Swal.fire('نجاح', `تم تفريغ الأفواج لـ (${affectedItems.length}) أستاذ بنجاح.`, 'success');
+            } catch (error) {
+                console.error("خطأ في تفريغ الأفواج:", error);
+                Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
+}
+
+function editRecord(docId) {
+    const item = centerData.find(d => d.docId === docId);
+    if(!item) return;
+
+    Swal.fire({
+        title: 'تعديل بيانات الأستاذ',
+        html: `
+            <div style="text-align:right; font-size:15px; padding: 5px;">
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 15px; font-size:14px; line-height:1.6;">
+                    <b>الاسم:</b> ${item.name || '-'} <br>
+                    <b>الرقم الوظيفي:</b> ${item.empId || '-'} <br>
+                    <b>الرتبة:</b> ${item.rank || '-'} <br>
+                    <b>مادة التخصص:</b> <span style="color:#1E68E8; font-weight:bold;">${item.specialty || '-'}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap: 10px;">
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">مكان الميلاد:</label>
+                        <input type="text" id="edit-pob" class="swal2-input" value="${item.pob !== '-' ? item.pob : ''}" style="margin: 0; width: 100%; height: 40px; font-size:14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">دائرة الإقامة:</label>
+                        <select id="edit-daira" class="swal2-select" style="margin: 0; width: 100%; height: 40px; font-size:14px; padding: 0 10px;">
+                            <option value="-" ${item.daira === '-' ? 'selected' : ''}>غير محدد</option>
+                            <option value="توقرت" ${item.daira === 'توقرت' ? 'selected' : ''}>توقرت</option>
+                            <option value="تماسين" ${item.daira === 'تماسين' ? 'selected' : ''}>تماسين</option>
+                            <option value="المقارين" ${item.daira === 'المقارين' ? 'selected' : ''}>المقارين</option>
+                            <option value="الطيبات" ${item.daira === 'الطيبات' ? 'selected' : ''}>الطيبات</option>
+                            <option value="الحجيرة" ${item.daira === 'الحجيرة' ? 'selected' : ''}>الحجيرة</option>
+                            <option value="البرمة" ${item.daira === 'البرمة' ? 'selected' : ''}>البرمة</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">العنوان:</label>
+                        <input type="text" id="edit-address" class="swal2-input" value="${item.address !== '-' ? item.address : ''}" style="margin: 0; width: 100%; height: 40px; font-size:14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">رقم الهاتف:</label>
+                        <input type="text" id="edit-phone" class="swal2-input" value="${item.phone !== '-' ? item.phone : ''}" dir="ltr" style="margin: 0; width: 100%; height: 40px; font-size:14px; text-align:right;">
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
+        preConfirm: () => {
+            // جلب رقم الهاتف وإزالة أي مسافات أو فراغات سابقة
+            let rawPhone = document.getElementById('edit-phone').value.trim().replace(/\s+/g, '');
+            // إعادة صياغة الرقم ليصبح بصيغة 00 00 00 00 00
+            let formattedPhone = rawPhone.replace(/(.{2})(?=.)/g, '$1 ');
+
+            return {
+                pob: document.getElementById('edit-pob').value.trim(), 
+                daira: document.getElementById('edit-daira').value,
+                address: document.getElementById('edit-address').value.trim(), 
+                phone: formattedPhone // حفظ الرقم المنسق
+            }
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const newValues = result.value;
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("employeescomnew").doc(docId).update({ pob: newValues.pob, daira: newValues.daira, adrs: newValues.address, phone: newValues.phone });
+                item.pob = newValues.pob || '-'; item.daira = newValues.daira; item.address = newValues.address || '-'; item.phone = newValues.phone || '-';
+                applyFilters(); 
+                Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات الأستاذ بنجاح!', confirmButtonColor: '#102a43' });
+            } catch (error) {
+                console.error("Update Error:", error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء حفظ التعديلات في قاعدة البيانات', 'error');
+            }
+        }
+    });
+}
+
+// ================= نظام الرخص والاستفسارات المتقدم =================
+
+// 1. تحديث دالة جلب البيانات لتشمل الرخص (ابحث عن fetchData في كودك وهذا الجزء يكملها برمجياً)
+// البيانات ستكون محفوظة في الحقل: permissions (مصفوفة) داخل employeescomnew
+
+// فتح النافذة وتعبئة الفلاتر الجديدة
+function openPermissionModal() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+    document.getElementById('permissionModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    let groups = new Set(), ranks = new Set(), specs = new Set();
+    centerData.forEach(i => { 
+        if (i.group && i.group !== '-') groups.add(i.group); 
+        if (i.rank) ranks.add(i.rank);
+        if (i.specialty && i.specialty !== '-') specs.add(i.specialty);
+    });
+    
+    const grpSel = document.getElementById('permGroupFilter');
+    const rankSel = document.getElementById('permRankFilter');
+    const specSel = document.getElementById('permSpecFilter');
+    
+    grpSel.innerHTML = '<option value="الكل">كل الأفواج</option>';
+    rankSel.innerHTML = '<option value="الكل">كل الرتب</option>';
+    specSel.innerHTML = '<option value="الكل">كل التخصصات</option>';
+    
+    Array.from(groups).sort().forEach(v => grpSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(ranks).sort().forEach(v => rankSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(specs).sort().forEach(v => specSel.innerHTML += `<option value="${v}">${v}</option>`);
+
+    renderPermissionTable();
+}
+
+function closePermissionModal() {
+    document.getElementById('permissionModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// عرض الجدول وتلوينه وحساب الوثائق (لكل نوع على حدة)
+function renderPermissionTable() {
+    const search = document.getElementById('permSearch').value.toLowerCase();
+    const grpF = document.getElementById('permGroupFilter').value;
+    const rankF = document.getElementById('permRankFilter').value;
+    const specF = document.getElementById('permSpecFilter').value;
+    const permLimit = parseInt(document.getElementById('permLimitInput').value) || 3;
+    const tbody = document.getElementById('permTableBody');
+    tbody.innerHTML = '';
+
+    let counter = 1;
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchG = grpF === "الكل" || item.group === grpF;
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+
+        if (matchS && matchG && matchR && matchSp) {
+            let perms = item.permissions || [];
+            
+            // حساب كل نوع وثيقة بشكل مستقل
+            let counts = {
+                'رخصة خروج': 0, 'رخصة غياب': 0, 'استفسار عن تأخر': 0, 'استفسار عن غياب': 0, 'رخصة دخول': 0
+            };
+            
+            perms.forEach(p => {
+                if (counts[p.type] !== undefined) counts[p.type]++;
+            });
+            
+            // إذا وصل أي نوع من الوثائق للحد المسموح، يتم تلوين السطر بالكامل
+            let isLimitReached = Object.values(counts).some(c => c >= permLimit);
+            let rowClass = isLimitReached ? 'row-limit-reached' : '';
+
+            // دالة لتلوين وتنسيق الرقم داخل الخلية
+            const formatCount = (count) => {
+                if (count >= permLimit) return `<span class="perm-badge danger">${count}</span>`;
+                if (count > 0) return `<span class="perm-badge">${count}</span>`;
+                return `<span style="color:#bbb; font-size:12px;">0</span>`;
+            };
+
+            let tr = document.createElement('tr');
+            tr.className = rowClass;
+            tr.innerHTML = `
+                <td style="text-align:center;">${counter++}</td>
+                <td><strong>${item.empId}</strong><br><span style="font-size:13px;">${item.name}</span></td>
+                <td>${item.specialty || '-'}<br><span style="font-size:12px; color:#1E68E8; font-weight:bold;">${item.group || '-'}</span></td>
+                <td style="text-align:center;">${formatCount(counts['رخصة خروج'])}</td>
+                <td style="text-align:center;">${formatCount(counts['رخصة غياب'])}</td>
+                <td style="text-align:center;">${formatCount(counts['استفسار عن تأخر'])}</td>
+                <td style="text-align:center;">${formatCount(counts['استفسار عن غياب'])}</td>
+                <td style="text-align:center;">${formatCount(counts['رخصة دخول'])}</td>
+                <td style="text-align: center;">
+                    <div style="display: flex; gap: 5px; justify-content: center;">
+                        <button class="btn-print" style="background:#e67e22; padding: 6px 10px; font-size:11px;" onclick="addPermission('${item.docId}')">
+                            <i class="fa-solid fa-plus"></i> استخراج
+                        </button>
+                        <button class="btn-print" style="background:#34495e; padding: 6px 10px; font-size:11px;" onclick="viewPermissionHistory('${item.docId}')">
+                            <i class="fa-solid fa-clock-rotate-left"></i> السجل
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    });
+}
+
+// إضافة رخصة/وثيقة جديدة (السبب أصبح اختيارياً)
+function addPermission(docId) {
+    let item = centerData.find(d => d.docId === docId);
+    if(!item) return;
+
+    let today = new Date();
+    let currentDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    let currentTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
+
+    Swal.fire({
+        title: 'استخراج وثيقة إدارية',
+        html: `
+            <div style="text-align:right; font-size:14px;">
+                <label style="font-weight:bold; color:#102a43;">نوع الوثيقة:</label>
+                <select id="swalPermType" class="swal2-select" style="width:100%; margin: 5px 0 15px; font-family:'Cairo';">
+                    <option value="رخصة خروج">رخصة خروج</option>
+                    <option value="رخصة غياب">رخصة غياب</option>
+                    <option value="استفسار عن تأخر">استفسار عن تأخر</option>
+                    <option value="استفسار عن غياب">استفسار عن غياب بدون تبرير</option>
+                    <option value="رخصة دخول">رخصة دخول</option>
+                </select>
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">التاريخ:</label>
+                        <input type="date" id="swalPermDate" class="swal2-input" value="${currentDate}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">الوقت:</label>
+                        <input type="time" id="swalPermTime" class="swal2-input" value="${currentTime}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                </div>
+
+                <label style="font-weight:bold; color:#102a43;">السبب / المبرر (اختياري):</label>
+                <textarea id="swalPermReason" class="swal2-textarea" placeholder="اكتب السبب هنا (يمكنك تركه فارغاً)..." style="width:100%; margin: 5px 0 0; font-family:'Cairo';"></textarea>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ وطباعة الوثيقة', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+        preConfirm: () => {
+            let type = document.getElementById('swalPermType').value;
+            let date = document.getElementById('swalPermDate').value;
+            let time = document.getElementById('swalPermTime').value;
+            let reason = document.getElementById('swalPermReason').value.trim();
+            // تم إزالة شرط الإلزامية للسبب
+            if (!reason) reason = 'لا يوجد'; // وضع قيمة افتراضية إذا ترك فارغاً
+            return { id: Date.now().toString(), type, date, time, reason };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let newPerm = result.value;
+            
+            try {
+                await db.collection("employeescomnew").doc(docId).update({
+                    permissions: firebase.firestore.FieldValue.arrayUnion(newPerm)
+                });
+                
+                if(!item.permissions) item.permissions = [];
+                item.permissions.push(newPerm);
+                renderPermissionTable();
+
+                Swal.fire('تم بنجاح', 'تم تسجيل الوثيقة. سيتم فتح نافذة الطباعة.', 'success')
+                .then(() => printPermissionDocument(item, newPerm));
+            } catch (error) {
+                console.error(error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات', 'error');
+            }
+        }
+    });
+}
+
+// متغيرات عامة لنظام صفحات السجل (توضع في أعلى قسم الرخص أو داخل الدالة)
+let currentPermPage = 1;
+const permsPerPage = 5; // العرض بـ 5 أسطر فقط حسب طلبك
+
+// =======================================================
+// 1. دالة عرض السجل المحدثة بنظام 5 أسطر وصفحات داخلية
+// =======================================================
+function viewPermissionHistory(docId) {
+    let item = centerData.find(d => d.docId === docId);
+    let perms = item.permissions || [];
+
+    if (perms.length === 0) {
+        Swal.fire('معلومة', 'لا يوجد سجل وثائق لهذا المتكون.', 'info');
+        return;
+    }
+
+    // حساب إجمالي الصفحات
+    const totalPages = Math.ceil(perms.length / permsPerPage);
+    if (currentPermPage > totalPages) currentPermPage = totalPages;
+
+    // استقطاع الأسطر الخاصة بالصفحة الحالية فقط (5 أسطر)
+    const start = (currentPermPage - 1) * permsPerPage;
+    const end = start + permsPerPage;
+    const paginatedPerms = perms.slice(start, end);
+
+    // إنشاء أسطر الجدول للصفحة الحالية
+    let rowsHtml = paginatedPerms.map((p, index) => {
+        // حساب المؤشر الحقيقي للوثيقة داخل المصفوفة الأصلية لحفظ التعديل والحذف بشكل صحيح
+        let realIndex = start + index;
+        return `
+            <tr style="background:#f8fbff; border-bottom:1px solid #ddd;">
+                <td style="padding:12px; font-weight:bold; text-align:center;">${p.type}</td>
+                <td style="padding:12px; text-align:center;" dir="ltr">${p.date} <br> <span style="color:#777; font-size:12px;">${p.time}</span></td>
+                <td style="padding:12px; font-size:14px; color:#333; word-wrap: break-word;">${p.reason}</td>
+                <td style="padding:12px; text-align:center;">
+                    <div style="display: flex; gap: 5px; justify-content: center; min-width: 140px;">
+                        <button onclick="printSinglePermission('${docId}', '${p.id}')" class="page-btn" style="background:#17a2b8; color:white; border:none; padding:6px 10px;" title="طباعة الوثيقة">
+                            <i class="fa-solid fa-print"></i>
+                        </button>
+                        <button onclick="editPermission('${docId}', '${p.id}', ${realIndex})" class="page-btn" style="background:#ffc107; color:#000; border:none; padding:6px 10px;" title="تعديل الوثيقة">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button onclick="deletePermission('${docId}', '${p.id}', ${realIndex})" class="page-btn" style="background:#d90429; color:white; border:none; padding:6px 10px;" title="حذف الوثيقة">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // بناء أزرار نظام الصفحات الخاص بالسجل
+    let paginationHtml = '';
+    if (totalPages > 1) {
+        paginationHtml = `
+            <div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
+                <div class="pagination-info" style="font-size:13px; font-weight:600; color:#555;">عرض ${start + 1} إلى ${Math.min(end, perms.length)} من أصل ${perms.length} وثيقة</div>
+                <div class="pagination-buttons" style="display:flex; gap:5px;">
+                    <button class="page-btn" ${currentPermPage === 1 ? 'disabled' : ''} onclick="changePermPage('${docId}', ${currentPermPage - 1})" style="padding:4px 10px; font-size:12px;">السابق</button>
+        `;
+        for (let i = 1; i <= totalPages; i++) {
+            paginationHtml += `<button class="page-btn ${i === currentPermPage ? 'active' : ''}" onclick="changePermPage('${docId}', ${i})" style="padding:4px 10px; font-size:12px;">${i}</button>`;
+        }
+        paginationHtml += `
+                    <button class="page-btn" ${currentPermPage === totalPages ? 'disabled' : ''} onclick="changePermPage('${docId}', ${currentPermPage + 1})" style="padding:4px 10px; font-size:12px;">التالي</button>
+                </div>
+            </div>
+        `;
+    }
+
+    // عرض نافذة السجل محدثة بالجدول والصفحات
+    Swal.fire({
+        title: `سجل الوثائق: ${item.name}`,
+        width: '950px',
+        html: `
+            <div style="width: 100%; overflow-x: auto; border: 1px solid #eee; border-radius: 8px;"> 
+                <table style="width:100%; min-width: 850px; border-collapse:collapse; text-align:right; font-family:'Cairo';">
+                    <thead style="background:#102a43; color:white;">
+                        <tr>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:20%; text-align:center;">نوع الوثيقة</th>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:20%; text-align:center;">التاريخ والوقت</th>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:40%;">السبب</th>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:20%; text-align:center;">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+            ${paginationHtml} <!-- إدراج أزرار التنقل أسفل الجدول مباشرة -->
+        `,
+        showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+    });
+}
+
+// =======================================================
+// 2. الدالة المساعدة للتنقل بين صفحات السجل دون إغلاق النافذة
+// =======================================================
+window.changePermPage = function(docId, page) {
+    currentPermPage = page;
+    viewPermissionHistory(docId); // إعادة بناء النافذة فوراً لعرض الصفحة المطلوبة
+};
+
+// =======================================================
+// 2. دالة الطباعة المفردة من السجل
+// =======================================================
+window.printSinglePermission = function(docId, permId) {
+    let item = centerData.find(d => d.docId === docId);
+    if (!item || !item.permissions) return;
+    
+    let perm = item.permissions.find(p => p.id === permId);
+    if (perm) {
+        printPermissionDocument(item, perm);
+    }
+};
+
+// =======================================================
+// 3. دالة تعديل الوثيقة من السجل
+// =======================================================
+window.editPermission = function(docId, permId, arrayIndex) {
+    let item = centerData.find(d => d.docId === docId);
+    if (!item || !item.permissions) return;
+    
+    let perm = item.permissions[arrayIndex];
+
+    Swal.fire({
+        title: 'تعديل الوثيقة الإدارية',
+        html: `
+            <div style="text-align:right; font-size:14px;">
+                <label style="font-weight:bold; color:#102a43;">نوع الوثيقة:</label>
+                <select id="editPermType" class="swal2-select" style="width:100%; margin: 5px 0 15px; font-family:'Cairo';">
+                    <option value="رخصة خروج" ${perm.type === 'رخصة خروج' ? 'selected' : ''}>رخصة خروج</option>
+                    <option value="رخصة غياب" ${perm.type === 'رخصة غياب' ? 'selected' : ''}>رخصة غياب</option>
+                    <option value="استفسار عن تأخر" ${perm.type === 'استفسار عن تأخر' ? 'selected' : ''}>استفسار عن تأخر</option>
+                    <option value="استفسار عن غياب" ${perm.type === 'استفسار عن غياب' ? 'selected' : ''}>استفسار عن غياب بدون تبرير</option>
+                    <option value="رخصة دخول" ${perm.type === 'رخصة دخول' ? 'selected' : ''}>رخصة دخول</option>
+                </select>
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">التاريخ:</label>
+                        <input type="date" id="editPermDate" class="swal2-input" value="${perm.date}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">الوقت:</label>
+                        <input type="time" id="editPermTime" class="swal2-input" value="${perm.time}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                </div>
+
+                <label style="font-weight:bold; color:#102a43;">السبب / المبرر:</label>
+                <textarea id="editPermReason" class="swal2-textarea" style="width:100%; margin: 5px 0 0; font-family:'Cairo';">${perm.reason === 'لا يوجد' ? '' : perm.reason}</textarea>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
+        preConfirm: () => {
+            let type = document.getElementById('editPermType').value;
+            let date = document.getElementById('editPermDate').value;
+            let time = document.getElementById('editPermTime').value;
+            let reason = document.getElementById('editPermReason').value.trim();
+            if (!reason) reason = 'لا يوجد';
+            
+            return { id: perm.id, type, date, time, reason };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let updatedPerm = result.value;
+            
+            // تحديث المصفوفة محلياً
+            item.permissions[arrayIndex] = updatedPerm;
+
+            try {
+                // حفظ المصفوفة بأكملها في قاعدة البيانات بعد التعديل
+                await db.collection("employeescomnew").doc(docId).update({
+                    permissions: item.permissions
+                });
+                
+                renderPermissionTable(); // لتحديث الجدول الرئيسي في الخلفية إن لزم الأمر
+                
+                Swal.fire('تم بنجاح', 'تم تعديل الوثيقة بنجاح.', 'success')
+                .then(() => {
+                    // إعادة فتح نافذة السجل بعد التعديل ليرى التحديث
+                    viewPermissionHistory(docId);
+                });
+            } catch (error) {
+                console.error(error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات', 'error');
+            }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            // إعادة فتح السجل إذا تم الضغط على زر إلغاء لتجنب إغلاق كل النوافذ
+            viewPermissionHistory(docId);
+        }
+    });
+};
+
+// =======================================================
+// دالة الطباعة المحسنة (بدون الرقم الوظيفي وبدون سمك في الإمضاءات)
+// =======================================================
+function printPermissionDocument(item, perm) {
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    
+    // تصميم الورقة الواحدة (نصف A4)
+    let docTemplate = `
+        <div class="doc-half">
+            <div class="doc-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+            <div class="doc-subheader">
+                <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                <div style="text-align:left;">مركز التكوين البيداغوجي:<br><strong>${INSPECTOR_CENTER}</strong></div>
+            </div>
+            
+            <div class="doc-title">${perm.type}</div>
+            
+            <div class="doc-body">
+                <table class="info-table">
+                    <tr><td width="30%"><strong>الاسم واللقب:</strong></td><td>${item.name}</td></tr>
+                    <tr><td><strong>الرتبة:</strong></td><td>${item.rank || '-'}</td></tr>
+                    <tr><td><strong>مادة التخصص:</strong></td><td>${item.specialty || '-'}</td></tr>
+                    <tr><td><strong>الفوج:</strong></td><td>${item.group || '-'}</td></tr>
+                    <tr><td><strong>مكان العمل:</strong></td><td>${item.workplace || '-'}</td></tr>
+                    <tr><td><strong>رقم الهاتف:</strong></td><td dir="ltr" style="text-align:right;">${item.phone || '-'}</td></tr>
+                </table>
+                
+                <div class="reason-box">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+                        <span><strong>التاريخ:</strong> <span dir="ltr">${perm.date}</span></span>
+                        <span><strong>الوقت:</strong> <span dir="ltr">${perm.time}</span></span>
+                    </div>
+                    <div><strong>السبب / المبرر:</strong> <br> ${perm.reason === 'لا يوجد' ? '....................................................................' : perm.reason}</div>
+                </div>
+                
+                <!-- الإمضاءات بدون سمك (تم إزالة وسوم strong) -->
+                <div class="doc-signatures">
+                    <div style="text-align:center; width:45%;">توقيع المعني بالأمر</div>
+                    <div style="text-align:center; width:45%;">ختم وتوقيع المفتش / رئيس المركز</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة الوثيقة - ${item.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 0; }
+            body { 
+                font-family: 'Cairo', sans-serif; margin: 0; padding: 0; 
+                display: flex; width: 100vw; height: 100vh; color: #000; box-sizing: border-box; 
+                overflow: hidden; 
+            }
+            
+            .doc-half { 
+                width: 50%; height: 100%; 
+                padding: 8mm 15mm 15mm 15mm; 
+                box-sizing: border-box; display: flex; flex-direction: column; 
+                border-left: 1px dashed #999; 
+            }
+            .doc-half:last-child { border-left: none; } 
+            
+            .doc-header { text-align: center; font-weight: 900; font-size: 13px; margin-bottom: 10px; line-height: 1.4; }
+            .doc-subheader { display: flex; justify-content: space-between; font-weight: bold; font-size: 12px; line-height: 1.4; margin-bottom: 10px; }
+            
+            .doc-title { 
+                text-align: center; font-size: 20px; font-weight: 900; margin-bottom: 10px; 
+                padding: 5px 15px; border: 3px double #000; display: table; margin-left: auto; margin-right: auto; 
+            }
+            
+            .doc-body { font-size: 13px; display: flex; flex-direction: column; }
+            
+            .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+            .info-table td { padding: 4px 5px; border-bottom: 1px solid #ddd; }
+            
+            .reason-box {
+                border: 1px solid #000; padding: 10px; border-radius: 5px;
+                background: #fafafa; margin-bottom: 5px; min-height: 70px;
+            }
+            
+            /* مساحة الإمضاء: تم تعديل الخط ليكون عادياً (normal) بدلاً من سميك (bold) */
+            .doc-signatures { 
+                display: flex; justify-content: space-between; 
+                font-weight: normal; /* هنا تم تغيير السمك إلى عادي */
+                font-size: 14px; 
+                margin-top: 20px; 
+                padding: 10px;
+            }
+            
+            @media print { 
+                body { padding: 0; width: 100%; height: 100%; } 
+                .doc-half { border-left: none; } 
+                .reason-box { background: transparent; }
+            }
+        </style>
+    </head>
+    <body>
+        ${docTemplate}
+        ${docTemplate}
+        <script>
+            window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }
+        <\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+// حذف وثيقة من السجل
+window.deletePermission = function(docId, permId, arrayIndex) {
+    let item = centerData.find(d => d.docId === docId);
+    let permToRemove = item.permissions.find(p => p.id === permId);
+
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'هل أنت متأكد من حذف هذه الوثيقة من السجل؟', icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#d90429', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                await db.collection("employeescomnew").doc(docId).update({
+                    permissions: firebase.firestore.FieldValue.arrayRemove(permToRemove)
+                });
+                item.permissions.splice(arrayIndex, 1);
+                renderPermissionTable();
+                Swal.fire('تم الحذف', 'تم حذف الوثيقة بنجاح.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'فشل عملية الحذف.', 'error');
+            }
+        }
+    });
+};
+
 
 </script>
 </body>
