@@ -243,7 +243,7 @@ async function onScanSuccess(decodedText, decodedResult) {
                     `,
                     confirmButtonText: 'استمرار المسح',
                     confirmButtonColor: '#203a43',
-                    timer: 3500,
+                    timer: 8000,
                     timerProgressBar: true
                 }).then(() => { isScanningPaused = false; });
                 return;
@@ -288,7 +288,7 @@ async function onScanSuccess(decodedText, decodedResult) {
                 icon: 'success',
                 confirmButtonText: 'مسح البطاقة التالية',
                 confirmButtonColor: '#203a43',
-                timer: 2500,
+                timer: 20000,
                 timerProgressBar: true
             }).then(() => { isScanningPaused = false; });
 
@@ -333,7 +333,7 @@ async function onScanSuccess(decodedText, decodedResult) {
                     `,
                     confirmButtonText: 'استمرار المسح',
                     confirmButtonColor: '#203a43',
-                    timer: 3500,
+                    timer: 8000,
                     timerProgressBar: true
                 }).then(() => { isScanningPaused = false; });
                 return; 
@@ -380,7 +380,7 @@ async function onScanSuccess(decodedText, decodedResult) {
                 icon: 'success',
                 confirmButtonText: 'مسح البطاقة التالية',
                 confirmButtonColor: '#203a43',
-                timer: 2500,
+                timer: 20000,
                 timerProgressBar: true
             }).then(() => { isScanningPaused = false; });
         }
