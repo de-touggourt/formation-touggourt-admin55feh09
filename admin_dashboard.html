@@ -171,6 +171,42 @@
 .att-table th { background: #334e68; color:white; position: sticky; top: 0; z-index: 10; }
 
 
+/* ================= تنسيقات الصورة الشخصية والبطاقة ================= */
+    .profile-pic-container {
+        width: 45px; 
+        height: 45px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid #cbd5e1;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        background-color: #f1f5f9;
+        display: flex; 
+        justify-content: center; 
+        align-items: center;
+        margin: 0 auto 5px auto;
+        transition: transform 0.3s ease;
+    }
+    .profile-pic-container:hover {
+        transform: scale(1.15);
+        border-color: #0FBA50;
+    }
+    .profile-pic-img {
+        width: 100%; 
+        height: 100%;
+        object-fit: cover;
+    }
+    .profile-pic-placeholder {
+        font-size: 20px; 
+        color: #94a3b8;
+    }
+    .swal-modal-custom { 
+        border-radius: 24px !important; 
+        padding: 0 !important; 
+        overflow: hidden; 
+        background: #f8fafc !important; 
+    }
+
+
   </style>
 </head>
 <body>
@@ -248,18 +284,23 @@
         <input type="text" id="searchInput" placeholder="ابحث هنا..." oninput="applyFilters()">
       </div>
       
-      <div class="filter-group">
+      <div class="filter-group" id="multiSelectDairaContainer">
         <label>الدائرة</label>
-        <select id="filterDaira" onchange="applyFilters()">
-          <option value="الكل">الكل</option>
-          <option value="توقرت">توقرت</option>
-          <option value="تماسين">تماسين</option>
-          <option value="المقارين">المقارين</option>
-          <option value="الطيبات">الطيبات</option>
-          <option value="الحجيرة">الحجيرة</option>
-          <option value="البرمة">البرمة</option>
-        </select>
+        <div class="multi-select-box" onclick="toggleDairaMenu()">
+           <span id="daira-selected-text">الكل</span>
+           <i class="fa-solid fa-chevron-down" style="color:#0FBA50;"></i>
+        </div>
+        <div class="multi-select-options" id="dairaOptions">
+          <label><input type="checkbox" id="daira-all" value="الكل" checked onchange="handleDairaAll()"> الكل</label>
+          <label><input type="checkbox" class="daira-checkbox" value="توقرت" onchange="handleDairaChange()"> توقرت</label>
+          <label><input type="checkbox" class="daira-checkbox" value="تماسين" onchange="handleDairaChange()"> تماسين</label>
+          <label><input type="checkbox" class="daira-checkbox" value="المقارين" onchange="handleDairaChange()"> المقارين</label>
+          <label><input type="checkbox" class="daira-checkbox" value="الطيبات" onchange="handleDairaChange()"> الطيبات</label>
+          <label><input type="checkbox" class="daira-checkbox" value="الحجيرة" onchange="handleDairaChange()"> الحجيرة</label>
+          <label><input type="checkbox" class="daira-checkbox" value="البرمة" onchange="handleDairaChange()"> البرمة</label>
+        </div>
       </div>
+
 
       <div class="filter-group" id="multiSelectRankContainer">
         <label>الرتبة / الطور</label>
@@ -436,6 +477,20 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+
+// ================= إعدادات الصور والمطابقة =================
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
+let employeePhotosMap = {}; 
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let str = String(val).trim().toUpperCase();
+    let digitsOnly = str.replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); // إزالة الأصفار من اليسار للمطابقة
+    return core === "" ? digitsOnly : core;
+}
+
+
 // المتغيرات العامة
 let allData = [];
 let filteredData = [];
@@ -447,7 +502,7 @@ let selectedGroupsTrainees = new Set();
 
 window.onload = function() {
     if(sessionStorage.getItem("userEmpId") !== "ADMIN_ACCESS") {
-        window.location.href = "index_2.html"; 
+        window.location.href = "index.html"; 
         return;
     }
     initCentersStats();
@@ -457,10 +512,14 @@ window.onload = function() {
 
 function logout() {
     sessionStorage.clear();
-    window.location.href = "index_2.html";
+    window.location.href = "index.html";
 }
 
 // ================= دوال الفلاتر المتعددة =================
+function toggleDairaMenu() {
+    const menu = document.getElementById("dairaOptions");
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
 function toggleRankMenu() {
     const menu = document.getElementById("rankOptions");
     menu.style.display = menu.style.display === "block" ? "none" : "block";
@@ -469,10 +528,39 @@ function toggleSpecMenu() {
     const menu = document.getElementById("specOptions");
     menu.style.display = menu.style.display === "block" ? "none" : "block";
 }
+// إغلاق القوائم عند النقر خارجها
 document.addEventListener('click', function(e) {
-    if(!e.target.closest('#multiSelectRankContainer')) document.getElementById("rankOptions").style.display = "none";
-    if(!e.target.closest('#multiSelectContainer')) document.getElementById("specOptions").style.display = "none";
+    if(!e.target.closest('#multiSelectDairaContainer')) { let m = document.getElementById("dairaOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiSelectRankContainer')) { let m = document.getElementById("rankOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiSelectContainer')) { let m = document.getElementById("specOptions"); if(m) m.style.display = "none"; }
 });
+
+// --- دوال الدائرة ---
+function handleDairaAll() {
+    document.querySelectorAll('.daira-checkbox').forEach(cb => cb.checked = false); 
+    updateDairaText();
+    applyFilters();
+}
+function handleDairaChange() {
+    const anyChecked = Array.from(document.querySelectorAll('.daira-checkbox')).some(cb => cb.checked);
+    document.getElementById('daira-all').checked = !anyChecked;
+    updateDairaText();
+    applyFilters();
+}
+function updateDairaText() {
+    if(document.getElementById('daira-all').checked) {
+        document.getElementById('daira-selected-text').innerText = "الكل";
+        return;
+    }
+    const checkedBoxes = document.querySelectorAll('.daira-checkbox:checked');
+    if(checkedBoxes.length === 1) {
+        document.getElementById('daira-selected-text').innerText = checkedBoxes[0].value;
+    } else {
+        document.getElementById('daira-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`;
+    }
+}
+
+
 
 function handleRankAll() {
     document.querySelectorAll('.rank-checkbox').forEach(cb => cb.checked = false); 
@@ -591,9 +679,31 @@ function getCenterOptionsHtml(selectedCenter) {
     return html;
 }
 
-// ================= جلب البيانات وبناء الفلاتر =================
+// ================= جلب البيانات والصور =================
 async function fetchData() {
     try {
+        // 1. جلب الصور أولاً من سكربت البطاقات
+        try {
+            const photoRes = await fetch(`${PHOTO_SCRIPT_URL}?type=employees`);
+            const responseText = await photoRes.text();
+            if (responseText && responseText.includes("[")) {
+                const photoData = JSON.parse(responseText);
+                employeePhotosMap = {};
+                photoData.forEach(item => {
+                    if(item.jobId && item.photoUrl) {
+                        const coreJobId = extractCoreId(item.jobId);
+                        let directUrl = item.photoUrl;
+                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                        if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
+                        employeePhotosMap[coreJobId] = directUrl;
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("تعذر جلب الصور:", e);
+        }
+
+        // 2. جلب البيانات من Firebase
         const snapshot = await db.collection("employeescomnew").get();
         allData = [];
         let ranks = new Set();
@@ -613,7 +723,8 @@ async function fetchData() {
                 daira: data.daira || "-",         
                 phone: data.phone || data.tel || "-", 
                 pob: data.pob || "-", 
-                center: data.center || ""
+                center: data.center || "",
+                password: data.password || "" 
             };
 
             if (item.dob && typeof item.dob.toDate === 'function') {
@@ -647,12 +758,15 @@ async function fetchData() {
         Swal.fire('خطأ', 'تعذر جلب البيانات من قاعدة البيانات', 'error');
     }
 }
-
 // ================= الفلترة وعرض الجدول =================
 function applyFilters() {
     const search = document.getElementById("searchInput").value.toLowerCase();
-    const filterDaira = document.getElementById("filterDaira").value;
     const filterCenter = document.getElementById("filterCenter").value;
+
+    let selectedDairas = [];
+    if(!document.getElementById('daira-all').checked) {
+        selectedDairas = Array.from(document.querySelectorAll('.daira-checkbox:checked')).map(cb => cb.value);
+    }
 
     let selectedRanks = [];
     if(!document.getElementById('rank-all').checked) {
@@ -666,7 +780,7 @@ function applyFilters() {
 
     filteredData = allData.filter(item => {
         const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
-        const matchDaira = (filterDaira === "الكل") || (item.daira === filterDaira);
+        const matchDaira = selectedDairas.length === 0 || selectedDairas.includes(item.daira);
         const matchRank = selectedRanks.length === 0 || selectedRanks.includes(item.rank);
         const matchSpec = selectedSpecs.length === 0 || selectedSpecs.includes(item.specialty);
         
@@ -733,6 +847,19 @@ function renderTable() {
 
     paginatedData.forEach(item => {
         const tr = document.createElement("tr");
+        
+        // 🌟 تجهيز الصورة بناءً على المطابقة 🌟
+        const coreEmpId = extractCoreId(item.empId);
+        const photoUrl = employeePhotosMap[coreEmpId];
+        
+        const photoHtml = `
+          <div class="profile-pic-container" style="cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
+              ${photoUrl 
+                  ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة الموظف" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' title=\\'تعذر تحميل الصورة\\'></i>'">` 
+                  : `<i class="fa-solid fa-user profile-pic-placeholder" title="الصورة غير متوفرة"></i>`}
+          </div>
+        `;
+
         const rankPlaceHtml = `
             <div style="line-height: 1.4;">
                 <strong>${item.rank || '-'}</strong><br>
@@ -740,23 +867,25 @@ function renderTable() {
             </div>
         `;
 
-        // التحقق مما إذا كان العنصر موجوداً في الذاكرة لتحديده بصرياً
         const isChecked = selectedTrainees.has(item.docId) ? 'checked' : '';
 
         tr.innerHTML = `
-            <td><input type="checkbox" class="row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleSelect(this, '${item.docId}')"></td>
-            <td><strong>${item.empId || '-'}</strong></td>
-            <td>${item.name || '-'}</td>
-            <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
+            <td style="vertical-align: middle;"><input type="checkbox" class="row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleSelect(this, '${item.docId}')"></td>
+            <td style="text-align:center; vertical-align: middle;">
+                ${photoHtml} <!-- 🌟 عرض الصورة هنا فوق الرقم -->
+                <strong>${item.empId || '-'}</strong>
+            </td>
+            <td style="vertical-align: middle;">${item.name || '-'}</td>
+            <td style="text-align:center; white-space:nowrap; vertical-align: middle;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
             
-            <td style="font-weight:600; color:#1E68E8;">${item.daira || '-'}</td>
-            <td>${item.address || '-'}</td>
-            <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
+            <td style="font-weight:600; color:#1E68E8; vertical-align: middle;">${item.daira || '-'}</td>
+            <td style="vertical-align: middle;">${item.address || '-'}</td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap; vertical-align: middle;">${item.phone || '-'}</td>
             
-            <td>${rankPlaceHtml}</td>
-            <td style="font-weight:600; color:#555;">${item.specialty || '-'}</td>
+            <td style="vertical-align: middle;">${rankPlaceHtml}</td>
+            <td style="font-weight:600; color:#555; vertical-align: middle;">${item.specialty || '-'}</td>
             
-            <td>
+            <td style="vertical-align: middle;">
                 <div style="display:flex; align-items:center; gap: 5px;">
                     <select id="center-select-${item.docId}" class="center-select">
                         ${getCenterOptionsHtml(item.center)}
@@ -764,9 +893,10 @@ function renderTable() {
                     <button class="btn-assign-single" onclick="assignSingleCenter('${item.docId}')">إدراج</button>
                 </div>
             </td>
-            <td>
+            <td style="vertical-align: middle;">
                 <div class="action-btns">
-                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="بطاقة المعلومات"><i class="fa-solid fa-eye"></i></button>
+                    <!-- تحويل الأيقونة لبطاقة الهوية -->
+                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="البطاقة المهنية"><i class="fa-solid fa-address-card"></i></button>
                     <button class="btn-icon btn-edit" onclick="editRecord('${item.docId}')" title="تعديل"><i class="fa-solid fa-pen"></i></button>
                     <button class="btn-icon btn-delete" onclick="deleteRecord('${item.docId}')" title="حذف"><i class="fa-solid fa-trash"></i></button>
                 </div>
@@ -775,9 +905,81 @@ function renderTable() {
         tbody.appendChild(tr);
     });
 
-    // تحديث حالة زر تحديد الكل العام
     document.getElementById("selectAll").checked = (filteredData.length > 0 && selectedTrainees.size === filteredData.length);
     renderPagination(totalPages);
+}
+
+// ================= دالة عرض البطاقة المهنية =================
+window.viewInfo = function(docId) {
+    const data = allData.find(d => d.docId === docId);
+    if (!data) return;
+
+    // جلب الصورة واستخراج رابط عالي الدقة (w800 للوضوح العالي)
+    const coreEmpId = extractCoreId(data.empId);
+    let photoUrl = employeePhotosMap[coreEmpId];
+    
+    if (photoUrl && photoUrl.includes('sz=w200')) {
+        photoUrl = photoUrl.replace('sz=w200', 'sz=w800');
+    }
+
+    const imgHtml = photoUrl
+        ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\' style=\\'font-size:70px; color:#94a3b8;\\'></i>'">`
+        : `<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>`;
+
+    const html = `
+    <div style="display: flex; flex-wrap: wrap; gap: 30px; align-items: center; text-align: right; font-family: 'Cairo', sans-serif; padding: 20px; background: #ffffff; border-radius: 20px;">
+        
+        <div style="flex-shrink: 0; position: relative; margin: 0 auto;">
+            <div style="width: 180px; height: 180px; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.25);">
+                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 4px solid #fff;">
+                    ${imgHtml}
+                </div>
+            </div>
+        </div>
+
+        <div style="flex-grow: 1; min-width: 250px;">
+            <h2 style="margin: 0 0 5px 0; font-size: 26px; font-weight: 900; color: #0f172a;">${data.name || '---'}</h2>
+            <h4 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 800; color: #0ea5e9;"><i class="fa-solid fa-briefcase" style="margin-left: 5px;"></i> ${data.rank || '---'}</h4>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.empId || '---'}</span>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">المركز المعين</span>
+                    <span style="display:block; font-size:15px; color:#0FBA50; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.center || 'غير محدد'}</span>
+                </div>
+
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مؤسسة العمل (المكان)</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${data.workplace || '---'}</span>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${data.phone || '---'}</span>
+                </div>
+
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مادة التخصص</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-book" style="color:#94a3b8; margin-left:5px;"></i> ${data.specialty || '---'}</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    `;
+
+    Swal.fire({
+        html: html,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: '700px',
+        background: 'transparent',
+        customClass: { popup: 'swal-modal-custom' }
+    });
 }
 
 // ================= دالة طباعة القوائم =================
@@ -806,13 +1008,23 @@ function printFilteredList() {
         phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
     }
 
-    const dairaFilter = document.getElementById("filterDaira").value;
+    let dairaText = "الكل";
+    if (!document.getElementById('daira-all').checked) {
+        const checkedBoxes = document.querySelectorAll('.daira-checkbox:checked');
+        if (checkedBoxes.length === 1) {
+            dairaText = checkedBoxes[0].value;
+        } else {
+            dairaText = `عدة دوائر (${checkedBoxes.length})`;
+        }
+    }
+
     const centerFilter = document.getElementById("filterCenter").value;
 
     let subTitlesArr = [];
-    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    if (dairaText !== "الكل") subTitlesArr.push(`الدائرة: ${dairaText}`);
     subTitlesArr.push(`الطور: ${phaseText}`);
     if (centerFilter !== "الكل") subTitlesArr.push(`المركز: ${centerFilter}`);
+
     
     let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
 
@@ -1107,7 +1319,6 @@ function deleteRecord(docId) {
 }
 
 // ================= نظام إدارة حسابات رؤساء المراكز =================
-
 function manageCenterAdmins() {
     Swal.fire({
         title: 'إدارة حسابات رؤساء المراكز',
@@ -1121,14 +1332,13 @@ function manageCenterAdmins() {
                 <div style="text-align: center; color: #777;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب الحسابات المسجلة...</div>
             </div>
         `,
-        // تم تكبير عرض النافذة إلى 1200 بكسل لتتسع لأعمدة الجدول براحة
-        width: '1200px', 
+        // تم تكبير عرض النافذة إلى 95% لتأخذ الشاشة كاملة وتعرض الجدول براحة
+        width: '95%', 
         showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#939393',
         didOpen: () => { loadAdminsList(); }
     });
 }
 
-// ... (تُترك دالة loadAdminsList, toggleAdminStatus, و changeAdminCenter كما هي بدون تغيير)
 
 function promptForAdminId() {
     Swal.fire({
@@ -1268,15 +1478,16 @@ async function loadAdminsList() {
             return;
         }
         let html = `
-        <div style="max-height: 400px; overflow-y: auto;">
-        <table class="admin-table">
-            <thead>
+        <div style="max-height: 65vh; overflow-y: auto; padding-left: 5px;">
+        <table class="admin-table" style="font-size: 15px;">
+            <thead style="position: sticky; top: 0; z-index: 10;">
                 <tr>
+                    <th style="width: 8%; text-align: center;">الصورة</th>
                     <th style="width: 15%;">الرقم الوظيفي</th>
-                    <th style="width: 25%;">الاسم واللقب</th>
-                    <th style="width: 20%;">المركز المشرف عليه</th>
+                    <th style="width: 22%;">الاسم واللقب</th>
+                    <th style="width: 18%;">المركز المشرف عليه</th>
                     <th style="width: 15%;">الرقم السري</th>
-                    <th style="width: 25%;">إجراء</th>
+                    <th style="width: 22%;">إجراء</th>
                 </tr>
             </thead>
             <tbody>
@@ -1287,17 +1498,39 @@ async function loadAdminsList() {
             let toggleIcon = data.disabled ? 'fa-toggle-off' : 'fa-toggle-on';
             let toggleColor = data.disabled ? '#6c757d' : '#28a745';
             let toggleTitle = data.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب مؤقتاً';
+            let toggleText = data.disabled ? 'تفعيل' : 'تعطيل';
+
+            // 🌟 جلب صورة المشرف من الذاكرة 🌟
+            const coreAdminId = extractCoreId(doc.id);
+            const photoUrl = employeePhotosMap[coreAdminId];
+            
+            const photoHtml = `
+              <div class="profile-pic-container" style="width: 42px; height: 42px; margin: 0 auto; cursor: default;">
+                  ${photoUrl 
+                      ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' style=\\'font-size: 18px;\\'></i>'">` 
+                      : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
+              </div>
+            `;
 
             html += `
                 <tr style="${data.disabled ? 'background:#f8d7da; opacity:0.8;' : ''}">
-                    <td style="font-weight: bold; text-align:center;">${doc.id} <br> ${statusBadge}</td>
-                    <td style="font-weight: bold; color: #1E68E8;">${data.name}</td>
-                    <td style="color: #0FBA50; font-weight: bold;">${data.center}</td>
-                    <td style="direction: ltr; text-align: center; font-family: monospace; font-size: 16px;">${data.password}</td>
-                    <td style="text-align: center; display:flex; gap:8px; justify-content:center; align-items:center; height: 100%;">
-                        <button onclick="toggleAdminStatus('${doc.id}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;" title="${toggleTitle}"><i class="fa-solid ${toggleIcon}"></i></button>
-                        <button onclick="changeAdminCenter('${doc.id}', '${data.center}')" style="background: #ffc107; color: #000; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;" title="تغيير المركز"><i class="fa-solid fa-pen-to-square"></i></button>
-                        <button onclick="deleteAdminAccount('${doc.id}')" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer;" title="حذف الحساب نهائياً"><i class="fa-solid fa-trash"></i></button>
+                    <td style="text-align:center; vertical-align: middle;">${photoHtml}</td>
+                    <td style="font-weight: bold; text-align:center; vertical-align: middle;">${doc.id} <br> ${statusBadge}</td>
+                    <td style="font-weight: bold; color: #1E68E8; vertical-align: middle;">${data.name}</td>
+                    <td style="color: #0FBA50; font-weight: bold; vertical-align: middle;">${data.center}</td>
+                    <td style="direction: ltr; text-align: center; font-family: monospace; font-size: 16px; vertical-align: middle;">${data.password}</td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                            <button onclick="toggleAdminStatus('${doc.id}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="${toggleTitle}">
+                                <i class="fa-solid ${toggleIcon}"></i> ${toggleText}
+                            </button>
+                            <button onclick="editAdminAccount('${doc.id}')" style="background: #ffc107; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="التعديل الشامل">
+                                <i class="fa-solid fa-pen-to-square"></i> تعديل
+                            </button>
+                            <button onclick="deleteAdminAccount('${doc.id}')" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="حذف الحساب نهائياً">
+                                <i class="fa-solid fa-trash"></i> حذف
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -1309,6 +1542,8 @@ async function loadAdminsList() {
     }
 }
 
+
+
 // دالة تعطيل / تفعيل الحساب
 async function toggleAdminStatus(docId, isDisabled) {
     try {
@@ -1319,41 +1554,125 @@ async function toggleAdminStatus(docId, isDisabled) {
     }
 }
 
-// دالة تغيير المركز من داخل النافذة
-function changeAdminCenter(docId, currentCenter) {
-    const centerOptionsHtml = getCenterOptionsHtml(currentCenter);
-    Swal.fire({
-        title: 'تغيير المركز للمشرف',
-        html: `
-            <select id="new-admin-center" class="swal2-select" style="width:100%; font-family:'Cairo';">
-                ${centerOptionsHtml}
-            </select>
-        `,
-        showCancelButton: true, confirmButtonText: 'حفظ التغيير', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
-        preConfirm: () => {
-            const newCenter = document.getElementById('new-admin-center').value;
-            if(!newCenter) { Swal.showValidationMessage('الرجاء اختيار المركز الجديد'); return false; }
-            return newCenter;
+// دالة التعديل الشامل لحساب رئيس المركز
+async function editAdminAccount(docId) {
+    Swal.fire({ title: 'جاري جلب البيانات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        let docSnap = await db.collection("center_admins").doc(docId).get();
+        if (!docSnap.exists) {
+            Swal.fire('خطأ', 'بيانات الحساب غير موجودة!', 'error').then(() => manageCenterAdmins());
+            return;
         }
-    }).then(async (res) => {
-        if (res.isConfirmed) {
-            Swal.fire({ title: 'جاري تحديث المركز...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            try {
-                // تحديث في مجموعة المشرفين
-                await db.collection("center_admins").doc(docId).update({ center: res.value });
+        
+        let data = docSnap.data();
+        const centerOptionsHtml = getCenterOptionsHtml(data.center || '');
+
+        // 🌟 جلب صورة المشرف بجودة عالية 🌟
+        const coreAdminId = extractCoreId(docId);
+        let photoUrl = employeePhotosMap[coreAdminId];
+        if (photoUrl && photoUrl.includes('sz=w200')) {
+            photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
+        }
+        const imgHtml = photoUrl
+            ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\' style=\\'font-size:40px; color:#94a3b8;\\'></i>'">`
+            : `<i class="fa-solid fa-user" style="font-size:40px; color:#94a3b8;"></i>`;
+
+        Swal.fire({
+            title: '<div style="color:#1E68E8; font-family:Cairo; font-weight:bold; border-bottom: 2px dashed #1E68E8; padding-bottom: 10px;"><i class="fa-solid fa-user-pen"></i> التعديل الشامل لحساب المشرف</div>',
+            html: `
+                <div style="text-align:right; font-size:14px; padding: 10px; font-family:'Cairo';">
+                    
+                    <!-- معلومات ثابتة للمشرف مع الصورة -->
+                    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px;">
+                        
+                        <!-- إطار الصورة -->
+                        <div style="flex-shrink: 0; width: 85px; height: 85px; border-radius: 50%; border: 3px solid #1E68E8; padding: 4px; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #f1f5f9;">
+                                ${imgHtml}
+                            </div>
+                        </div>
+
+                        <!-- تفاصيل المشرف -->
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; flex-grow: 1;">
+                            <div><b style="color:#6c757d; font-size:12px; display:block;">الاسم واللقب</b><span style="font-weight:bold; font-size:15px; color:#333;">${data.name || '-'}</span></div>
+                            <div><b style="color:#6c757d; font-size:12px; display:block;">الرقم الوظيفي</b><span style="font-weight:bold; font-size:15px; color:#1E68E8; font-family:monospace;">${docId}</span></div>
+                            <div><b style="color:#6c757d; font-size:12px; display:block;">الرتبة</b><span style="font-weight:bold; font-size:14px; color:#333;">${data.rank || '-'}</span></div>
+                            <div><b style="color:#6c757d; font-size:12px; display:block;">حالة الحساب</b><span style="font-weight:bold; font-size:14px; color:${data.disabled ? '#dc3545' : '#28a745'};">${data.disabled ? 'معطل' : 'مفعل نشط'}</span></div>
+                        </div>
+                    </div>
+
+                    <!-- الحقول القابلة للتعديل -->
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+                        
+                        <!-- المركز -->
+                        <div style="background: #e8fbf0; padding: 15px; border-radius: 10px; border: 1px dashed #0FBA50;">
+                            <label style="font-weight:bold; color:#0FBA50; font-size:14px; display:block; margin-bottom:8px;"><i class="fa-solid fa-school"></i> تعيين أو تغيير المركز:</label>
+                            <select id="edit-admin-center" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #0FBA50; font-family: 'Cairo'; font-weight: bold; outline: none; background: white; color: #333;">
+                                ${centerOptionsHtml}
+                            </select>
+                        </div>
+
+                        <!-- الرقم السري -->
+                        <div style="background: #fff8f8; padding: 15px; border-radius: 10px; border: 1px dashed #dc3545;">
+                            <label style="font-weight:bold; color:#dc3545; font-size:14px; display:block; margin-bottom:8px;"><i class="fa-solid fa-lock"></i> الرقم السري (للدخول كمسؤول مركز):</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="edit-admin-password" value="${data.password || ''}" class="swal2-input" minlength="8" maxlength="20" style="margin: 0; width: 75%; text-align: center; font-family: monospace; font-size: 16px; font-weight:bold; color:#dc3545;" placeholder="أدخل من 8 إلى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\\\-=\\[\\]{}:;<>?,./]/g, '')">
+                                <button type="button" onclick="document.getElementById('edit-admin-password').value = generateStrongPassword()" style="width: 25%; background: #1E68E8; color: white; border: none; border-radius: 6px; cursor: pointer; font-family:'Cairo'; font-weight: bold; font-size: 13px; transition: 0.3s;">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> توليد عشوائي
+                                </button>
+                            </div>
+                            <span style="font-size:11px; color:#777; display:block; margin-top:5px;">* يتكون من أحرف فرنسية (كبيرة وصغيرة)، أرقام، ورموز (8 إلى 20 خانة).</span>
+                        </div>
+
+                    </div>
+                </div>
+            `,
+            width: '800px', 
+            showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'رجوع', confirmButtonColor: '#1E68E8',
+            preConfirm: () => {
+                const center = document.getElementById('edit-admin-center').value;
+                const password = document.getElementById('edit-admin-password').value;
+
+                if (!center || !password) { Swal.showValidationMessage('الرجاء اختيار المركز وإدخال الرقم السري!'); return false; }
                 
-                // تحديث في مجموعة المستخدمين إذا أردت (اختياري)
-                await db.collection("employeescomplus").doc(docId).update({ center: res.value }).catch(e => console.log("Profile not found in employeescomplus"));
-                await db.collection("employeescomnew").doc(docId).update({ center: res.value }).catch(e => console.log("Profile not found in employeescomnew"));
-                
-                loadAdminsList();
-                applyFilters(); // تحديث الجدول الرئيسي في الخلفية
-                Swal.close();
-            } catch(e) {
-                Swal.fire('خطأ', 'تعذر تغيير المركز.', 'error');
+                if (password.length < 8 || password.length > 20) {
+                    Swal.showValidationMessage('الرقم السري يجب أن يكون بين 8 و 20 خانة!');
+                    return false;
+                }
+                const validRegex = /^[a-zA-Z0-9!@#$%^&*()_+~\-=\[\]{}:;<>?,./]{8,20}$/;
+                if (!validRegex.test(password)) {
+                    Swal.showValidationMessage('الرقم السري غير صالح! استخدم أحرف فرنسية، أرقام، ورموز فقط.');
+                    return false;
+                }
+
+                return { center, password };
             }
-        }
-    });
+        }).then(async (res) => {
+            if (res.isConfirmed) {
+                Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                try {
+                    await db.collection("center_admins").doc(docId).update({
+                        center: res.value.center,
+                        password: res.value.password
+                    });
+                    
+                    await db.collection("employeescomplus").doc(docId).update({ center: res.value.center, password: res.value.password }).catch(()=>console.log("Not in plus"));
+                    await db.collection("employeescomnew").doc(docId).update({ center: res.value.center, password: res.value.password }).catch(()=>console.log("Not in new"));
+
+                    Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات رئيس المركز بنجاح!', confirmButtonColor: '#1E68E8', timer: 2000 })
+                    .then(() => manageCenterAdmins()); 
+                } catch(e) {
+                    Swal.fire('خطأ', 'تعذر حفظ التعديلات.', 'error').then(() => manageCenterAdmins());
+                }
+            } else {
+                manageCenterAdmins();
+            }
+        });
+
+    } catch (err) {
+        Swal.fire('خطأ', 'فشل جلب البيانات.', 'error').then(() => manageCenterAdmins());
+    }
 }
 
 function promptForAdminId() {
@@ -1387,7 +1706,7 @@ function deleteAdminAccount(docId) {
 }
 
 // ================= نظام إدارة الأفواج المدمج للمديرية (محدث) =================
-let availableGroups = ["الفوج الأول", "الفوج الثاني", "الفوج الثالث", "الفوج الرابع", "الفوج الخامس"];
+let availableGroups = ["الفوج 1", "الفوج 2", "الفوج 3", "الفوج 4", "الفوج 5"];
 let currentGroupPage = 1;         // رقم الصفحة الحالية
 const groupsPerPage = 10;         // عدد الأسطر في الصفحة
 let currentFilteredGroupData = []; // البيانات المفلترة لتسهيل نظام الصفحات والإدراج الجماعي

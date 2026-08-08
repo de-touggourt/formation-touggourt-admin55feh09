@@ -197,6 +197,196 @@ async function onScanSuccess(decodedText, decodedResult) {
     audio.play().catch(e=>console.log(e));
 
     try {
+        // 1. المحاولة الأولى: البحث في قاعدة بيانات المتكونين (Trainees)
+        let traineeSnap = await db.collection("employeescomnew").where("id", "==", scannedId).get();
+        
+        if (!traineeSnap.empty) {
+            // === معالجة المتكون ===
+            let trainee = { empId: traineeSnap.docs[0].data().id, ...traineeSnap.docs[0].data() };
+            let centerName = trainee.center;
+
+            if (!centerName) {
+                Swal.fire({ icon: 'warning', title: 'خطأ في البيانات', text: `المتكون غير مرتبط بمركز تكوين!`, confirmButtonText: 'حسناً' }).then(() => { isScanningPaused = false; });
+                return;
+            }
+
+            const docId = `${centerName}_${todayDate}`;
+            let attDoc = await db.collection('attendance_daily').doc(docId).get();
+            let sysMode = "closed"; 
+            let existingRecords = {}; 
+
+            if (attDoc.exists) {
+                let data = attDoc.data();
+                if (data.systemMode) sysMode = data.systemMode;
+                if (data.records) existingRecords = data.records;
+            }
+
+            // التحقق مما إذا مسح بطاقته مسبقاً
+            if (existingRecords[trainee.empId] && existingRecords[trainee.empId].time && existingRecords[trainee.empId].time !== '') {
+                let recStatus = existingRecords[trainee.empId].status;
+                let recTime = existingRecords[trainee.empId].time;
+                
+                Swal.fire({
+                    icon: 'info',
+                    title: 'مسجل مسبقاً (متكون)!',
+                    html: `
+                        <div style="line-height: 2; font-size:15px; text-align:right;">
+                            تم تسجيل حضور المتكون <b>${trainee.name || '-'}</b> مسبقاً.<br>
+                            الوضعية: <span style="color:#0FBA50; font-weight:bold;">${recStatus}</span> على الساعة <span dir="ltr">${recTime}</span>
+                        </div>
+                    `,
+                    confirmButtonText: 'استمرار المسح',
+                    confirmButtonColor: '#203a43',
+                    timer: 3500,
+                    timerProgressBar: true
+                }).then(() => { isScanningPaused = false; });
+                return;
+            }
+
+            if (sysMode === "closed") {
+                Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `تسجيل حضور المتكونين لمركز (${centerName}) مغلق حالياً.`, confirmButtonText: 'استمرار المسح', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
+                return;
+            }
+
+            const d = new Date();
+            const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            let status = sysMode === "open" ? "حاضر" : "متأخر";
+            let badgeClass = status === "حاضر" ? "badge-present" : "badge-late";
+            let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
+
+            await db.collection('attendance_daily').doc(docId).set({
+                center: centerName,
+                date: todayDate,
+                records: {
+                    [trainee.empId]: { status: status, time: timeString }
+                }
+            }, { merge: true });
+
+            Swal.fire({
+                title: 'تم تسجيل حضور متكون!',
+                html: `
+                    <div class="swal-welcome-card">
+                        <div style="text-align:center;">
+                            <span class="swal-badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> ${status} (${timeString})</span>
+                        </div>
+                        <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
+                        <b>المركز:</b> ${centerName}<br>
+                        <b>الاسم:</b> ${trainee.name || '-'}<br>
+                        <b>الرتبة:</b> ${trainee.grade || trainee.rank || '-'}<br>
+                        <b>التخصص:</b> ${trainee.maty || trainee.specialty || '-'}
+                    </div>
+                `,
+                icon: 'success',
+                confirmButtonText: 'مسح البطاقة التالية',
+                confirmButtonColor: '#203a43',
+                timer: 2500,
+                timerProgressBar: true
+            }).then(() => { isScanningPaused = false; });
+
+        } else {
+            // === 2. المحاولة الثانية: إذا لم يكن متكوناً، نبحث في قاعدة بيانات المؤطرين (center_framers) ===
+            let framerDoc = await db.collection("center_framers").doc(scannedId).get();
+            
+            if (!framerDoc.exists) {
+                Swal.fire({ icon: 'error', title: 'غير مسجل', text: `الرقم (${scannedId}) غير مسجل في النظام (لا متكون ولا مؤطر)!`, confirmButtonText: 'حسناً', confirmButtonColor: '#203a43' }).then(() => { isScanningPaused = false; });
+                return;
+            }
+
+            let framerData = framerDoc.data();
+            let centerName = framerData.center;
+
+            const docId = `${centerName}_${todayDate}`;
+            let attDoc = await db.collection('framers_attendance_daily').doc(docId).get();
+            let sysMode = "closed"; 
+            let existingRecords = {}; 
+
+            if (attDoc.exists) {
+                let data = attDoc.data();
+                if (data.systemMode) sysMode = data.systemMode;
+                if (data.records) existingRecords = data.records;
+            }
+
+            // التحقق مما إذا مسح بطاقته مسبقاً
+            if (existingRecords[scannedId] && existingRecords[scannedId].time && existingRecords[scannedId].time !== '') {
+                let recStatus = existingRecords[scannedId].status;
+                let recTime = existingRecords[scannedId].time;
+                
+                Swal.fire({
+                    icon: 'info',
+                    title: 'مسجل مسبقاً (مؤطر)!',
+                    html: `
+                        <div style="line-height: 2; font-size:15px; text-align:right;">
+                            تم تسجيل حضور المؤطر مسبقاً.<br>
+                            الوضعية: <span style="color:#0FBA50; font-weight:bold;">${recStatus}</span> على الساعة <span dir="ltr">${recTime}</span>
+                        </div>
+                    `,
+                    confirmButtonText: 'استمرار المسح',
+                    confirmButtonColor: '#203a43',
+                    timer: 3500,
+                    timerProgressBar: true
+                }).then(() => { isScanningPaused = false; });
+                return; 
+            }
+
+            if (sysMode === "closed") {
+                Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `تسجيل حضور المؤطرين لمركز (${centerName}) مغلق حالياً.`, confirmButtonText: 'استمرار المسح', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
+                return;
+            }
+
+            const d = new Date();
+            const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            let status = "حاضر"; 
+
+            // جلب اسم المؤطر من القاعدة الأساسية
+            let baseSnap = await db.collection("employeescomnew").doc(scannedId).get();
+            if (!baseSnap.exists) baseSnap = await db.collection("employeescomplus").doc(scannedId).get();
+            let framerName = baseSnap.exists ? baseSnap.data().name : 'غير متوفر';
+
+            await db.collection('framers_attendance_daily').doc(docId).set({
+                center: centerName,
+                date: todayDate,
+                records: {
+                    [scannedId]: { status: status, time: timeString }
+                }
+            }, { merge: true });
+
+            Swal.fire({
+                title: 'تم تسجيل حضور مؤطر!',
+                html: `
+                    <div class="swal-welcome-card">
+                        <div style="text-align:center;">
+                            <span class="swal-badge badge-present"><i class="fa-solid fa-user-check"></i> مؤطر: ${status} (${timeString})</span>
+                        </div>
+                        <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
+                        <b>المركز:</b> ${centerName}<br>
+                        <b>الاسم:</b> ${framerName}<br>
+                        <b>الوظيفة بالمركز:</b> ${framerData.role || '-'}
+                    </div>
+                `,
+                icon: 'success',
+                confirmButtonText: 'مسح البطاقة التالية',
+                confirmButtonColor: '#203a43',
+                timer: 2500,
+                timerProgressBar: true
+            }).then(() => { isScanningPaused = false; });
+        }
+
+    } catch (error) {
+        console.error("Error:", error);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات', 'error').then(() => { isScanningPaused = false; });
+    }
+}
+
+
+    if (isScanningPaused) return; 
+    let scannedId = decodedText.trim();
+    isScanningPaused = true; 
+
+    // تشغيل صوت المسح
+    let audio = new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
+    audio.play().catch(e=>console.log(e));
+
+    try {
         let snapshot = await db.collection("employeescomnew").where("id", "==", scannedId).get();
         
         if (snapshot.empty) {

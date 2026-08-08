@@ -1,0 +1,2748 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة مؤطري المركز - فضاء التكوين</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- مكتبة إكسل -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  
+  <style>
+    * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+    body { margin: 0; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); color: #333; min-height: 100vh; display: flex; flex-direction: column; }
+    
+    /* الشريط العلوي */
+    .top-nav { background: #e67e22; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .top-nav h2 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+    .top-nav h2 span { color: #e67e22; font-size: 16px; background: #fff; padding: 4px 12px; border-radius: 20px; margin-right: 10px; font-weight: bold;}
+    
+    .nav-btn { color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; display: flex; align-items: center; gap: 5px; font-family: 'Cairo';}
+    .btn-back { background: #102a43; } .btn-back:hover { background: #243b53; }
+    .btn-logout { background: #d90429; } .btn-logout:hover { background: #ef233c; }
+
+    .dashboard-container { padding: 20px; flex: 1; max-width: 100%; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px;}
+
+    /* الإحصائيات */
+    .stats-container { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .att-stat-box { padding: 10px 20px; border-radius: 10px; font-weight: bold; font-size: 15px; display: flex; flex-direction: column; align-items: center; min-width: 140px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+    .att-stat-box span { font-size: 22px; margin-top: 5px; }
+
+    /* الفلاتر وشريط الأدوات */
+    .att-filters { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+    .att-filters input, .att-filters select { padding: 10px 15px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; outline: none; font-weight: bold; }
+    .att-filters input:focus, .att-filters select:focus { border-color: #e67e22; }
+    
+    .btn-action-main { color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: 'Cairo'; font-size: 14px; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+    .btn-action-main:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+
+    /* التبويبات (Tabs) */
+    .tabs-container { display: flex; gap: 10px; margin-bottom: -5px; border-bottom: 2px solid #cbd5e1; padding-bottom: 0px; flex-wrap: wrap;}
+    .tab-btn { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-bottom: none; padding: 12px 25px; border-radius: 12px 12px 0 0; font-weight: 800; cursor: pointer; font-family: 'Cairo'; font-size: 15px; transition: 0.3s; display: flex; align-items: center; gap: 8px;}
+    .tab-btn:hover:not(.active) { background: #e2e8f0; color: #102a43; }
+    .tab-btn.active { background: #102a43; color: white; border-color: #102a43; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); position: relative;}
+    .tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 3px; background: #e67e22; }
+
+    /* الجدول */
+    .table-container { flex: 1; overflow-x: auto; background: white; padding: 20px; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .att-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+    .att-table th { background: #102a43; color: white; padding: 12px 15px; text-align: center; position: sticky; top: 0; z-index: 10; }
+    .att-table td { padding: 12px 15px; text-align: center; border-bottom: 1px solid #eee; font-size: 14px; vertical-align: middle; }
+    .att-table tbody tr:hover { background: #fff8f3; }
+
+    .btn-action { color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; transition: 0.2s; display: flex; align-items: center; gap: 5px; font-size: 13px;}
+    .btn-action:hover { filter: brightness(0.9); }
+
+    /* الصور */
+    .profile-pic-container { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 2px solid #e67e22; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #f1f5f9; display: flex; justify-content: center; align-items: center; margin: 0 auto 5px auto; transition: transform 0.3s ease; }
+    .profile-pic-container:hover { transform: scale(1.15); }
+    .profile-pic-img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-pic-placeholder { font-size: 20px; color: #94a3b8; }
+
+    /* الترقيم */
+    .pagination-container { display: flex; justify-content: center; gap: 5px; margin-top: 20px; flex-wrap: wrap; }
+    .page-btn { background: #f0f4f8; color: #102a43; border: 1px solid #102a43; padding: 6px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-family: 'Cairo'; }
+    .page-btn:hover:not(:disabled), .page-btn.active { background: #102a43; color: white; }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; border-color: #ccc; color: #777;}
+
+    #loader { display: flex; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.95); z-index:9999; justify-content:center; align-items:center; flex-direction:column; }
+    .spinner { border: 5px solid #f3f3f3; border-top: 5px solid #e67e22; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .swal-modal-custom { border-radius: 24px !important; padding: 0 !important; overflow: hidden; background: #f8fafc !important; }
+
+    /* شارات الدورات الاحترافية في الجدول */
+    .session-badge {
+        display: inline-flex; justify-content: center; align-items: center;
+        width: 30px; height: 30px; border-radius: 8px; font-size: 15px;
+        background: #f1f5f9; color: #cbd5e1; border: 1px solid #e2e8f0;
+    }
+    .session-badge.active {
+        background: #e8fbf0; color: #0FBA50; border-color: #a5d6a7;
+        box-shadow: 0 2px 5px rgba(15,186,80,0.2);
+    }
+
+/* تنسيقات التخصصات والمقاييس */
+    .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; max-height: 120px; overflow-y: auto; background: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+    .checkbox-grid label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: bold; cursor: pointer; color: #102a43; }
+    .checkbox-grid input { cursor: pointer; width: 16px; height: 16px; accent-color: #e67e22; }
+    .shift-stats-board { display: flex; gap: 15px; background: linear-gradient(135deg, #102a43, #243b53); padding: 15px 25px; border-radius: 12px; color: white; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 15px;}
+    .shift-stat-item { flex: 1; text-align: center; border-left: 1px solid rgba(255,255,255,0.2); }
+    .shift-stat-item:last-child { border-left: none; }
+    .shift-stat-title { font-size: 13px; color: #cbd5e1; font-weight: bold; margin-bottom: 5px; display: block; }
+    .shift-stat-val { font-size: 24px; font-weight: 900; }
+	
+	/* ================= تنسيقات نظام الحضور ================= */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(16, 42, 67, 0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+.modal-content { background: #f0f4f8; width: 95%; height: 95%; border-radius: 15px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-header { background: #102a43; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.close-modal { background: #d90429; color: white; border: none; width: 35px; height: 35px; border-radius: 8px; cursor: pointer; font-size: 18px; transition: 0.3s; }
+.close-modal:hover { background: #ef233c; transform: scale(1.05); }
+
+.att-controls { background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-bottom: 2px solid #d9e2ec; }
+.att-date-picker { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #102a43; }
+.att-date-picker input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Cairo'; outline: none; }
+
+.att-stats { display: flex; gap: 10px; flex: 1; justify-content: flex-end; }
+.att-stat-box { padding: 8px 15px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; flex-direction: column; align-items: center; min-width: 100px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+.box-total { background: #102a43; color: white; }
+.box-present { background: #0FBA50; color: white; }
+.box-absent { background: #d90429; color: white; }
+
+.att-filters { padding: 15px; display: flex; gap: 15px; background: #fff; }
+.att-table-container { flex: 1; overflow-y: auto; background: white; padding: 0 15px 15px 15px; }
+.att-select { padding: 6px; border-radius: 6px; font-family: 'Cairo'; font-weight: bold; outline: none; border: 1px solid #ccc; cursor: pointer; }
+.att-time { font-size: 12px; font-weight: bold; color: #555; direction: ltr; display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; margin-right: 5px;}
+
+.row-unspecified { background-color: #fff !important; }
+.row-absent { background-color: #ffeaea !important; }
+.row-present { background-color: #e8fbf0 !important; }
+.sel-absent { color: #d90429; }
+.sel-present { color: #0FBA50; }
+.sel-unspecified { color: #777; font-weight: normal; }
+
+
+  </style>
+</head>
+<body>
+
+  <!-- شاشة التحميل -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h3 style="color: #e67e22; margin-top: 15px; font-weight: bold;">جاري تهيئة نظام المؤطرين...</h3>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <div class="top-nav">
+    <h2><i class="fa-solid fa-users-gear"></i> إدارة مؤطري المركز <span id="headerCenterName">...</span></h2>
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+      <button class="nav-btn btn-back" onclick="window.location.href='inspector_dashboard.html'">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> رجوع للوحة الرئيسية
+      </button>
+     
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    
+    <!-- شريط الأدوات والفلاتر المشترك -->
+    <div class="att-filters">
+        <button class="btn-action-main" style="background: #0FBA50;" onclick="promptAddFramer()">
+            <i class="fa-solid fa-user-plus"></i> إضافة مؤطر
+        </button>
+        <button class="btn-action-main" style="background: #34495e;" onclick="printCurrentTabList()">
+            <i class="fa-solid fa-print"></i> طباعة القوائم
+        </button>
+        <button class="btn-action-main" style="background: #27ae60;" onclick="exportCurrentTabExcel()">
+            <i class="fa-solid fa-file-excel"></i> تحميل إكسل
+        </button>
+        <button class="btn-action-main" style="background: #8e44ad;" onclick="printFramerIDCards()">
+            <i class="fa-solid fa-id-badge"></i> طباعة البطاقات
+        </button>
+		
+		<button class="btn-action-main" style="background: #17a2b8;" onclick="openFramerAttendance()">
+            <i class="fa-solid fa-clipboard-user"></i> متابعة حضور المؤطرين
+        </button>
+        
+        <!-- 🌟 الزر الجديد للتبديل بين إدارة المؤطرين وتسيير الدوام 🌟 -->
+        <button class="btn-action-main" id="btnToggleMode" style="background: #d35400; margin-right: auto;" onclick="toggleWorkshiftMode()">
+            <i class="fa-solid fa-business-time"></i> تسيير الدوام
+        </button>
+    </div>
+
+    <!-- ================= القسم الأول: إدارة المؤطرين الأساسية ================= -->
+    <div id="mainFramersSection">
+        <!-- الإحصائيات -->
+        <div class="stats-container">
+            <div class="att-stat-box" style="background: #102a43; color: white;">إجمالي المؤطرين<span id="st-framer-total">0</span></div>
+            <div class="att-stat-box" style="background: #1E68E8; color: white;">الأساتذة المؤطرين<span id="st-framer-prof">0</span></div>
+            <div class="att-stat-box" style="background: #8e44ad; color: white;">الإداريين<span id="st-framer-admin">0</span></div>
+            <div class="att-stat-box" style="background: #0FBA50; color: white;">الدورة الأولى<span id="st-framer-s1">0</span></div>
+            <div class="att-stat-box" style="background: #ff9800; color: white;">الدورة الثانية<span id="st-framer-s2">0</span></div>
+            <div class="att-stat-box" style="background: #e91e63; color: white;">الدورة الثالثة<span id="st-framer-s3">0</span></div>
+        </div>
+
+        <div class="att-filters" style="margin-top: 15px;">
+            <div style="flex: 1; min-width: 200px; position: relative;">
+                <i class="fa-solid fa-search" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #777;"></i>
+                <input type="text" id="framerSearch" placeholder="بحث (الاسم، الرقم، الهاتف)..." oninput="filterFramersTable()" style="width: 100%; padding-right: 40px; margin: 0;">
+            </div>
+            <select id="framerRoleFilter" onchange="filterFramersTable()" style="min-width: 180px;">
+                <option value="الكل">كل الوظائف بالمركز</option>
+            </select>
+            <select id="framerRankFilter" onchange="filterFramersTable()" style="min-width: 180px;">
+                <option value="الكل">كل الرتب</option>
+            </select>
+        </div>
+
+        <!-- التبويبات -->
+        <div class="tabs-container" style="margin-top: 15px;">
+            <button class="tab-btn active" id="tab-all" onclick="switchTab('all')"><i class="fa-solid fa-users"></i> جميع المؤطرين</button>
+            <button class="tab-btn" id="tab-s1" onclick="switchTab('s1')"><i class="fa-solid fa-calendar-day"></i> الدورة الأولى</button>
+            <button class="tab-btn" id="tab-s2" onclick="switchTab('s2')"><i class="fa-solid fa-calendar-day"></i> الدورة الثانية</button>
+            <button class="tab-btn" id="tab-s3" onclick="switchTab('s3')"><i class="fa-solid fa-calendar-day"></i> الدورة الثالثة</button>
+        </div>
+
+        <!-- الجدول -->
+        <div class="table-container">
+            <table class="att-table" id="framersTable">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;">#</th>
+                        <th style="width: 120px;">الصورة + الرقم</th>
+                        <th style="width: 140px;">الحساب الجاري</th>
+                        <th style="width: 18%;">الاسم واللقب</th>
+                        <th style="width: 12%;">الرتبة</th>
+                        <th style="width: 25%;">مكان العمل</th>
+                        <th style="width: 120px;">رقم الهاتف</th>
+                        <th style="width: 120px;">الوظيفة</th>
+                        <th id="th-s1" style="width: 45px;" title="الدورة الأولى">د 1</th>
+                        <th id="th-s2" style="width: 45px;" title="الدورة الثانية">د 2</th>
+                        <th id="th-s3" style="width: 45px;" title="الدورة الثالثة">د 3</th>
+                        <th id="th-actions" style="width: 190px;">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="framersTableBody">
+                    <!-- يتم تعبئة البيانات هنا -->
+                </tbody>
+            </table>
+            <div id="framersPagination" class="pagination-container" style="display: none;"></div>
+        </div>
+    </div>
+
+  <!-- ================= القسم الثاني: تسيير الدوام ================= -->
+    <div id="workshiftsSection" style="display: none;">
+        
+        <!-- بطاقة إحصائيات الساعات للدورة -->
+        <div class="shift-stats-board">
+           <div class="shift-stat-item">
+                <span class="shift-stat-title"><i class="fa-solid fa-bullseye"></i> الساعات المستهدفة للدورة</span>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+                    <input type="number" id="targetSessionHours" value="60" onchange="window.saveTargetHours()" style="width: 70px; text-align: center; font-size: 20px; font-weight: bold; background: #fff; border: 1px solid #cbd5e1; color: #0FBA50; border-radius: 6px; padding: 2px; outline:none;">
+                    <span style="font-size: 14px;">ساعة</span>
+                    <button onclick="saveTargetHours()" style="background:#0FBA50; color:white; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-family:'Cairo'; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition:0.2s;"><i class="fa-solid fa-save"></i> حفظ</button>
+                </div>
+            </div>
+            <div class="shift-stat-item">
+                <span class="shift-stat-title"><i class="fa-solid fa-check-double"></i> إجمالي المنجز بالدورة</span>
+                <span class="shift-stat-val" id="completedSessionHours" style="color: #38bdf8;">0</span>
+            </div>
+            <div class="shift-stat-item">
+                <span class="shift-stat-title"><i class="fa-solid fa-hourglass-half"></i> الساعات المتبقية</span>
+                <span class="shift-stat-val" id="remainingSessionHours" style="color: #f87171;">0</span>
+            </div>
+        </div>
+
+        <div class="att-filters" style="background: #fff8f3; border: 1px solid #ffcc80; padding: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <label style="font-weight:bold; color:#d35400; margin-left: 5px;"><i class="fa-solid fa-filter"></i> الدورة:</label>
+            <select id="shiftSessionSelect" onchange="renderShiftsTable()" style="min-width: 140px; border-color: #e67e22; color: #102a43;">
+                <option value="s1">الدورة الأولى</option>
+                <option value="s2">الدورة الثانية</option>
+                <option value="s3">الدورة الثالثة</option>
+            </select>
+            
+            <button class="btn-action-main" style="background: #34495e;" onclick="printShiftsTabList()">
+                <i class="fa-solid fa-file-contract"></i> طباعة وثيقة الدوام (رسمية)
+            </button>
+            <button class="btn-action-main" style="background: #8e44ad;" onclick="printDetailedShiftsList()">
+                <i class="fa-solid fa-print"></i> طباعة التفاصيل الشاملة
+            </button>
+            <button class="btn-action-main" style="background: #27ae60;" onclick="exportShiftsTabExcel()">
+                <i class="fa-solid fa-file-excel"></i> تحميل إكسل
+            </button>
+
+            <div style="flex: 1; min-width: 200px; position: relative;">
+                <i class="fa-solid fa-search" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #777;"></i>
+                <input type="text" id="shiftSearch" placeholder="بحث بالاسم أو الرقم في هذه الدورة..." oninput="renderShiftsTable()" style="width: 100%; padding-right: 40px; margin: 0;">
+            </div>
+        </div>
+
+        <div class="table-container" style="border-radius: 15px; margin-top: 15px;">
+            <table class="att-table">
+                <thead style="background: #e67e22;">
+                    <tr>
+                        <th style="width: 40px; background: #d35400;">#</th>
+                        <th style="width: 100px; background: #d35400;">الصورة</th>
+                        <th style="width: 22%; background: #d35400;">الاسم واللقب</th>
+                        <th style="width: 15%; background: #d35400;">الرتبة / العمل</th>
+                        <th style="width: 120px; background: #d35400;">الوظيفة</th>
+                        <th style="width: 18%; background: #d35400;">التخصص المؤطر</th>
+                        <th style="width: 18%; background: #d35400;">المقاييس</th>
+                        <th style="width: 80px; background: #d35400;">أيام</th>
+                        <th style="width: 80px; background: #d35400;">ساعات</th>
+                        <th style="width: 160px; background: #d35400;">إجراءات الدوام</th>
+                    </tr>
+                </thead>
+                <tbody id="shiftsTableBody">
+                    <!-- يتم تعبئة بيانات الدوام هنا -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+  </div>
+  
+  <!-- نافذة متابعة الحضور للمؤطرين -->
+  <div class="modal-overlay" id="framerAttendanceModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-clipboard-user"></i> سجل الحضور والغياب اليومي للمؤطرين</h2>
+        <button class="close-modal" onclick="closeFramerAttendance()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="att-controls">
+        <div class="att-date-picker">
+          <label>تاريخ السجل:</label>
+          <input type="date" id="framerAttDate" onchange="loadFramerAttendanceData()">
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center; background: #fff; padding: 5px 10px; border-radius: 10px; border: 1px solid #ccc;">
+            <button id="btnSysOpen" class="page-btn" style="background:#0FBA50; color:white;" onclick="changeFramerSystemMode('open')">فتح النظام</button>
+            <button id="btnSysClosed" class="page-btn" style="background:#d90429; color:white;" onclick="changeFramerSystemMode('closed')"><i class="fa-solid fa-lock"></i> غلق النظام</button>
+        </div>
+
+        <div class="att-stats">
+          <div class="att-stat-box box-total">الإجمالي<span id="f-st-total">0</span></div>
+          <div class="att-stat-box box-present">حاضر<span id="f-st-present">0</span></div>
+          <div class="att-stat-box box-absent">غائب<span id="f-st-absent">0</span></div>
+        </div>
+      </div>
+
+      <div style="background: #fff; padding: 15px 15px 5px 15px; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px dashed #eee;">
+        <button class="btn-print" style="background: #1E68E8; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="markAllFramersPresent()">إدراج الحضور الشامل</button>
+        <button class="btn-print" style="background: #d90429; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="markAllFramersAbsent()">إدراج الغياب الشامل</button>
+        <button class="btn-print" style="background: #8e44ad; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="printPresentFramers()">طباعة قائمة الحاضرين</button>
+        <button class="btn-print" style="background: #34495e; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="window.open('scanner.html', '_blank')">فتح ماسح الباركود</button>
+      </div>
+
+      <div class="att-table-container">
+        <table class="att-table" style="margin-top: 15px;">
+          <thead style="background: #334e68; position: sticky; top: 0; z-index: 10;">
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th>الصورة والرقم</th>
+              <th>الاسم واللقب</th>
+              <th>الرتبة</th>
+              <th>الوظيفة بالمركز</th>
+              <th style="width: 180px; text-align: center;">الوضعية والتوقيت</th>
+            </tr>
+          </thead>
+          <tbody id="framerAttTableBody">
+            <!-- يتم التوليد هنا -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ================= إعدادات Firebase والمطابقة =================
+const firebaseConfig = {
+    apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+    authDomain: "voyage-touggourt-48755.firebaseapp.com",
+    projectId: "voyage-touggourt-48755",
+    storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+    messagingSenderId: "712694455348",
+    appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const db = firebase.firestore();
+
+const MODULES_LIST = ["تعليمية المادة", "التشريع المدرسي", "علم النفس التربوي", "هندسة التكوين", "تكنولوجيا الإعلام والاتصال", "التقويم والمعالجة البيداغوجية", "النظام التربوي الجزائري"];
+const FRAMER_ROLES = ["المسؤول الإداري", "المسؤول البيداغوجي", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
+const UNIQUE_ROLES = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
+
+let employeePhotosMap = {}; 
+let INSPECTOR_CENTER = "";
+let framersData = [];
+let centerData = []; 
+let framersBaseDataCache = {}; 
+let currentFramerPage = 1;
+const framersPerPage = 10;
+
+let isShiftMode = false; 
+let currentShiftData = []; 
+let targetHoursData = { s1: 300, s2: 300, s3: 600 }; 
+
+
+let currentTab = 'all'; 
+let currentFilteredData = [];
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let digitsOnly = String(val).trim().toUpperCase().replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); 
+    return core === "" ? digitsOnly : core;
+}
+
+function getTodayDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ================= التحميل الأولي والتهيئة =================
+window.onload = function() {
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+
+    if (!isLoggedIn || !INSPECTOR_CENTER) {
+        window.location.href = "index.html";
+        return;
+    }
+    document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
+    initializeSystem();
+};
+
+function logout() {
+    sessionStorage.clear();
+    window.location.href = "index.html";
+}
+
+async function initializeSystem() {
+    fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
+        const responseText = await photoRes.text();
+        if (responseText && responseText.includes("[")) {
+            const photoData = JSON.parse(responseText);
+            photoData.forEach(item => {
+                if(item.jobId && item.photoUrl) {
+                    let directUrl = item.photoUrl;
+                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
+                    employeePhotosMap[extractCoreId(item.jobId)] = directUrl;
+                }
+            });
+            if(framersData.length > 0) {
+                window.filterFramersTable(); 
+                if(isShiftMode) window.renderShiftsTable();
+            }
+        }
+    }).catch(e => console.warn("تعذر جلب الصور:", e));
+
+    try {
+        const snap = await db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).get();
+        centerData = snap.docs.map(doc => doc.data());
+    } catch(e) {}
+
+    await loadSettings();
+    await checkAndAutoRegisterInspector();
+    await loadFramersData();
+    
+}
+
+// ================= إعدادات الساعات المستهدفة =================
+async function loadSettings() {
+    try {
+        let doc = await db.collection("center_framers").doc("settings_" + INSPECTOR_CENTER).get();
+        if (doc.exists) targetHoursData = { ...targetHoursData, ...doc.data() };
+    } catch(e) {}
+}
+
+window.saveTargetHours = async function() {
+    const session = document.getElementById('shiftSessionSelect').value;
+    let val = parseFloat(document.getElementById('targetSessionHours').value);
+    if(isNaN(val)) val = 0;
+
+    targetHoursData[session] = val;
+    
+    try {
+        await db.collection("center_framers").doc("settings_" + INSPECTOR_CENTER).set(targetHoursData, { merge: true });
+        window.renderShiftsTable(); 
+        Swal.fire({ toast: true, position: 'bottom-end', icon: 'success', title: 'تم حفظ الساعات المستهدفة', showConfirmButton: false, timer: 1500 });
+    } catch(e) {
+        Swal.fire('خطأ', 'فشل الاتصال', 'error');
+    }
+}
+
+// ================= التسجيل التلقائي وجلب البيانات =================
+async function checkAndAutoRegisterInspector() {
+    const inspectorId = sessionStorage.getItem("userEmpId");
+    if (!inspectorId || inspectorId === "ADMIN_ACCESS") return;
+
+    try {
+        const framerRef = db.collection("center_framers").doc(String(inspectorId));
+        const doc = await framerRef.get();
+        
+        if (!doc.exists) {
+            const baseData = await fetchEmployeeBaseData(inspectorId);
+            if (baseData) {
+                await framerRef.set({
+                    empId: String(inspectorId),
+                    center: INSPECTOR_CENTER,
+                    role: "المسؤول البيداغوجي",
+                    phone: baseData.phone || "",
+                    ccp: baseData.ccp || "",
+                    ccpKey: "",
+                    s1: false, s2: false, s3: false,
+                    shifts: [], 
+                    isProtected: true 
+                });
+            }
+        }
+    } catch (e) {}
+}
+
+async function fetchEmployeeBaseData(empId) {
+    if (!empId) return null; 
+    let safeId = String(empId).trim();
+    if (framersBaseDataCache[safeId]) return framersBaseDataCache[safeId];
+    
+    try {
+        let snap = await db.collection("employeescomnew").doc(safeId).get();
+        if (!snap.exists) snap = await db.collection("employeescomplus").doc(safeId).get();
+        
+        if (snap.exists) {
+            framersBaseDataCache[safeId] = snap.data();
+            return snap.data();
+        }
+    } catch (e) { }
+    return null;
+}
+
+async function loadFramersData() {
+    try {
+        const snap = await db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).get();
+        
+        const fetchPromises = snap.docs.map(async (doc) => {
+            let data = doc.data();
+            if (!data.empId || doc.id.startsWith("settings_")) return null; 
+            
+            data.shifts = data.shifts || [];
+            let baseData = await fetchEmployeeBaseData(data.empId);
+            if (baseData) return { ...data, docId: doc.id, baseInfo: baseData };
+            return null;
+        });
+
+        const results = await Promise.all(fetchPromises);
+        framersData = results.filter(item => item !== null);
+        
+        populateFramerFilters();
+        window.filterFramersTable();
+        if (isShiftMode) window.renderShiftsTable();
+
+        // إخفاء شريط الانتظار فقط بعد اكتمال جلب وعرض البيانات بنجاح
+        document.getElementById("loader").style.display = "none";
+
+    } catch (e) {
+        console.error("خطأ أثناء جلب المؤطرين:", e); // سيساعدك على تتبع الأخطاء مستقبلاً
+        Swal.fire('خطأ', 'تعذر جلب بيانات المؤطرين.', 'error');
+        // لن يتم إخفاء شريط الانتظار هنا تنفيذاً لطلبك، أو يمكنك إضافة زر لتحديث الصفحة إذا لزم الأمر
+    }
+}
+
+// ================= التبديل النظيف بين الواجهتين =================
+window.toggleWorkshiftMode = function() {
+    isShiftMode = !isShiftMode;
+    const btnToggle = document.getElementById('btnToggleMode');
+    const mainSection = document.getElementById('mainFramersSection');
+    const shiftSection = document.getElementById('workshiftsSection');
+
+    if (isShiftMode) {
+        mainSection.style.display = 'none';
+        shiftSection.style.display = 'block';
+        btnToggle.innerHTML = '<i class="fa-solid fa-users-gear"></i> رجوع لإدارة المؤطرين';
+        btnToggle.style.background = '#2e86de';
+        btnToggle.style.borderColor = '#2e86de';
+        window.renderShiftsTable(); 
+    } else {
+        mainSection.style.display = 'block';
+        shiftSection.style.display = 'none';
+        btnToggle.innerHTML = '<i class="fa-solid fa-business-time"></i> تسيير الدوام';
+        btnToggle.style.background = '#d35400';
+        btnToggle.style.borderColor = 'white';
+        window.filterFramersTable();
+    }
+};
+
+// ================= الفلترة والتبويبات ورسم الجدول (المؤطرين) =================
+window.switchTab = function(tabId) {
+    currentTab = tabId;
+    currentFramerPage = 1; 
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    window.filterFramersTable();
+}
+
+window.filterFramersTable = function() {
+    const search = document.getElementById('framerSearch').value.toLowerCase();
+    const roleF = document.getElementById('framerRoleFilter').value;
+    const rankF = document.getElementById('framerRankFilter').value;
+    
+    currentFilteredData = framersData.filter(f => {
+        let b = f.baseInfo || {};
+        let rank = b.grade || b.rank || "";
+        
+        let matchS = (b.name||"").toLowerCase().includes(search) || (f.empId).includes(search) || (f.phone||"").includes(search);
+        let matchRole = roleF === "الكل" || f.role === roleF;
+        let matchRank = rankF === "الكل" || rank === rankF;
+        
+        let matchTab = true;
+        if (currentTab === 's1') matchTab = f.s1 === true;
+        if (currentTab === 's2') matchTab = f.s2 === true;
+        if (currentTab === 's3') matchTab = f.s3 === true;
+
+        return matchS && matchRole && matchRank && matchTab;
+    });
+
+    renderFramersTable(currentFilteredData);
+}
+
+function renderFramersTable(data) {
+    const tbody = document.getElementById('framersTableBody');
+    
+    const showSessions = currentTab === 'all';
+    document.getElementById('th-s1').style.display = showSessions ? '' : 'none';
+    document.getElementById('th-s2').style.display = showSessions ? '' : 'none';
+    document.getElementById('th-s3').style.display = showSessions ? '' : 'none';
+    document.getElementById('th-actions').style.display = showSessions ? '' : 'none';
+
+    document.getElementById('st-framer-total').innerText = framersData.length;
+    document.getElementById('st-framer-prof').innerText = framersData.filter(f => f.role === 'أستاذ مؤطر').length;
+    document.getElementById('st-framer-admin').innerText = framersData.filter(f => f.role !== 'أستاذ مؤطر' && f.role !== 'حارس').length;
+    document.getElementById('st-framer-s1').innerText = framersData.filter(f => f.s1).length;
+    document.getElementById('st-framer-s2').innerText = framersData.filter(f => f.s2).length;
+    document.getElementById('st-framer-s3').innerText = framersData.filter(f => f.s3).length;
+
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding: 30px; font-weight:bold; color:#777; font-size:16px;">لا توجد بيانات مطابقة في هذا التبويب</td></tr>`;
+        document.getElementById('framersPagination').style.display = 'none';
+        return;
+    }
+
+    const totalPages = Math.ceil(data.length / framersPerPage);
+    if (currentFramerPage > totalPages) currentFramerPage = Math.max(1, totalPages);
+    const start = (currentFramerPage - 1) * framersPerPage;
+    const paginatedData = data.slice(start, start + framersPerPage);
+
+    let counter = start + 1;
+    let tableHtml = ''; 
+
+    paginatedData.forEach(f => {
+        let b = f.baseInfo || {};
+        const photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+        
+        const photoHtml = `<div class="profile-pic-container">
+            ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+        </div>`;
+
+        const ccpDisplay = f.ccp ? `<div style="line-height:1.4;"><span style="letter-spacing:1px; font-weight:bold; font-size:14px;">${f.ccp}</span><br><span style="font-size:11px; color:#777;">المفتاح: <b style="color:#1E68E8;">${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}</b></span></div>` : '---';
+        const deleteBtn = f.isProtected ? '' : `<button onclick="window.deleteFramer('${f.docId}')" class="btn-action" style="background:#dc3545;" title="حذف"><i class="fa-solid fa-trash"></i> حذف</button>`;
+
+        const s1Badge = `<span class="session-badge ${f.s1 ? 'active' : ''}"><i class="fa-solid ${f.s1 ? 'fa-check' : 'fa-minus'}"></i></span>`;
+        const s2Badge = `<span class="session-badge ${f.s2 ? 'active' : ''}"><i class="fa-solid ${f.s2 ? 'fa-check' : 'fa-minus'}"></i></span>`;
+        const s3Badge = `<span class="session-badge ${f.s3 ? 'active' : ''}"><i class="fa-solid ${f.s3 ? 'fa-check' : 'fa-minus'}"></i></span>`;
+
+        const actionButtons = `
+            <div style="display:flex; gap:5px; justify-content:center;">
+                <button onclick="window.viewFramer('${f.docId}')" class="btn-action" style="background:#17a2b8;" title="عرض"><i class="fa-solid fa-address-card"></i> عرض</button>
+                <button onclick="window.editFramer('${f.docId}')" class="btn-action" style="background:#ffc107; color:black;" title="تعديل"><i class="fa-solid fa-pen"></i> تعديل</button>
+                ${deleteBtn}
+            </div>
+        `;
+
+        const extraColumnsHtml = showSessions ? `
+            <td style="text-align:center; vertical-align: middle;">${s1Badge}</td>
+            <td style="text-align:center; vertical-align: middle;">${s2Badge}</td>
+            <td style="text-align:center; vertical-align: middle;">${s3Badge}</td>
+            <td style="text-align:center; vertical-align: middle; white-space:nowrap;">${actionButtons}</td>
+        ` : '';
+
+        tableHtml += `
+            <tr>
+                <td style="text-align:center; vertical-align: middle;">${counter++}</td>
+                <td style="text-align:center; vertical-align: middle; white-space:nowrap;">${photoHtml} <strong style="color:#e67e22;">${f.empId}</strong></td>
+                <td style="text-align:center; vertical-align: middle; direction:ltr; font-family:monospace; white-space:nowrap;">${ccpDisplay}</td>
+                <td style="vertical-align: middle; font-weight:bold; line-height:1.5;">${b.name || '-'}</td>
+                <td style="vertical-align: middle; line-height:1.5;">${b.grade || b.rank || '-'}</td>
+                <td style="vertical-align: middle; line-height:1.5;">${b.place || b.workplace || '-'}</td>
+                <td style="text-align:center; vertical-align: middle; direction:ltr; font-family:monospace; font-weight:bold; white-space:nowrap; font-size:15px;">${f.phone || '-'}</td>
+                <td style="text-align:center; vertical-align: middle; white-space:nowrap;">
+                    <span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold; border:1px solid #ffcc80;">${f.role}</span>
+                </td>
+                ${extraColumnsHtml}
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = tableHtml; 
+    renderFramerPagination(totalPages);
+}
+
+function populateFramerFilters() {
+    const roleFilter = document.getElementById('framerRoleFilter');
+    const rankFilter = document.getElementById('framerRankFilter');
+    
+    roleFilter.innerHTML = '<option value="الكل">كل الوظائف بالمركز</option>';
+    rankFilter.innerHTML = '<option value="الكل">كل الرتب</option>';
+    
+    let ranks = new Set();
+    FRAMER_ROLES.forEach(r => roleFilter.innerHTML += `<option value="${r}">${r}</option>`);
+    framersData.forEach(f => { if(f.baseInfo.grade || f.baseInfo.rank) ranks.add(f.baseInfo.grade || f.baseInfo.rank); });
+    Array.from(ranks).sort().forEach(r => rankFilter.innerHTML += `<option value="${r}">${r}</option>`);
+}
+
+function renderFramerPagination(totalPages) {
+    const container = document.getElementById("framersPagination");
+    if (totalPages <= 1) { container.style.display = "none"; return; }
+    container.style.display = "flex";
+    
+    let html = '';
+    for (let i = 1; i <= totalPages; i++) {
+        html += `<button class="page-btn ${i === currentFramerPage ? 'active' : ''}" onclick="currentFramerPage=${i}; window.filterFramersTable();">${i}</button>`;
+    }
+    container.innerHTML = html;
+}
+
+// ================= رسم جدول تسيير الدوام والمحاسبة =================
+window.renderShiftsTable = function() {
+    const session = document.getElementById('shiftSessionSelect').value;
+    const search = document.getElementById('shiftSearch').value.toLowerCase();
+    const tbody = document.getElementById('shiftsTableBody');
+    tbody.innerHTML = '';
+
+    // إصلاح قراءة الساعات وتحديث الحقل
+    let targetHours = targetHoursData[session] !== undefined && !isNaN(targetHoursData[session]) ? parseFloat(targetHoursData[session]) : 60;
+    document.getElementById('targetSessionHours').value = targetHours;
+
+    let shiftData = framersData.filter(f => f[session] === true);
+    
+    if(search) {
+        shiftData = shiftData.filter(f => {
+            let name = (f.baseInfo.name || "").toLowerCase();
+            return name.includes(search) || f.empId.includes(search);
+        });
+    }
+
+    currentShiftData = shiftData;
+    let totalHoursCompleted = 0;
+
+    if (shiftData.length === 0) {
+        document.getElementById('completedSessionHours').innerText = 0;
+        document.getElementById('remainingSessionHours').innerText = targetHours;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:30px; font-weight:bold; color:#777; font-size:16px;">لا يوجد مؤطرين مسجلين في هذه الدورة.</td></tr>`;
+        return;
+    }
+
+    let counter = 1;
+    let tableHtml = '';
+
+    shiftData.forEach(f => {
+        let b = f.baseInfo || {};
+        const photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+        const photoHtml = `<div class="profile-pic-container" style="width:36px; height:36px; border-color:#d35400; margin:0 auto;">
+            ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+        </div>`;
+
+        let totalDays = 0;
+        let totalHours = 0;
+        let shiftsArray = f.shifts || [];
+        
+        shiftsArray.forEach(sh => {
+            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'ساعات') {
+                totalHours += parseFloat(sh.amount);
+                totalHoursCompleted += parseFloat(sh.amount);
+            }
+        });
+
+       let specsHtml = '-';
+        let modsHtml = '-';
+        if (f.role === 'أستاذ مؤطر') {
+            let specsList = f.framingSpecs || [];
+            let groupsList = f.framingGroups || [];
+            
+            if (specsList.length > 0) {
+                specsHtml = '';
+                
+                // تجميع الأفواج حسب التخصص
+                let groupsBySpec = {};
+                groupsList.forEach(g => {
+                    let parts = g.split('::');
+                    if (parts.length === 2) {
+                        if (!groupsBySpec[parts[0]]) groupsBySpec[parts[0]] = [];
+                        groupsBySpec[parts[0]].push(parts[1]);
+                    }
+                });
+
+                // بناء عرض التخصص وتحته أفواجه
+                specsList.forEach(s => {
+                    specsHtml += `<div style="background:#f1f5f9; border:1px solid #cbd5e1; padding:3px 6px; margin:4px 0; border-radius:4px; font-size:11px; font-weight:bold;">`;
+                    specsHtml += `<div style="color:#102a43; border-bottom:1px dashed #cbd5e1; padding-bottom:2px; margin-bottom:2px;">${s}</div>`;
+                    
+                    if (groupsBySpec[s] && groupsBySpec[s].length > 0) {
+                        let grps = groupsBySpec[s].join('، ');
+                        specsHtml += `<div style="color:#d35400; font-size:10px;"><i class="fa-solid fa-users"></i> ${grps}</div>`;
+                    } else {
+                        specsHtml += `<div style="color:#94a3b8; font-size:10px;">بدون أفواج</div>`;
+                    }
+                    specsHtml += `</div>`;
+                });
+            } else {
+                specsHtml = '<span style="color:#aaa;">غير محدد</span>';
+            }
+
+            modsHtml = (f.framingModules || []).length > 0 ? (f.framingModules || []).map(m => `<div style="background:#eff6ff; border:1px solid #93c5fd; padding:2px 5px; margin:2px 0; border-radius:4px; font-size:11px;">${m}</div>`).join('') : '<span style="color:#aaa;">غير محدد</span>';
+        }
+
+        tableHtml += `
+            <tr style="background:#fff; border-bottom:1px solid #eee;">
+                <td style="padding:10px; text-align:center; vertical-align:middle;">${counter++}</td>
+                <td style="padding:10px; text-align:center; vertical-align:middle;">${photoHtml}</td>
+                <td style="padding:10px; text-align:right; vertical-align:middle; font-weight:bold;">${b.name || '-'}</td>
+                <td style="padding:10px; text-align:right; vertical-align:middle; line-height:1.4;">
+                    <span style="font-weight:bold; color:#1E68E8; font-size:13px;">${b.grade || b.rank || '-'}</span><br>
+                    <span style="font-size:11px; color:#555;">${b.place || b.workplace || '-'}</span>
+                </td>
+                <td style="padding:10px; text-align:center; vertical-align:middle; white-space:nowrap;">
+                    <span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold; border:1px solid #ffcc80;">${f.role}</span>
+                </td>
+                <td style="padding:5px; text-align:center; vertical-align:middle;">${specsHtml}</td>
+                <td style="padding:5px; text-align:center; vertical-align:middle;">${modsHtml}</td>
+                <td style="padding:10px; text-align:center; vertical-align:middle; font-weight:900; font-size:16px; color:#d35400;">${totalDays}</td>
+                <td style="padding:10px; text-align:center; vertical-align: middle; font-weight:900; font-size:16px; color:#1E68E8;">${totalHours}</td>
+                <td style="padding:10px; text-align:center; vertical-align: middle; white-space:nowrap;">
+                    <div style="display:flex; gap:5px; justify-content:center;">
+                        <button onclick="window.promptAddShift('${f.docId}')" class="btn-action" style="background:#0FBA50; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cairo'; font-size:12px;" title="إضافة دوام"><i class="fa-solid fa-plus"></i> إضافة</button>
+                        <button onclick="window.viewShiftHistory('${f.docId}')" class="btn-action" style="background:#34495e; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cairo'; font-size:12px;" title="سجل الدوام"><i class="fa-solid fa-list"></i> السجل</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = tableHtml;
+
+    document.getElementById('completedSessionHours').innerText = totalHoursCompleted;
+        let remain = targetHours - totalHoursCompleted;
+        
+        
+        window.currentRemainingHours = remain; 
+
+        document.getElementById('remainingSessionHours').innerText = remain < 0 ? `+${Math.abs(remain)} إضافية` : remain;
+   
+};
+
+// ================= الإضافة والتعديل =================
+function getCenterSpecialties() {
+    let specs = new Set();
+    // نعتمد على centerData التي تجلب بيانات employeescomnew
+    centerData.forEach(item => {
+        // في بيانات المتكونين التخصص مخزن في item.maty أو item.specialty
+        let sp = item.specialty || item.maty;
+        if (sp && sp !== '-' && sp.trim() !== '') specs.add(sp.trim());
+    });
+    return Array.from(specs).sort();
+}
+
+function getCenterGroups(selectedSpec = null) {
+    let groups = new Set();
+    centerData.forEach(item => {
+        let sp = item.specialty || item.maty;
+        let grp = item.group || item.fawj;
+        
+        if (grp && grp !== '-' && grp.trim() !== '') {
+            // إذا تم تمرير تخصص، نجلب أفواج هذا التخصص فقط، وإلا نجلب كل الأفواج
+            if (!selectedSpec || sp === selectedSpec) {
+                groups.add(grp.trim());
+            }
+        }
+    });
+    return Array.from(groups).sort();
+}
+window.promptAddFramer = function() {
+    Swal.fire({
+        title: 'إضافة مؤطر جديد',
+        text: 'أدخل الرقم الوظيفي للبحث عن الموظف في القاعدة الرئيسية:',
+        input: 'text', inputPlaceholder: 'الرقم الوظيفي...',
+        showCancelButton: true, confirmButtonText: 'تحقق وبحث', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+        preConfirm: (id) => {
+            if (!id) { Swal.showValidationMessage('الرجاء إدخال الرقم للبحث!'); return false; }
+            return id;
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.fire({ title: 'جاري البحث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
+            if (framersData.some(f => f.empId === res.value)) {
+                return Swal.fire('تنبيه', 'هذا الموظف مسجل كمؤطر مسبقاً!', 'warning');
+            }
+
+            const baseData = await fetchEmployeeBaseData(res.value);
+            if (!baseData) {
+                return Swal.fire('غير موجود', 'لم يتم العثور على الموظف في قاعدة البيانات.', 'error').then(()=>window.promptAddFramer());
+            }
+
+            window.showAddFramerForm(res.value, baseData);
+        }
+    });
+};
+
+window.showAddFramerForm = function(empId, baseData) {
+    const photoUrl = employeePhotosMap[extractCoreId(empId)];
+    const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; border:2px solid #e67e22;">` : `<div style="width:65px; height:65px; border-radius:50%; background:#e2e8f0; display:flex; justify-content:center; align-items:center;"><i class="fa-solid fa-user" style="font-size:30px; color:#94a3b8;"></i></div>`;
+    
+    let rolesHtml = '<option value="" disabled selected>اختر الوظيفة...</option>';
+    FRAMER_ROLES.forEach(r => rolesHtml += `<option value="${r}">${r}</option>`);
+
+    const allSpecs = getCenterSpecialties();
+    let specsHtml = '';
+    allSpecs.forEach(s => specsHtml += `<label class="styled-cb"><input type="checkbox" value="${s}" class="spec-cb" onchange="window.updateAddGroups()"> <span>${s}</span></label>`);
+
+    let modsHtml = '';
+    MODULES_LIST.forEach(m => modsHtml += `<label class="styled-cb"><input type="checkbox" value="${m}" class="mod-cb"> <span>${m}</span></label>`);
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-plus" style="color:#0FBA50; margin-left:8px;"></i> استكمال بيانات المؤطر',
+        html: `
+            <style>
+                /* جعل النافذة ذات عمود واحد افتراضياً */
+                #framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
+                
+                /* عندما يتم اختيار أستاذ مؤطر، تتسع لتصبح عمودين */
+                #framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
+                
+                @media(max-width: 768px) { #framer-form-container.is-teacher { grid-template-columns: 1fr; } }
+                .col-main { display: flex; flex-direction: column; gap: 15px; }
+                
+                .framer-section { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
+                .framer-section-title { font-size:15px; font-weight:800; color:#102a43; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:15px; display:flex; align-items:center; gap:8px; }
+                .input-group { margin-bottom:12px; }
+                .input-group label { display:block; font-size:13px; font-weight:bold; color:#475569; margin-bottom:6px; }
+                .styled-input { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:'Cairo'; outline:none; transition:0.3s; box-sizing: border-box; }
+                .styled-input:focus { border-color:#e67e22; box-shadow:0 0 0 3px rgba(230,126,34,0.1); }
+                .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+                
+                .cb-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; max-height:160px; overflow-y:auto; padding:5px; }
+                .styled-cb { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:6px 10px; border-radius:8px; cursor:pointer; transition:0.2s; font-size:12px; font-weight:bold; color:#334e68; }
+                .styled-cb:hover { background:#f1f5f9; border-color:#cbd5e1; }
+                .styled-cb input { accent-color:#e67e22; width:16px; height:16px; cursor:pointer; }
+                
+                .session-pills { display:flex; gap:10px; justify-content:space-between; }
+                .s-pill { flex:1; position:relative; cursor:pointer; }
+                .s-pill input { position:absolute; opacity:0; cursor:pointer; }
+                .s-pill-content { display:flex; justify-content:center; align-items:center; gap:5px; padding:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:8px; font-weight:bold; font-size:13px; color:#64748b; transition:0.3s; }
+                .s-pill input:checked ~ .s-pill-content { background:#fff; border-color:#0FBA50; color:#0FBA50; box-shadow:0 4px 10px rgba(15,186,80,0.15); }
+                .s-pill-content i { display:none; }
+                .s-pill input:checked ~ .s-pill-content i { display:inline-block; }
+                
+                .profile-header { background:linear-gradient(to left, #f8fafc, #fff); padding:10px 15px; border-radius:12px; border:1px solid #e2e8f0; display:flex; gap:15px; align-items:center; }
+            </style>
+            
+            <div id="framer-form-container">
+                <!-- العمود الأيمن (يظهر دائماً) -->
+                <div class="col-main">
+                    <div class="profile-header">
+                        ${imgHtml}
+                        <div>
+                            <h3 style="margin:0 0 5px 0; color:#0f172a; font-size:16px;">${baseData.name || ''}</h3>
+                            <div style="font-size:12px; color:#64748b; font-weight:bold;">${baseData.grade || baseData.rank || ''}</div>
+                        </div>
+                    </div>
+
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-address-card" style="color:#e67e22;"></i> البيانات الشخصية والمالية</div>
+                        
+                        <div class="grid-2">
+                            <div class="input-group">
+                                <label>رقم الهاتف <span style="color:#d90429;">*</span></label>
+                                <input type="text" id="fr-phone" class="styled-input" style="direction:ltr; text-align:right;" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
+                            </div>
+                            <div class="input-group">
+                                <label>الوظيفة بالمركز <span style="color:#d90429;">*</span></label>
+                                <select id="fr-role" class="styled-input" onchange="window.toggleTeacherFields()">
+                                    ${rolesHtml}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:15px;">
+                            <div class="input-group" style="flex:3;">
+                                <label>الحساب الجاري (CCP)</label>
+                                <input type="text" id="fr-ccp" class="styled-input" style="direction:ltr; text-align:right;" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                            <div class="input-group" style="flex:1;">
+                                <label>المفتاح</label>
+                                <input type="text" id="fr-cle" class="styled-input" style="direction:ltr; text-align:center;" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-calendar-check" style="color:#0FBA50;"></i> الدورات المشارك فيها</div>
+                        <div class="session-pills">
+                            <label class="s-pill"><input type="checkbox" id="fr-s1" checked><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 1</div></label>
+                            <label class="s-pill"><input type="checkbox" id="fr-s2"><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 2</div></label>
+                            <label class="s-pill"><input type="checkbox" id="fr-s3"><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 3</div></label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- العمود الأيسر (مخفي افتراضياً ويظهر عند اختيار أستاذ مؤطر) -->
+                <div class="col-main" id="teacherFieldsCol" style="display:none;">
+                    <div class="framer-section" style="border-color:#93c5fd; background:#f8fbff;">
+                        <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
+                        
+                        <div class="input-group">
+                            <label>تخصصات التأطير:</label>
+                            <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
+                        </div>
+
+                        <div class="input-group" id="groups-container">
+                            <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
+                            <div id="add-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;">
+                                <!-- سيتم تعبئتها ديناميكياً -->
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>مقاييس التأطير:</label>
+                            <div class="cb-grid">${modsHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `,
+        width: '550px', // البداية تكون بحجم صغير 550 بكسل بدلاً من 950
+        showCancelButton: true, confirmButtonText: 'حفظ المؤطر', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        didOpen: () => {
+            // إضافة حركة انتقال سلسة لعرض النافذة
+            Swal.getPopup().style.transition = 'width 0.4s ease-in-out';
+
+            window.toggleTeacherFields = () => {
+                const role = document.getElementById('fr-role').value;
+                const container = document.getElementById('framer-form-container');
+                const teacherCol = document.getElementById('teacherFieldsCol');
+                const popup = Swal.getPopup();
+
+                if (role === 'أستاذ مؤطر') {
+                    // توسيع النافذة وإظهار العمود الأيسر
+                    popup.style.width = '950px';
+                    container.classList.add('is-teacher');
+                    teacherCol.style.display = 'flex';
+                } else {
+                    // تصغير النافذة وإخفاء العمود الأيسر
+                    popup.style.width = '550px';
+                    container.classList.remove('is-teacher');
+                    teacherCol.style.display = 'none';
+                }
+            };
+
+            window.updateAddGroups = () => {
+                const selectedSpecs = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
+                const groupsGrid = document.getElementById('add-groups-grid');
+                
+                let currentCheckedBoxes = document.querySelectorAll('.grp-cb:checked');
+                let prevChecked = Array.from(currentCheckedBoxes).map(cb => cb.value);
+
+                let grpHtml = '';
+                
+                if (selectedSpecs.length === 0) {
+                    grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
+                } else {
+                    selectedSpecs.forEach(spec => {
+                        let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
+                        let safeSpec = spec.replace(/\s+/g, '');
+                        
+                        grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
+                                        <h4 style="margin:0 0 10px 0; color:#1E68E8; font-size:13px; border-bottom:1px dashed #cce5ff; padding-bottom:5px;">
+                                            <i class="fa-solid fa-layer-group"></i> أفواج تخصص: ${spec}
+                                        </h4>
+                                        <div class="cb-grid" style="max-height: none;">`;
+                        
+                        if (specGroups.length === 0) {
+                            grpHtml += `<div style="color:#777; font-size:12px; grid-column:1/-1;">لا توجد أفواج مسجلة لهذا التخصص.</div>`;
+                        } else {
+                            let allVal = `${spec}::كل الأفواج`;
+                            let allChecked = prevChecked.includes(allVal) ? 'checked' : '';
+                            
+                            grpHtml += `<label class="styled-cb" style="border-color:#e67e22; grid-column:1/-1;">
+                                            <input type="checkbox" value="${allVal}" class="grp-cb grp-all-${safeSpec}" onchange="window.handleAddGroupAll(this, '${safeSpec}')" ${allChecked}> 
+                                            <span style="color:#e67e22;">كل أفواج (${spec})</span>
+                                        </label>`;
+                            
+                            specGroups.forEach(g => {
+                                let val = `${spec}::${g}`;
+                                let checked = prevChecked.includes(val) || allChecked ? 'checked' : '';
+                                grpHtml += `<label class="styled-cb">
+                                                <input type="checkbox" value="${val}" class="grp-cb grp-item-${safeSpec}" onchange="window.checkAddGroupAllState('${safeSpec}')" ${checked}> 
+                                                <span>${g}</span>
+                                            </label>`;
+                            });
+                        }
+                        grpHtml += `</div></div>`;
+                    });
+                }
+                groupsGrid.innerHTML = grpHtml;
+            };
+
+            window.handleAddGroupAll = (allCb, safeSpec) => {
+                const groupCbs = document.querySelectorAll(`.grp-item-${safeSpec}`);
+                groupCbs.forEach(cb => cb.checked = allCb.checked);
+            };
+
+            window.checkAddGroupAllState = (safeSpec) => {
+                const allCb = document.querySelector(`.grp-all-${safeSpec}`);
+                const groupCbs = document.querySelectorAll(`.grp-item-${safeSpec}`);
+                if(allCb && groupCbs.length > 0) {
+                    const allChecked = Array.from(groupCbs).every(cb => cb.checked);
+                    allCb.checked = allChecked;
+                }
+            };
+
+            window.updateAddGroups();
+            window.toggleTeacherFields(); // ضبط حجم النافذة فور الفتح حسب الوظيفة المحددة مسبقاً
+        },
+        preConfirm: () => {
+            const phone = document.getElementById('fr-phone').value.replace(/\s/g, '');
+            const ccp = document.getElementById('fr-ccp').value;
+            const cle = document.getElementById('fr-cle').value;
+            const role = document.getElementById('fr-role').value;
+            
+            let framingSpecs = [];
+            let framingModules = [];
+            let framingGroups = [];
+
+            if(role === 'أستاذ مؤطر') {
+                document.querySelectorAll('.spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
+                document.querySelectorAll('.mod-cb:checked').forEach(cb => framingModules.push(cb.value));
+                
+                framingSpecs.forEach(spec => {
+                    const safeSpec = spec.replace(/\s+/g, '');
+                    const allCb = document.querySelector(`.grp-all-${safeSpec}`);
+                    if (allCb && allCb.checked) {
+                        framingGroups.push(`${spec}::كل الأفواج`);
+                    } else {
+                        document.querySelectorAll(`.grp-item-${safeSpec}:checked`).forEach(cb => framingGroups.push(cb.value));
+                    }
+                });
+
+                // شروط الإلزامية الخاصة بالأستاذ المؤطر
+                if (framingSpecs.length === 0) {
+                    Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!');
+                    return false;
+                }
+                if (framingGroups.length === 0) {
+                    Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!');
+                    return false;
+                }
+                if (framingModules.length === 0) {
+                    Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!');
+                    return false;
+                }
+            }
+
+            if (!role) { Swal.showValidationMessage('الرجاء اختيار وظيفة المؤطر!'); return false; }
+            if (!/^(05|06|07)[0-9]{8}$/.test(phone) && phone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
+            
+            if (UNIQUE_ROLES.includes(role) && framersData.some(f => f.role === role)) {
+                Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); return false;
+            }
+
+            return {
+                empId: empId, center: INSPECTOR_CENTER, role: role, phone: document.getElementById('fr-phone').value,
+                ccp: ccp, ccpKey: cle, s1: document.getElementById('fr-s1').checked, s2: document.getElementById('fr-s2').checked, s3: document.getElementById('fr-s3').checked,
+                shifts: [], isProtected: false, framingSpecs, framingModules, framingGroups
+            };
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("center_framers").doc(empId).set(res.value);
+                Swal.fire('نجاح', 'تم تسجيل المؤطر بنجاح.', 'success');
+                loadFramersData(); 
+            } catch (e) { Swal.fire('خطأ', 'تعذر الحفظ.', 'error'); }
+        }
+    });
+};
+
+window.editFramer = function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) {
+        Swal.fire('خطأ', 'لم يتم العثور على البيانات.', 'error');
+        return;
+    }
+
+    const isProtectedRole = f.isProtected && f.role === 'المسؤول البيداغوجي';
+    let rolesHtml = '';
+    if (isProtectedRole) {
+        rolesHtml = `<option value="${f.role}" selected>${f.role}</option>`;
+    } else {
+        FRAMER_ROLES.forEach(r => rolesHtml += `<option value="${r}" ${f.role === r ? 'selected' : ''}>${r}</option>`);
+    }
+
+    // تجهيز التخصصات
+    const allSpecs = getCenterSpecialties();
+    let specsHtml = '';
+    allSpecs.forEach(s => {
+        let checked = (f.framingSpecs || []).includes(s) ? 'checked' : '';
+        specsHtml += `<label class="styled-cb"><input type="checkbox" value="${s}" class="edit-spec-cb" onchange="window.updateEditGroups()" ${checked}> <span>${s}</span></label>`;
+    });
+
+    // تجهيز المقاييس
+    let modsHtml = '';
+    MODULES_LIST.forEach(m => {
+        let checked = (f.framingModules || []).includes(m) ? 'checked' : '';
+        modsHtml += `<label class="styled-cb"><input type="checkbox" value="${m}" class="edit-mod-cb" ${checked}> <span>${m}</span></label>`;
+    });
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-pen" style="color:#e67e22; margin-left:8px;"></i> بطاقة تعديل بيانات المؤطر',
+        html: `
+            <style>
+                /* التصميم الأفقي الجديد */
+                .swal-wide-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; }
+                @media(max-width: 768px) { .swal-wide-container { grid-template-columns: 1fr; } }
+                .col-main { display: flex; flex-direction: column; gap: 15px; }
+                
+                .framer-section { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
+                .framer-section-title { font-size:15px; font-weight:800; color:#102a43; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:15px; display:flex; align-items:center; gap:8px; }
+                .input-group { margin-bottom:12px; }
+                .input-group label { display:block; font-size:13px; font-weight:bold; color:#475569; margin-bottom:6px; }
+                .styled-input { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:'Cairo'; outline:none; transition:0.3s; box-sizing: border-box; }
+                .styled-input:focus { border-color:#e67e22; box-shadow:0 0 0 3px rgba(230,126,34,0.1); }
+                .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+                
+                .cb-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; max-height:160px; overflow-y:auto; padding:5px; }
+                .styled-cb { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:6px 10px; border-radius:8px; cursor:pointer; transition:0.2s; font-size:12px; font-weight:bold; color:#334e68; }
+                .styled-cb:hover { background:#f1f5f9; border-color:#cbd5e1; }
+                .styled-cb input { accent-color:#e67e22; width:16px; height:16px; cursor:pointer; }
+                
+                .session-pills { display:flex; gap:10px; justify-content:space-between; }
+                .s-pill { flex:1; position:relative; cursor:pointer; }
+                .s-pill input { position:absolute; opacity:0; cursor:pointer; }
+                .s-pill-content { display:flex; justify-content:center; align-items:center; gap:5px; padding:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:8px; font-weight:bold; font-size:13px; color:#64748b; transition:0.3s; }
+                .s-pill input:checked ~ .s-pill-content { background:#fff; border-color:#0FBA50; color:#0FBA50; box-shadow:0 4px 10px rgba(15,186,80,0.15); }
+                .s-pill-content i { display:none; }
+                .s-pill input:checked ~ .s-pill-content i { display:inline-block; }
+            </style>
+            
+            <div class="swal-wide-container">
+                <!-- العمود الأيمن: البيانات الشخصية والدورات -->
+                <div class="col-main">
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-address-card" style="color:#e67e22;"></i> البيانات الشخصية والمالية</div>
+                        
+                        <div class="grid-2">
+                            <div class="input-group">
+                                <label>رقم الهاتف</label>
+                                <input type="text" id="edit-fr-phone" class="styled-input" style="direction:ltr; text-align:right;" value="${f.phone || ''}" maxlength="14" oninput="window.formatPhoneInput(this)">
+                            </div>
+                            <div class="input-group">
+                                <label>الوظيفة بالمركز</label>
+                                <select id="edit-fr-role" class="styled-input" onchange="window.toggleEditTeacherFields()" ${isProtectedRole ? 'disabled' : ''}>
+                                    ${rolesHtml}
+                                </select>
+                                ${isProtectedRole ? '<span style="font-size:11px; color:#d90429; font-weight:bold; margin-top:4px; display:block;">غير قابل للتعديل</span>' : ''}
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:15px;">
+                            <div class="input-group" style="flex:3;">
+                                <label>الحساب الجاري (CCP)</label>
+                                <input type="text" id="edit-fr-ccp" class="styled-input" style="direction:ltr; text-align:right;" value="${f.ccp || ''}" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                            <div class="input-group" style="flex:1;">
+                                <label>المفتاح</label>
+                                <input type="text" id="edit-fr-cle" class="styled-input" style="direction:ltr; text-align:center;" value="${f.ccpKey || ''}" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-calendar-check" style="color:#0FBA50;"></i> الدورات المشارك فيها</div>
+                        <div class="session-pills">
+                            <label class="s-pill"><input type="checkbox" id="edit-fr-s1" ${f.s1 ? 'checked' : ''}><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 1</div></label>
+                            <label class="s-pill"><input type="checkbox" id="edit-fr-s2" ${f.s2 ? 'checked' : ''}><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 2</div></label>
+                            <label class="s-pill"><input type="checkbox" id="edit-fr-s3" ${f.s3 ? 'checked' : ''}><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 3</div></label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- العمود الأيسر: المهام البيداغوجية -->
+                <div class="col-main">
+                    <div id="editTeacherFields" class="framer-section" style="display:${f.role === 'أستاذ مؤطر' ? 'block' : 'none'}; border-color:#93c5fd; background:#f8fbff;">
+                        <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
+                        
+                        <div class="input-group">
+                            <label>تخصصات التأطير:</label>
+                            <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
+                        </div>
+
+                        <div class="input-group" id="groups-container">
+                            <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
+                            <!-- حاوية الأفواج المنفصلة -->
+                            <div id="edit-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;">
+                                <!-- سيتم تعبئتها ديناميكياً -->
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>مقاييس التأطير:</label>
+                            <div class="cb-grid">${modsHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `,
+        width: '950px', // تكبير النافذة لتدعم العمودين
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+        didOpen: () => {
+            window.toggleEditTeacherFields = () => {
+                const roleEl = document.getElementById('edit-fr-role');
+                const role = isProtectedRole ? f.role : roleEl.value;
+                document.getElementById('editTeacherFields').style.display = role === 'أستاذ مؤطر' ? 'block' : 'none';
+            };
+
+            // الدالة المطورة لفصل الأفواج حسب التخصص
+            window.updateEditGroups = () => {
+                const selectedSpecs = Array.from(document.querySelectorAll('.edit-spec-cb:checked')).map(cb => cb.value);
+                const groupsGrid = document.getElementById('edit-groups-grid');
+                
+                let prevChecked = f.framingGroups || []; 
+                let currentCheckedBoxes = document.querySelectorAll('.edit-grp-cb:checked');
+                if(currentCheckedBoxes.length > 0) {
+                    prevChecked = Array.from(currentCheckedBoxes).map(cb => cb.value);
+                }
+
+                let grpHtml = '';
+                
+                if (selectedSpecs.length === 0) {
+                    grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
+                } else {
+                    selectedSpecs.forEach(spec => {
+                        let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
+                        let safeSpec = spec.replace(/\s+/g, '');
+                        
+                        grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
+                                        <h4 style="margin:0 0 10px 0; color:#1E68E8; font-size:13px; border-bottom:1px dashed #cce5ff; padding-bottom:5px;">
+                                            <i class="fa-solid fa-layer-group"></i> أفواج تخصص: ${spec}
+                                        </h4>
+                                        <div class="cb-grid" style="max-height: none;">`;
+                        
+                        if (specGroups.length === 0) {
+                            grpHtml += `<div style="color:#777; font-size:12px; grid-column:1/-1;">لا توجد أفواج مسجلة لهذا التخصص.</div>`;
+                        } else {
+                            let allVal = `${spec}::كل الأفواج`;
+                            let allChecked = prevChecked.includes(allVal) ? 'checked' : '';
+                            
+                            grpHtml += `<label class="styled-cb" style="border-color:#e67e22; grid-column:1/-1;">
+                                            <input type="checkbox" value="${allVal}" class="edit-grp-cb edit-grp-all-${safeSpec}" onchange="window.handleEditGroupAll(this, '${safeSpec}')" ${allChecked}> 
+                                            <span style="color:#e67e22;">كل أفواج (${spec})</span>
+                                        </label>`;
+                            
+                            specGroups.forEach(g => {
+                                let val = `${spec}::${g}`;
+                                let checked = prevChecked.includes(val) || allChecked ? 'checked' : '';
+                                grpHtml += `<label class="styled-cb">
+                                                <input type="checkbox" value="${val}" class="edit-grp-cb edit-grp-item-${safeSpec}" onchange="window.checkEditGroupAllState('${safeSpec}')" ${checked}> 
+                                                <span>${g}</span>
+                                            </label>`;
+                            });
+                        }
+                        grpHtml += `</div></div>`;
+                    });
+                }
+                groupsGrid.innerHTML = grpHtml;
+            };
+
+            window.handleEditGroupAll = (allCb, safeSpec) => {
+                const groupCbs = document.querySelectorAll(`.edit-grp-item-${safeSpec}`);
+                groupCbs.forEach(cb => cb.checked = allCb.checked);
+            };
+
+            window.checkEditGroupAllState = (safeSpec) => {
+                const allCb = document.querySelector(`.edit-grp-all-${safeSpec}`);
+                const groupCbs = document.querySelectorAll(`.edit-grp-item-${safeSpec}`);
+                if(allCb && groupCbs.length > 0) {
+                    const allChecked = Array.from(groupCbs).every(cb => cb.checked);
+                    allCb.checked = allChecked;
+                }
+            };
+
+            window.updateEditGroups();
+        },
+        preConfirm: () => {
+            const phone = document.getElementById('edit-fr-phone').value.replace(/\s/g, '');
+            const ccp = document.getElementById('edit-fr-ccp').value;
+            const cle = document.getElementById('edit-fr-cle').value;
+            
+            const roleEl = document.getElementById('edit-fr-role');
+            const role = isProtectedRole ? f.role : roleEl.value;
+
+            const s1 = document.getElementById('edit-fr-s1').checked;
+            const s2 = document.getElementById('edit-fr-s2').checked;
+            const s3 = document.getElementById('edit-fr-s3').checked;
+
+            let framingSpecs = [];
+            let framingModules = [];
+            let framingGroups = [];
+
+            if(role === 'أستاذ مؤطر') {
+                document.querySelectorAll('.edit-spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
+                document.querySelectorAll('.edit-mod-cb:checked').forEach(cb => framingModules.push(cb.value));
+                
+                framingSpecs.forEach(spec => {
+                    const safeSpec = spec.replace(/\s+/g, '');
+                    const allCb = document.querySelector(`.edit-grp-all-${safeSpec}`);
+                    if (allCb && allCb.checked) {
+                        framingGroups.push(`${spec}::كل الأفواج`);
+                    } else {
+                        document.querySelectorAll(`.edit-grp-item-${safeSpec}:checked`).forEach(cb => framingGroups.push(cb.value));
+                    }
+                });
+
+                // شروط الإلزامية الجديدة للأستاذ المؤطر
+                if (framingSpecs.length === 0) {
+                    Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!');
+                    return false;
+                }
+                if (framingGroups.length === 0) {
+                    Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!');
+                    return false;
+                }
+                if (framingModules.length === 0) {
+                    Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!');
+                    return false;
+                }
+            }
+
+            if (!/^(05|06|07)[0-9]{8}$/.test(phone) && phone.length > 0) { 
+                Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
+                return false; 
+            }
+            
+            return { phone, ccp, ccpKey: cle, role, s1, s2, s3, framingSpecs, framingModules, framingGroups };
+        }
+
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("center_framers").doc(docId).update(res.value);
+                f.phone = res.value.phone; f.ccp = res.value.ccp; f.ccpKey = res.value.ccpKey; f.role = res.value.role;
+                f.s1 = res.value.s1; f.s2 = res.value.s2; f.s3 = res.value.s3;
+                f.framingSpecs = res.value.framingSpecs; f.framingModules = res.value.framingModules; f.framingGroups = res.value.framingGroups;
+                
+                window.filterFramersTable();
+                if(isShiftMode) window.renderShiftsTable();
+                
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم التعديل بنجاح', showConfirmButton: false, timer: 1500 });
+            } catch (e) { 
+                Swal.fire('خطأ', 'تعذر الحفظ في قاعدة البيانات.', 'error'); 
+            }
+        }
+    });
+};
+
+
+window.deleteFramer = function(docId) {
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'هل أنت متأكد من إزالة هذا المؤطر من المركز؟', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء', confirmButtonColor: '#d90429'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                await db.collection("center_framers").doc(docId).delete();
+                framersData = framersData.filter(f => f.docId !== docId);
+                window.filterFramersTable();
+                if(isShiftMode) window.renderShiftsTable();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم الحذف', showConfirmButton: false, timer: 1500 });
+            } catch (e) { Swal.fire('خطأ', 'فشل الحذف.', 'error'); }
+        }
+    });
+};
+
+window.viewFramer = function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) return;
+    let b = f.baseInfo;
+    
+    let photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+    if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
+    
+    const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : `<i class="fa-solid fa-user" style="font-size:60px; color:#ccc;"></i>`;
+
+    Swal.fire({
+        html: `
+        <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; text-align: right; font-family: 'Cairo', sans-serif; padding: 15px; background: #fff; border-radius: 15px;">
+            <div style="flex-shrink: 0; margin: 0 auto;">
+                <div style="width: 140px; height: 140px; border-radius: 50%; padding: 5px; background: linear-gradient(135deg, #e67e22, #d35400); box-shadow: 0 5px 15px rgba(230, 126, 34, 0.3);">
+                    <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 3px solid #fff;">
+                        ${imgHtml}
+                    </div>
+                </div>
+            </div>
+            <div style="flex-grow: 1; min-width: 250px;">
+                <h2 style="margin: 0 0 5px 0; font-size: 22px; font-weight: 900; color: #102a43;">${b.name || '-'}</h2>
+                <h4 style="margin: 0 0 15px 0; font-size: 15px; font-weight: 800; color: #e67e22;"><i class="fa-solid fa-user-tie" style="margin-left: 5px;"></i> ${f.role}</h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">الرقم الوظيفي</span>
+                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900; font-family:monospace;" dir="ltr">${f.empId}</span>
+                    </div>
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">الحساب الجاري / المفتاح</span>
+                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900; font-family:monospace;" dir="ltr">${f.ccp || '-'} / ${f.ccpKey || '-'}</span>
+                    </div>
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">مكان العمل الأصلي</span>
+                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="margin-left:5px; color:#94a3b8;"></i> ${b.place || b.workplace || '-'}</span>
+                    </div>
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">رقم الهاتف</span>
+                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900; font-family:monospace;" dir="ltr"><i class="fa-solid fa-phone" style="margin-left:5px; color:#94a3b8;"></i> ${f.phone || '-'}</span>
+                    </div>
+                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">الرتبة</span>
+                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900;">${b.grade || b.rank || '-'}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `,
+        showConfirmButton: false, showCloseButton: true, width: '650px', customClass: { popup: 'swal-modal-custom' }
+    });
+};
+
+// ================= أنظمة الطباعة والتصدير (ديناميكية حسب التبويب) =================
+window.printCurrentTabList = function() {
+    if (currentFilteredData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لطباعتها في هذا التبويب.', 'info');
+
+    let sessionTitle = "القائمة الشاملة لجميع المؤطرين بالمركز";
+    if (currentTab === 's1') sessionTitle = "قائمة المؤطرين - الدورة الأولى";
+    if (currentTab === 's2') sessionTitle = "قائمة المؤطرين - الدورة الثانية";
+    if (currentTab === 's3') sessionTitle = "قائمة المؤطرين - الدورة الثالثة";
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    currentFilteredData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let ccpText = f.ccp ? `${f.ccp} Clé ${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}` : '-';
+        
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap">${b.name || '-'}</td>
+                <td class="nowrap">${b.grade || b.rank || '-'}</td>
+                <td>${b.place || b.workplace || '-'}</td>
+                <td dir="ltr" class="center-text nowrap">${ccpText}</td>
+                <td dir="ltr" class="center-text nowrap">${f.phone || '-'}</td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>${sessionTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 20px; }
+            .title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; font-size: 15px; font-weight: 600; vertical-align: middle; font-family: 'Cairo', sans-serif;}
+            th { background: #f0f0f0; text-align: center; font-weight: 700; font-size: 16px; }
+            td { text-align: right; }
+            .center-text { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            .signature { text-align: left; padding-left: 60px; font-weight: 700; font-size: 16px; margin-top: 40px; }
+            @media print { body { padding: 0; } th { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت</div>
+            <div>المركز: ${INSPECTOR_CENTER}</div>
+        </div>
+        <div class="title">${sessionTitle}</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 22%;">مكان العمل</th>
+                    <th style="width: 15%;">الحساب الجاري</th>
+                    <th style="width: 13%;">رقم الهاتف</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        
+        <div class="signature">ختم وإمضاء رئيس المركز</div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.exportCurrentTabExcel = function() {
+    if (currentFilteredData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لتحميلها في هذا التبويب.', 'info');
+
+    let tabName = "كل_المؤطرين";
+    if(currentTab === 's1') tabName = "الدورة_الأولى";
+    if(currentTab === 's2') tabName = "الدورة_الثانية";
+    if(currentTab === 's3') tabName = "الدورة_الثالثة";
+
+    let rowsHtml = '';
+    currentFilteredData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let ccpText = f.ccp ? `${f.ccp} CLE ${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}` : '-';
+        
+        rowsHtml += `
+            <tr>
+                <td style="border: 1px solid #000;">${idx + 1}</td>
+                <td style="border: 1px solid #000;">${b.name || '-'}</td>
+                <td style="border: 1px solid #000;">${b.grade || b.rank || '-'}</td>
+                <td style="border: 1px solid #000;">${b.place || b.workplace || '-'}</td>
+                <td class="text-cell" style="border: 1px solid #000;">${ccpText}</td>
+                <td class="text-cell" style="border: 1px solid #000;">${f.phone || '-'}</td>
+                <td style="border: 1px solid #000;">${f.role || '-'}</td>
+            </tr>
+        `;
+    });
+
+    const excelTemplate = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                table { border-collapse: collapse; font-family: 'Arial', sans-serif; direction: rtl; }
+                th, td { border: 1px solid #000000; padding: 8px; text-align: center; vertical-align: middle; }
+                th { background-color: #e67e22; color: #ffffff; font-weight: bold; font-size: 14px; }
+                .text-cell { mso-number-format: "\\@"; } 
+            </style>
+        </head>
+        <body dir="rtl">
+            <table>
+                <thead>
+                    <tr><th colspan="7" style="font-size: 18px; background-color: #f1f5f9; color: #102a43; padding: 15px;">قائمة مؤطري المركز - ${tabName.replace('_', ' ')}</th></tr>
+                    <tr>
+                        <th>الرقم</th>
+                        <th>الاسم واللقب</th>
+                        <th>الرتبة</th>
+                        <th>مكان العمل</th>
+                        <th>الحساب الجاري</th>
+                        <th>رقم الهاتف</th>
+                        <th>الوظيفة بالمركز</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + excelTemplate], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `قائمة_المؤطرين_${tabName}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+window.formatPhoneInput = function(input) {
+    let val = input.value.replace(/\D/g, '').slice(0, 10);
+    if (val.length > 0) input.value = val.match(/.{1,2}/g).join(' ');
+    else input.value = '';
+};
+
+window.printFramerIDCards = function() {
+    if (currentFilteredData.length === 0) return Swal.fire('تنبيه', 'لا يوجد مؤطرين في هذا التبويب لطباعة بطاقاتهم.', 'warning');
+
+    let printWindow = window.open('', '_blank');
+    let pagesHtml = '';
+    
+    const getColor = (role) => {
+        if (role.includes('بيداغوجي') || role.includes('أستاذ')) return '#0FBA50'; 
+        if (role.includes('إداري') || role.includes('إدارة') || role.includes('أمانة')) return '#1E68E8'; 
+        return '#8e44ad'; 
+    };
+
+    for (let i = 0; i < currentFilteredData.length; i += 8) {
+        let pageData = currentFilteredData.slice(i, i + 8);
+        pagesHtml += '<div class="page">';
+        
+        pageData.forEach(f => {
+            let empId = f.empId || '000000';
+            let b = f.baseInfo;
+            
+            let photoUrl = employeePhotosMap[extractCoreId(empId)];
+            if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
+
+            const photoContent = photoUrl 
+                ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.outerHTML='صورة<br>الموظف'"/>`
+                : `صورة<br>المؤطر`;
+
+            const cardColor = getColor(f.role);
+
+            pagesHtml += `
+                <div class="card" style="border-color: ${cardColor};">
+                    <div style="position:absolute; top:0; left:0; right:0; height:5px; background:${cardColor};"></div>
+                    <div class="card-header">
+                        <div class="rep-title" style="color:${cardColor};">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+                        <div class="side-headers">
+                            <div class="right-header">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                            <div class="left-header">مركز التكوين:<br><span class="center-name">${INSPECTOR_CENTER}</span></div>
+                        </div>
+                    </div>
+                    <div class="card-title" style="background:${cardColor}; color: white;">مؤطر بالمركز</div>
+                    <div class="card-body">
+                        <div class="info-section">
+                            <div class="info-row"><b style="color:${cardColor};">الاسم واللقب:</b> <span>${b.name || '-'}</span></div>
+                            <div class="info-row" style="display:flex; align-items:center; margin-bottom:3px;">
+                                <b style="color:${cardColor};">الوظيفة:</b> 
+                                <span style="background:#f8f9fa; padding:1px 6px; border-radius:4px; font-weight:900; color:${cardColor}; margin-right:5px; font-size:11.5px; border:1px solid ${cardColor}; white-space:nowrap;">${f.role}</span>
+                            </div>
+                            <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b style="color:${cardColor};">الرتبة:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${b.grade || b.rank || '-'}</span></div></div>
+                            <div class="info-row"><b style="color:${cardColor};">الهاتف:</b> <span dir="ltr" style="font-family:monospace; font-weight:900;">${f.phone || '-'}</span></div>
+                            <div class="barcode-wrapper">
+                                <svg class="barcode" data-value="${empId}"></svg>
+                            </div>
+                        </div>
+                        <div class="photo-section">
+                            <div class="photo-box" style="border-color:${cardColor}; color:${cardColor};">
+                                ${photoContent}
+                            </div>
+                            <div class="signature">رئيس المركز</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        pagesHtml += '</div>';
+    }
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>طباعة بطاقات المؤطرين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { font-family: 'Cairo', sans-serif; background: #e0e6ed; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page { width: 210mm; height: 297mm; background: white; margin: 0 auto; padding: 10mm; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 6mm 5mm; box-sizing: border-box; page-break-after: always; }
+            @media print { body { background: white; } .page { margin: 0; box-shadow: none; } }
+            .card{ border:2px solid; border-radius:10px; padding:8px 10px 8px 10px; display:flex; flex-direction:column; background:#fff; position:relative; overflow:hidden; min-height:100%; box-sizing:border-box; }
+            .card-header { margin-bottom: 3px; }
+            .rep-title { text-align: center; font-size: 10.5px; font-weight: 900; line-height: 1.3; margin-bottom: 4px; }
+            .side-headers { display: flex; justify-content: space-between; font-size: 9px; font-weight: 800; color: #334e68; line-height: 1.3; }
+            .center-name { color: #d90429; font-weight: 900; }
+            .card-title { text-align: center; font-size: 13.5px; font-weight: 900; padding: 3px; border-radius: 5px; margin: 3px 0 5px 0; letter-spacing: 0.5px; }
+            .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
+            .info-section{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
+            .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
+            .info-row b { display: inline-block; min-width: 55px; font-weight: 900;}
+            .info-row span { font-weight: 700; }
+            .barcode-wrapper{ margin-top: auto; margin-bottom: 4px; text-align:center; display:flex; justify-content:center; align-items:center; }
+            .barcode-wrapper svg { width: 100%; max-width: 115px; height: auto !important; display: block; margin: 0 auto; }
+            .photo-section{ width:25%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; }
+            .photo-box { overflow:hidden; padding:0; width: 85%; aspect-ratio: 3/4; border: 2px dashed; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3; }
+            .signature{ font-size:8px; font-weight:900; text-align:center; color:#333; line-height:1.2; margin-top:0; padding-bottom:0; }
+        </style>
+    </head>
+    <body>
+        ${pagesHtml}
+        <script>
+            function initBarcodes() {
+                if (typeof JsBarcode === 'undefined') { setTimeout(initBarcodes, 50); return; }
+                document.querySelectorAll('.barcode').forEach(function(svg) {
+                    var val = svg.getAttribute('data-value');
+                    if (val) { JsBarcode(svg, val, { format: "CODE128", lineColor: "#000", width: 1.5, height: 70, displayValue: false, margin: 0 }); }
+                });
+                document.querySelectorAll('.shrink-workplace').forEach(function(el) {
+                    var availableWidth = el.parentElement.clientWidth; var textWidth = el.scrollWidth;
+                    if (textWidth > availableWidth && availableWidth > 0) { el.style.transform = 'translateY(-50%) scale(' + (availableWidth / textWidth) + ')'; }
+                });
+                setTimeout(function() { window.print(); }, 800);
+            }
+            setTimeout(initBarcodes, 200);
+        <\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ================= نوافذ إضافة دوام وسجل الدوام =================
+window.promptAddShift = function(docId) {
+    let framer = framersData.find(f => f.docId === docId);
+    if(!framer) return;
+
+    let defaultDate = getTodayDate();
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-calendar-plus" style="color:#0FBA50; margin-left:8px;"></i> إضافة دوام جديد',
+        html: `
+            <div style="text-align:right; font-family:'Cairo';">
+                <div style="background: linear-gradient(135deg, #102a43, #243b53); padding:15px; border-radius:12px; margin-bottom:20px; color:white; display:flex; align-items:center; gap:15px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">
+                    <div style="width:50px; height:50px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:20px;">
+                        <i class="fa-solid fa-user-tie"></i>
+                    </div>
+                    <div>
+                        <div style="font-size:16px; font-weight:bold;">${framer.baseInfo.name || ''}</div>
+                        <div style="font-size:13px; color:#a0aec0;">${framer.role}</div>
+                    </div>
+                </div>
+                
+                <div style="background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0;">
+                    <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">تاريخ العمل:</label>
+                    <input type="date" id="sh-date" value="${defaultDate}" class="swal2-input" style="width:100%; margin:0 0 15px; height:45px; font-family:'Cairo'; font-weight:bold;">
+
+                    <div style="display:flex; gap:15px;">
+                        <div style="flex:1;">
+                            <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">طبيعة الدوام:</label>
+                            <select id="sh-type" class="swal2-select" style="width:100%; margin:0; height:45px; padding:0 10px; font-family:'Cairo'; font-weight:bold;" onchange="window.toggleShiftAmountInput()">
+                                <option value="أيام" selected>بالأيام</option>
+                                <option value="ساعات">بالساعات</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">العدد:</label>
+                            <input type="number" id="sh-amount" value="1" step="0.5" class="swal2-input" style="width:100%; margin:0; height:45px; text-align:center; font-weight:bold; font-size:18px; color:#0FBA50;">
+                        </div>
+                    </div>
+                    <div id="sh-hint" style="font-size:12px; color:#1E68E8; margin-top:10px; text-align:center; font-weight:bold; background:#eff6ff; padding:8px; border-radius:6px;">
+                        <i class="fa-solid fa-circle-info"></i> يتم تسجيل (1 يوم عمل) كقيمة افتراضية.
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ وإضافة', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        didOpen: () => {
+            window.toggleShiftAmountInput = () => {
+                const type = document.getElementById('sh-type').value;
+                const amtInput = document.getElementById('sh-amount');
+                const hint = document.getElementById('sh-hint');
+                if(type === 'أيام') {
+                    amtInput.value = 1; amtInput.style.color = '#0FBA50';
+                    hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> يتم تسجيل (1 يوم عمل) كقيمة افتراضية.';
+                } else {
+                    amtInput.value = ''; amtInput.placeholder = 'مثال: 4'; amtInput.style.color = '#1E68E8';
+                    hint.innerHTML = '<i class="fa-solid fa-clock"></i> أدخل عدد الساعات التي عملها المؤطر.';
+                }
+            };
+        },
+        preConfirm: () => {
+            const date = document.getElementById('sh-date').value;
+            const type = document.getElementById('sh-type').value;
+            const amount = parseFloat(document.getElementById('sh-amount').value);
+
+            if (!date) { Swal.showValidationMessage('الرجاء اختيار التاريخ!'); return false; }
+            if (!amount || amount <= 0) { Swal.showValidationMessage('الرجاء إدخال عدد صحيح أكبر من الصفر!'); return false; }
+
+            // التحقق من الساعات المتبقية
+            if (type === 'ساعات' && amount > window.currentRemainingHours) {
+                Swal.showValidationMessage(`عذراً، الساعات المدخلة (${amount}) تتجاوز الساعات المتبقية للدورة (${window.currentRemainingHours})!`);
+                return false;
+            }
+
+            return { id: Date.now().toString(), date, type, amount };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let shifts = framer.shifts || [];
+            shifts.push(result.value);
+            try {
+                await db.collection("center_framers").doc(docId).update({ shifts: shifts });
+                framer.shifts = shifts;
+                window.renderShiftsTable();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم تسجيل الدوام بنجاح', showConfirmButton: false, timer: 1500 });
+            } catch (error) { Swal.fire('خطأ', 'فشل الحفظ في قاعدة البيانات.', 'error'); }
+        }
+    });
+};
+
+// متغيرات عامة لنظام صفحات سجل الدوام
+let currentShiftHistPage = 1;
+const shiftHistPerPage = 5; // عرض 5 صفوف في كل صفحة
+
+window.viewShiftHistory = function(docId, page = 1) {
+    currentShiftHistPage = page;
+    let framer = framersData.find(f => f.docId === docId);
+    let shifts = framer.shifts || [];
+    
+    // الترتيب التنازلي لرؤية أحدث الساعات المضافة أولاً
+    shifts.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    // حساب الإجماليات من كل السجلات (وليس فقط الصفحة الحالية)
+    let totalDays = 0; let totalHours = 0;
+    shifts.forEach(sh => {
+        if(sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+        if(sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+    });
+
+    // حساب الصفحات
+    const totalPages = Math.ceil(shifts.length / shiftHistPerPage) || 1;
+    if (currentShiftHistPage > totalPages) currentShiftHistPage = totalPages;
+
+    const start = (currentShiftHistPage - 1) * shiftHistPerPage;
+    const paginatedShifts = shifts.slice(start, start + shiftHistPerPage);
+
+    let rowsHtml = '';
+
+    if (shifts.length === 0) {
+        rowsHtml = `<tr><td colspan="3" style="text-align:center; padding:30px; color:#94a3b8; font-weight:bold;"><i class="fa-solid fa-folder-open fa-2x"></i><br>لا يوجد سجل دوام مسجل.</td></tr>`;
+    } else {
+        paginatedShifts.forEach(sh => {
+            let amountColor = sh.type === 'أيام' ? '#d35400' : '#1E68E8';
+            let amountBg = sh.type === 'أيام' ? '#fff3e0' : '#eff6ff';
+
+            rowsHtml += `
+                <tr style="transition:0.2s;">
+                    <td style="text-align:center; padding:12px; border-bottom:1px solid #f1f5f9; font-family:monospace; font-size:15px; font-weight:bold; color:#475569;" dir="ltr">${sh.date}</td>
+                    <td style="text-align:center; padding:12px; border-bottom:1px solid #f1f5f9;">
+                        <span style="background:${amountBg}; color:${amountColor}; padding:6px 12px; border-radius:8px; font-weight:900; font-size:14px;">${sh.amount} ${sh.type}</span>
+                    </td>
+                    <td style="text-align:center; padding:12px; border-bottom:1px solid #f1f5f9; white-space:nowrap;">
+                        <button onclick="window.editShiftEntry('${docId}', '${sh.id}')" style="background:#f1f5f9; color:#f59e0b; border:none; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="تعديل"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="window.deleteShiftEntry('${docId}', '${sh.id}')" style="background:#f1f5f9; color:#ef4444; border:none; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="حذف"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // بناء واجهة نظام الصفحات
+    let paginationHtml = '';
+    if (totalPages > 1) {
+        paginationHtml = `
+            <div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
+                <div class="pagination-info" style="font-size:13px; font-weight:600; color:#555;">عرض ${start + 1} إلى ${Math.min(start + shiftHistPerPage, shifts.length)} من أصل ${shifts.length} سجل</div>
+                <div class="pagination-buttons" style="display:flex; gap:5px;">
+                    <button class="page-btn" ${currentShiftHistPage === 1 ? 'disabled' : ''} onclick="window.changeShiftHistPage('${docId}', ${currentShiftHistPage - 1})" style="padding:4px 10px; font-size:12px;">السابق</button>
+        `;
+        for (let i = 1; i <= totalPages; i++) {
+            paginationHtml += `<button class="page-btn ${i === currentShiftHistPage ? 'active' : ''}" onclick="window.changeShiftHistPage('${docId}', ${i})" style="padding:4px 10px; font-size:12px;">${i}</button>`;
+        }
+        paginationHtml += `
+                    <button class="page-btn" ${currentShiftHistPage === totalPages ? 'disabled' : ''} onclick="window.changeShiftHistPage('${docId}', ${currentShiftHistPage + 1})" style="padding:4px 10px; font-size:12px;">التالي</button>
+                </div>
+            </div>
+        `;
+    }
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-clock-rotate-left" style="color:#34495e;"></i> سجل المداومة التفصيلي',
+        width: '800px', // تم تكبير النافذة لـ 800px
+        html: `
+            <div style="font-family:'Cairo'; text-align:right;">
+                <div style="background: linear-gradient(135deg, #f8fafc, #e2e8f0); padding:20px; border-radius:15px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border:1px solid #cbd5e1;">
+                    <div>
+                        <h2 style="margin:0 0 5px; color:#1e293b; font-size:22px;">${framer.baseInfo.name || '-'}</h2>
+                       
+                       <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #64748b; font-weight: bold;">
+    
+                       <span dir="ltr" style="display: flex; align-items: center; gap: 6px;">
+                       <i class="fa-solid fa-phone"></i> 
+                       <span style="letter-spacing: 1px; padding-top: 2px;">${framer.phone || '-'}</span>
+                       </span>
+                       <span style="color: #cbd5e1;">|</span>
+                       <span style="display: flex; align-items: center; gap: 6px;">
+                       <i class="fa-solid fa-briefcase"></i> 
+                       <span>${framer.role}</span>
+                       </span>
+                       </div>
+                    
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <div style="background:white; padding:10px 15px; border-radius:10px; text-align:center; border:1px solid #ffcc80;">
+                            <span style="display:block; font-size:12px; color:#d35400; font-weight:bold;">مجموع الأيام</span>
+                            <span style="font-size:22px; font-weight:900; color:#d35400;">${totalDays}</span>
+                        </div>
+                        <div style="background:white; padding:10px 15px; border-radius:10px; text-align:center; border:1px solid #93c5fd;">
+                            <span style="display:block; font-size:12px; color:#1E68E8; font-weight:bold;">مجموع الساعات</span>
+                            <span style="font-size:22px; font-weight:900; color:#1E68E8;">${totalHours}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- تم إزالة سكرول max-height لضمان عدم اختفاء الزر بالأسفل -->
+                <div style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead style="background:#f1f5f9;">
+                            <tr>
+                                <th style="padding:12px; border-bottom:2px solid #cbd5e1;">تاريخ الإنجاز</th>
+                                <th style="padding:12px; border-bottom:2px solid #cbd5e1;">المدة المسجلة</th>
+                                <th style="padding:12px; border-bottom:2px solid #cbd5e1; width:120px;">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+                
+                ${paginationHtml}
+
+                <div style="margin-top:20px; text-align:center;">
+                    <button onclick="window.printShiftHistory('${docId}')" class="btn-action-main" style="background:#102a43; margin:0 auto; padding:12px 30px; font-size:15px;">
+                        <i class="fa-solid fa-print"></i> طباعة الوثيقة الرسمية للمداومة
+                    </button>
+                </div>
+            </div>
+        `,
+        showConfirmButton: false, showCloseButton: true
+    });
+};
+
+// دالة الانتقال بين الصفحات للسجل
+window.changeShiftHistPage = function(docId, page) {
+    window.viewShiftHistory(docId, page);
+};
+
+window.editShiftEntry = function(docId, shiftId) {
+    let framer = framersData.find(f => f.docId === docId);
+    let shiftIndex = framer.shifts.findIndex(s => s.id === shiftId);
+    let shift = framer.shifts[shiftIndex];
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-pen-to-square" style="color:#ffc107;"></i> تعديل سجل الدوام',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0;">
+                <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">التاريخ:</label>
+                <input type="date" id="e-sh-date" value="${shift.date}" class="swal2-input" style="width:100%; height:45px; margin:0 0 15px;">
+                
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">النوع:</label>
+                        <select id="e-sh-type" class="swal2-select" style="width:100%; height:45px; margin:0; padding:0 10px;">
+                            <option value="أيام" ${shift.type === 'أيام' ? 'selected' : ''}>أيام</option>
+                            <option value="ساعات" ${shift.type === 'ساعات' ? 'selected' : ''}>ساعات</option>
+                        </select>
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">العدد:</label>
+                        <input type="number" id="e-sh-amount" value="${shift.amount}" step="0.5" class="swal2-input" style="width:100%; height:45px; margin:0; text-align:center; font-weight:bold; color:#d35400;">
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#f59e0b',
+        preConfirm: () => {
+            const date = document.getElementById('e-sh-date').value;
+            const type = document.getElementById('e-sh-type').value;
+            const amount = parseFloat(document.getElementById('e-sh-amount').value);
+            
+            if (!date || !amount) { Swal.showValidationMessage('بيانات ناقصة!'); return false; }
+
+            // التحقق من الساعات المتبقية مع أخذ الساعات القديمة بعين الاعتبار
+            let allowedAmount = window.currentRemainingHours;
+            
+            // إذا كان التعديل على سجل من نوع "ساعات"، نعيد الساعات القديمة للرصيد المتاح
+            if (shift.type === 'ساعات') {
+                allowedAmount += parseFloat(shift.amount); 
+            }
+
+            if (type === 'ساعات' && amount > allowedAmount) {
+                Swal.showValidationMessage(`عذراً، الساعات المدخلة تتجاوز الرصيد المتاح (${allowedAmount})!`);
+                return false;
+            }
+
+            return { id: shift.id, date, type, amount };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', didOpen: () => Swal.showLoading() });
+            framer.shifts[shiftIndex] = result.value;
+            try {
+                await db.collection("center_framers").doc(docId).update({ shifts: framer.shifts });
+                window.renderShiftsTable();
+                window.viewShiftHistory(docId); 
+            } catch (e) { Swal.fire('خطأ', 'فشل التعديل.', 'error'); }
+        }
+    });
+};
+
+window.deleteShiftEntry = function(docId, shiftId) {
+    let framer = framersData.find(f => f.docId === docId);
+
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'سيتم حذف هذا السجل بشكل نهائي ولن يؤخذ في الحسبان.', icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#d90429', confirmButtonText: 'احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحذف...', didOpen: () => Swal.showLoading() });
+            framer.shifts = framer.shifts.filter(s => s.id !== shiftId);
+            try {
+                await db.collection("center_framers").doc(docId).update({ shifts: framer.shifts });
+                window.renderShiftsTable();
+                window.viewShiftHistory(docId);
+            } catch (e) { Swal.fire('خطأ', 'فشل الحذف.', 'error'); }
+        }
+    });
+};
+
+// ================= أنظمة الطباعة والتصدير =================
+
+window.printShiftsTabList = function() {
+    if (currentShiftData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لطباعتها في الدورة المحددة.', 'info');
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value;
+    let sessionTitle = "وثيقة المداومة للمؤطرين";
+    if (sessionVal === 's1') sessionTitle += " - الدورة الأولى";
+    if (sessionVal === 's2') sessionTitle += " - الدورة الثانية";
+    if (sessionVal === 's3') sessionTitle += " - الدورة الثالثة";
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    currentShiftData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let totalDays = 0, totalHours = 0;
+        (f.shifts || []).forEach(sh => {
+            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        });
+        
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap">${b.name || '-'}</td>
+                <td class="nowrap">${b.grade || b.rank || '-'}</td>
+                <td>${b.place || b.workplace || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
+                <td class="center-text"><b>${totalDays}</b></td>
+                <td class="center-text"><b>${totalHours}</b></td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>${sessionTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 20px; }
+            .title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; font-size: 15px; font-weight: 600; vertical-align: middle; }
+            th { background: #f0f0f0; text-align: center; font-weight: 700; font-size: 16px; }
+            td { text-align: right; }
+            .center-text { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            .signature { text-align: left; padding-left: 60px; font-weight: 700; font-size: 16px; margin-top: 40px; }
+            @media print { body { padding: 0; } th { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت</div>
+            <div>المركز: ${INSPECTOR_CENTER}</div>
+        </div>
+        <div class="title">${sessionTitle}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 20%;">مكان العمل</th>
+                    <th style="width: 16%;">الوظيفة بالمركز</th>
+                    <th style="width: 7%;">أيام</th>
+                    <th style="width: 7%;">ساعات</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        <div class="signature">ختم وإمضاء رئيس المركز</div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.printDetailedShiftsList = function() {
+    if (currentShiftData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لطباعتها.', 'info');
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value;
+    let sessionTitle = "تفاصيل دوام وتأطير الأساتذة";
+    if (sessionVal === 's1') sessionTitle += " - الدورة الأولى";
+    if (sessionVal === 's2') sessionTitle += " - الدورة الثانية";
+    if (sessionVal === 's3') sessionTitle += " - الدورة الثالثة";
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    currentShiftData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let totalDays = 0, totalHours = 0;
+        (f.shifts || []).forEach(sh => {
+            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        });
+
+        let specs = '-';
+        let mods = '-';
+        
+        if (f.role === 'أستاذ مؤطر') {
+            let specsList = f.framingSpecs || [];
+            let groupsList = f.framingGroups || [];
+            
+            if (specsList.length > 0) {
+                let groupsBySpec = {};
+                // تجميع الأفواج لكل تخصص
+                groupsList.forEach(g => {
+                    let parts = g.split('::');
+                    if (parts.length === 2) {
+                        if (!groupsBySpec[parts[0]]) groupsBySpec[parts[0]] = [];
+                        groupsBySpec[parts[0]].push(parts[1]);
+                    }
+                });
+
+                let specBlocks = [];
+                specsList.forEach(s => {
+                    let text = `<b>${s}</b>`;
+                    if (groupsBySpec[s] && groupsBySpec[s].length > 0) {
+                        text += `<br><span style="font-size:10px; color:#555;">[ ${groupsBySpec[s].join(' ، ')} ]</span>`;
+                    } else {
+                        text += `<br><span style="font-size:10px; color:#aaa;">[ بدون أفواج ]</span>`;
+                    }
+                    specBlocks.push(`<div style="margin-bottom:6px;">${text}</div>`);
+                });
+                specs = specBlocks.join('');
+            }
+            
+            mods = (f.framingModules || []).length > 0 ? (f.framingModules).join('<br>') : '-';
+        }
+        
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap">${b.name || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
+                <td style="font-size:12px;">${specs}</td>
+                <td style="font-size:12px;">${mods}</td>
+                <td class="center-text"><b>${totalDays}</b></td>
+                <td class="center-text"><b>${totalHours}</b></td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>${sessionTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 20px; }
+            .title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; font-size: 14px; font-weight: 600; vertical-align: middle; }
+            th { background: #f0f0f0; text-align: center; font-weight: 700; font-size: 15px; }
+            td { text-align: right; }
+            .center-text { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            @media print { th { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت</div>
+            <div>المركز: ${INSPECTOR_CENTER}</div>
+        </div>
+        <div class="title">${sessionTitle}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 20%;">الاسم واللقب</th>
+                    <th style="width: 15%;">الوظيفة بالمركز</th>
+                    <th style="width: 25%;">التخصصات المؤطرة</th>
+                    <th style="width: 25%;">مقاييس التأطير</th>
+                    <th style="width: 5%;">أيام</th>
+                    <th style="width: 5%;">ساعات</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.printShiftHistory = function(docId) {
+    let framer = framersData.find(f => f.docId === docId);
+    let shifts = framer.shifts || [];
+    shifts.sort((a,b) => new Date(a.date) - new Date(b.date)); 
+
+    let totalDays = 0, totalHours = 0;
+    let rowsHtml = '';
+    
+    shifts.forEach((sh, idx) => {
+        if(sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+        if(sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        
+        rowsHtml += `
+            <tr>
+                <td style="text-align:center;">${idx + 1}</td>
+                <td dir="ltr" style="text-align:center; font-family:monospace; font-weight:bold; font-size:15px;">${sh.date}</td>
+                <td style="text-align:center;">${sh.type}</td>
+                <td style="text-align:center; font-weight:bold; font-size:16px;">${sh.amount}</td>
+            </tr>
+        `;
+    });
+
+    if(shifts.length === 0) rowsHtml = `<tr><td colspan="4" style="text-align:center; padding:15px;">لا يوجد سجل دوام.</td></tr>`;
+
+    let printWindow = window.open('', '', 'width=800,height=900');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>سجل الدوام - ${framer.baseInfo.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 30px; }
+            .title { text-align: center; font-size: 22px; font-weight: 900; text-decoration: underline; margin-bottom: 30px; }
+            .info-box { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-bottom: 30px; background: #fafafa; }
+            .info-table { width: 100%; border-collapse: collapse; }
+            .info-table td { padding: 5px; font-size: 15px; }
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            table.data-table th, table.data-table td { border: 1px solid #000; padding: 8px; font-size: 15px; }
+            table.data-table th { background: #f0f0f0; text-align: center; font-weight: 700; }
+            .totals-box { display: flex; justify-content: space-around; border: 2px solid #000; padding: 10px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #eee; }
+            .signature { display: flex; justify-content: space-between; padding: 0 50px; font-weight: 700; font-size: 16px; margin-top: 50px; }
+            @media print { th, .totals-box { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } .info-box{background: transparent;} }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align:left;">مركز التكوين:<br><strong>${INSPECTOR_CENTER}</strong></div>
+        </div>
+        
+        <div class="title">البطاقة الفردية لسجل الدوام</div>
+        
+        <div class="info-box">
+            <table class="info-table">
+                <tr><td width="20%"><strong>الاسم واللقب:</strong></td><td width="30%"><strong>${framer.baseInfo.name || '-'}</strong></td>
+                    <td width="20%"><strong>الوظيفة بالمركز:</strong></td><td width="30%"><strong>${framer.role}</strong></td></tr>
+                <tr><td><strong>رقم الهاتف:</strong></td><td dir="ltr" style="text-align:right;">${framer.phone || '-'}</td>
+                    <td><strong>مكان العمل:</strong></td><td>${framer.baseInfo.place || framer.baseInfo.workplace || '-'}</td></tr>
+            </table>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr><th style="width: 10%;">الرقم</th><th style="width: 40%;">تاريخ العمل</th><th style="width: 25%;">طبيعة الدوام</th><th style="width: 25%;">العدد المنجز</th></tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        
+        <div class="totals-box">
+            <div>المجموع الكلي للأيام: ${totalDays} يوم</div>
+            <div>المجموع الكلي للساعات: ${totalHours} ساعة</div>
+        </div>
+
+        <div class="signature">
+            <div>إمضاء المعني بالأمر</div>
+            <div>ختم وإمضاء رئيس المركز</div>
+        </div>
+        
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.exportShiftsTabExcel = function() {
+    if (currentShiftData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات دوام لتحميلها.', 'info');
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value;
+    let tabName = "وثيقة_المداومة_";
+    if(sessionVal === 's1') tabName += "الدورة_الأولى";
+    if(sessionVal === 's2') tabName += "الدورة_الثانية";
+    if(sessionVal === 's3') tabName += "الدورة_الثالثة";
+
+    let rowsHtml = '';
+    currentShiftData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let totalDays = 0, totalHours = 0;
+        (f.shifts || []).forEach(sh => {
+            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        });
+        
+        let specs = '-';
+        let mods = '-';
+        
+        if (f.role === 'أستاذ مؤطر') {
+            let specsList = f.framingSpecs || [];
+            let groupsList = f.framingGroups || [];
+            
+            if (specsList.length > 0) {
+                let groupsBySpec = {};
+                groupsList.forEach(g => {
+                    let parts = g.split('::');
+                    if (parts.length === 2) {
+                        if (!groupsBySpec[parts[0]]) groupsBySpec[parts[0]] = [];
+                        groupsBySpec[parts[0]].push(parts[1]);
+                    }
+                });
+
+                specs = specsList.map(s => {
+                    let text = s;
+                    if (groupsBySpec[s] && groupsBySpec[s].length > 0) {
+                        text += ` (${groupsBySpec[s].join('، ')})`;
+                    }
+                    return text;
+                }).join(' / ');
+            }
+            
+            mods = (f.framingModules || []).length > 0 ? (f.framingModules).join(' / ') : '-';
+        }
+
+        rowsHtml += `
+            <tr>
+                <td style="border: 1px solid #000;">${idx + 1}</td>
+                <td style="border: 1px solid #000;">${b.name || '-'}</td>
+                <td style="border: 1px solid #000;">${b.grade || b.rank || '-'}</td>
+                <td style="border: 1px solid #000;">${b.place || b.workplace || '-'}</td>
+                <td style="border: 1px solid #000;">${f.role || '-'}</td>
+                <td style="border: 1px solid #000;">${specs}</td>
+                <td style="border: 1px solid #000;">${mods}</td>
+                <td style="border: 1px solid #000;">${totalDays}</td>
+                <td style="border: 1px solid #000;">${totalHours}</td>
+            </tr>
+        `;
+    });
+
+    const excelTemplate = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                table { border-collapse: collapse; font-family: 'Arial', sans-serif; direction: rtl; }
+                th, td { border: 1px solid #000000; padding: 8px; text-align: center; vertical-align: middle; }
+                th { background-color: #d35400; color: #ffffff; font-weight: bold; font-size: 14px; }
+            </style>
+        </head>
+        <body dir="rtl">
+            <table>
+                <thead>
+                    <tr><th colspan="9" style="font-size: 18px; background-color: #f1f5f9; color: #102a43; padding: 15px;">${tabName.replace(/_/g, ' ')}</th></tr>
+                    <tr>
+                        <th>الرقم</th>
+                        <th>الاسم واللقب</th>
+                        <th>الرتبة</th>
+                        <th>مكان العمل</th>
+                        <th>الوظيفة بالمركز</th>
+                        <th>التخصصات المؤطرة</th>
+                        <th>المقاييس</th>
+                        <th>الأيام المنجزة</th>
+                        <th>الساعات المنجزة</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + excelTemplate], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `${tabName}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ================= نظام حضور المؤطرين =================
+let currentFramerAttDate = "";
+let framerAttRecords = {};
+let framerAttListener = null;
+
+function openFramerAttendance() {
+    if (framersData.length === 0) { Swal.fire('تنبيه', 'لا يوجد مؤطرون مسجلون في المركز.', 'warning'); return; }
+    document.getElementById('framerAttendanceModal').style.display = 'flex';
+    
+    const dateInput = document.getElementById('framerAttDate');
+    if (!dateInput.value) { dateInput.value = getTodayDate(); }
+    
+    loadFramerAttendanceData();
+}
+
+function closeFramerAttendance() {
+    document.getElementById('framerAttendanceModal').style.display = 'none';
+    if (framerAttListener) framerAttListener();
+}
+
+function changeFramerSystemMode(mode) {
+    const btnOpen = document.getElementById('btnSysOpen');
+    const btnClosed = document.getElementById('btnSysClosed');
+
+    btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+    btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+
+    if (mode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+    else if (mode === 'closed') { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    db.collection('framers_attendance_daily').doc(docId).set({ systemMode: mode }, { merge: true });
+}
+
+async function loadFramerAttendanceData() {
+    currentFramerAttDate = document.getElementById('framerAttDate').value;
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    
+    if (framerAttListener) framerAttListener();
+
+    framerAttListener = db.collection('framers_attendance_daily').doc(docId).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            framerAttRecords = data.records || {};
+            
+            let currentMode = data.systemMode || "closed";
+            const btnOpen = document.getElementById('btnSysOpen');
+            const btnClosed = document.getElementById('btnSysClosed');
+            btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+            btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+            if (currentMode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+            else { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+
+        } else {
+            framerAttRecords = {};
+            changeFramerSystemMode('closed');
+        }
+        renderFramerAttendanceTable();
+    });
+}
+
+function renderFramerAttendanceTable() {
+    const tbody = document.getElementById('framerAttTableBody');
+    tbody.innerHTML = '';
+
+    let total = 0, present = 0, absent = 0;
+
+    framersData.forEach((f, index) => {
+        let b = f.baseInfo || {};
+        let record = framerAttRecords[f.empId] || { status: 'غير محدد', time: '' };
+        
+        total++;
+        if (record.status === 'حاضر') present++;
+        else if (record.status === 'غائب') absent++;
+
+        const tr = document.createElement('tr');
+        let rowClass = 'row-unspecified';
+        let selectClass = 'sel-unspecified';
+        
+        if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
+        else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
+
+        const photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+        const photoHtml = `<div class="profile-pic-container" style="width:30px; height:30px; margin:0 auto;">
+            ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+        </div>`;
+
+        tr.className = rowClass;
+        tr.innerHTML = `
+            <td style="text-align:center;">${index + 1}</td>
+            <td style="text-align:center;">${photoHtml} <strong>${f.empId}</strong></td>
+            <td><b>${b.name || '-'}</b></td>
+            <td>${b.grade || b.rank || '-'}</td>
+            <td style="text-align:center;"><span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">${f.role}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+                <span class="att-time">${record.time || '--:--'}</span>
+                <select class="att-select ${selectClass}" onchange="changeFramerRecordStatus('${f.empId}', this.value)">
+                    <option value="غير محدد" ${record.status === 'غير محدد' ? 'selected' : ''}>غير محدد</option>
+                    <option value="غائب" ${record.status === 'غائب' ? 'selected' : ''}>غائب</option>
+                    <option value="حاضر" ${record.status === 'حاضر' ? 'selected' : ''}>حاضر</option>
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('f-st-total').innerText = total;
+    document.getElementById('f-st-present').innerText = present;
+    document.getElementById('f-st-absent').innerText = absent;
+}
+
+async function changeFramerRecordStatus(empId, newStatus) {
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    let timeString = '';
+    if (newStatus !== 'غير محدد') {
+        const d = new Date();
+        timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    }
+    await db.collection('framers_attendance_daily').doc(docId).set({ records: { [empId]: { status: newStatus, time: timeString } } }, { merge: true });
+}
+
+function markAllFramersPresent() {
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    const d = new Date();
+    const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    let newRecords = {};
+    framersData.forEach(f => {
+        let record = framerAttRecords[f.empId];
+        if (!record || !record.time || record.time.trim() === '') {
+            newRecords[f.empId] = { status: 'حاضر', time: timeString };
+        }
+    });
+    db.collection('framers_attendance_daily').doc(docId).set({ records: newRecords }, { merge: true });
+}
+
+function markAllFramersAbsent() {
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    const d = new Date();
+    const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    let newRecords = {};
+    framersData.forEach(f => {
+        let record = framerAttRecords[f.empId];
+        if (!record || !record.time || record.time.trim() === '') {
+            newRecords[f.empId] = { status: 'غائب', time: timeString };
+        }
+    });
+    db.collection('framers_attendance_daily').doc(docId).set({ records: newRecords }, { merge: true });
+}
+
+// دالة الطباعة الخاصة بالحاضرين فقط وبشكل أفقي
+function printPresentFramers() {
+    let presentFramers = framersData.filter(f => {
+        let record = framerAttRecords[f.empId];
+        return record && record.status === 'حاضر';
+    });
+
+    if (presentFramers.length === 0) {
+        Swal.fire('تنبيه', 'لا يوجد أي مؤطر مسجل كـ "حاضر" لطباعته.', 'warning');
+        return;
+    }
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    presentFramers.forEach((f, idx) => {
+        let b = f.baseInfo || {};
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap"><b>${b.name || '-'}</b></td>
+                <td class="nowrap">${b.grade || b.rank || '-'}</td>
+                <td>${b.place || b.workplace || '-'}</td>
+                <td dir="ltr" class="center-text nowrap">${f.phone || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
+                <td></td> <!-- مساحة الإمضاء -->
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>قائمة حضور المؤطرين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; } /* صفحة أفقية */
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; text-align: right; font-size: 14px; }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 15px; }
+            td.center-text { text-align: center; }
+            td.nowrap { white-space: nowrap; } 
+            @media print { body { padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align: left;">مركز التكوين:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+
+        <div class="main-title">القائمة الاسمية للمؤطرين الحاضرين (${currentFramerAttDate})</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 20%;">الاسم واللقب</th>
+                    <th style="width: 15%;">الرتبة</th>
+                    <th style="width: 20%;">مكان العمل</th>
+                    <th style="width: 15%;">رقم الهاتف</th>
+                    <th style="width: 15%;">الوظيفة بالمركز</th>
+                    <th style="width: 10%;">الإمضاء</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        
+        <div style="text-align: left; padding-left: 60px; font-weight: 700; font-size: 16px; margin-top: 40px;">رئيس المركز</div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+</script>
+</body>
+</html>

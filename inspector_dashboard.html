@@ -47,9 +47,38 @@
     .multi-select-box { padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; background: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 42px; }
     .multi-select-box:hover { border-color: #102a43; }
     .multi-select-options { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #102a43; border-radius: 8px; z-index: 100; max-height: 250px; overflow-y: auto; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-top: 5px; padding: 5px; }
-    .multi-select-options label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; font-weight: 600; font-size: 14px; margin: 0; border-radius: 5px; }
-    .multi-select-options label:hover { background: #f0f4f8; }
-    .multi-select-options input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #102a43; }
+    
+
+    /* استخدام نظام Grid لضمان التصاق المربع بالنص */
+    .multi-select-options label { 
+        display: grid !important; 
+        grid-template-columns: auto 1fr !important; /* المربع يأخذ حجمه فقط، والنص يأخذ الباقي */
+        align-items: center !important; 
+        gap: 10px !important; 
+        padding: 8px 12px !important; 
+        cursor: pointer; 
+        font-weight: 600; 
+        font-size: 14px; 
+        margin: 0; 
+        border-radius: 5px; 
+        text-align: right !important;
+        width: 100%;
+        box-sizing: border-box;
+        transition: background 0.2s;
+    }
+    
+    .multi-select-options label:hover { 
+        background: #f0f4f8 !important; 
+    }
+
+    .multi-select-options input[type="checkbox"] { 
+        width: 16px !important; 
+        height: 16px !important; 
+        margin: 0 !important; 
+        cursor: pointer; 
+        accent-color: #102a43; 
+    }    
+
     .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
     table { width: 100%; border-collapse: collapse; min-width: 1000px; }
     thead { background: #102a43; color: white; }
@@ -143,6 +172,43 @@
 .perm-badge { background: #1E68E8; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; }
 .perm-badge.danger { background: #d90429; }
 
+
+/* ================= تنسيقات الصورة الشخصية والبطاقة ================= */
+    .profile-pic-container {
+        width: 45px; 
+        height: 45px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid #cbd5e1;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        background-color: #f1f5f9;
+        display: flex; 
+        justify-content: center; 
+        align-items: center;
+        margin: 0 auto 5px auto; /* مسافة 5px للأسفل لفصلها عن الرقم */
+        transition: transform 0.3s ease;
+    }
+    .profile-pic-container:hover {
+        transform: scale(1.15);
+        border-color: #0ea5e9;
+    }
+    .profile-pic-img {
+        width: 100%; 
+        height: 100%;
+        object-fit: cover;
+    }
+    .profile-pic-placeholder {
+        font-size: 20px; 
+        color: #94a3b8;
+    }
+    .swal-modal-custom { 
+        border-radius: 24px !important; 
+        padding: 0 !important; 
+        overflow: hidden; 
+        background: #f8fafc !important; 
+    }
+
+
  </style>
 </head>
 <body>
@@ -162,6 +228,12 @@
       <!-- زر إدارة الملفات الخاص بالمفتش -->
       <button class="logout-btn" style="background: #1E68E8;" onclick="openFileManagerSelection()">
         <i class="fa-solid fa-folder-open"></i> إدارة ملفات المقاييس
+      </button>
+
+
+     <!-- زر مؤطرو المركز الجديد -->
+      <button class="logout-btn" style="background: #e67e22;" onclick="window.location.href='framers_management.html'">
+        <i class="fa-solid fa-user-tie"></i> تسيير التأطير
       </button>
 
       <button class="logout-btn" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
@@ -231,6 +303,8 @@
              <button class="btn-print" style="background: #e67e22;" onclick="openPermissionModal()">
                <i class="fa-solid fa-file-signature"></i> نظام الرخص والاستفسارات
              </button>
+
+             
              
              <span style="background: #e2e8f0; color: #334e68; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; border: 1px solid #cbd5e1;">
                نتيجة الفلترة: <span id="stat-filtered" style="color:#d90429;">0</span>
@@ -339,31 +413,14 @@
         </div>
       </div>
 
-    <div class="att-filters" style="flex-wrap: wrap;">
-        <input type="text" id="attSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="filterAttendanceTable()">
-        
-        <select id="attGroupFilter" onchange="filterAttendanceTable()">
-          <option value="الكل">كل الأفواج</option>
-          <!-- سيتم إضافة الأفواج برمجياً -->
-        </select>
-        
-        <select id="attStatusFilter" onchange="filterAttendanceTable()">
-          <option value="الكل">عرض كل الحالات</option>
-          <option value="غير محدد">غير محدد (لم يُسجل)</option> <!-- الخيار الجديد -->
-          <option value="غائب">غائب</option>
-          <option value="حاضر">حاضر</option>
-          <option value="متأخر">متأخر</option>
-        </select>
-
-        <!-- أزرار الإدراج الشامل الجديدة -->
+  <!-- 1. شريط الأزرار (في الأعلى) -->
+      <div style="background: #fff; padding: 15px 15px 5px 15px; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px dashed #eee;">
         <button class="btn-print" style="background: #1E68E8;" onclick="markAllPresent()">
-          <i class="fa-solid fa-user-check"></i> إدراج الحضور
+          <i class="fa-solid fa-user-check"></i> إدراج الحضور الشامل
         </button>
         <button class="btn-print" style="background: #d90429;" onclick="markAllAbsent()">
-          <i class="fa-solid fa-user-xmark"></i> إدراج الغياب
+          <i class="fa-solid fa-user-xmark"></i> إدراج الغياب الشامل
         </button>
-
-        <!-- أزرار الطباعة والماسح -->
         <button class="btn-print" style="background: #17a2b8;" onclick="printAttendanceList()">
           <i class="fa-solid fa-print"></i> طباعة القائمة
         </button>
@@ -372,18 +429,58 @@
         </button>
       </div>
 
+      <!-- 2. حقول الفلترة (متعددة الاختيارات أسفل الأزرار) -->
+      <div class="att-filters" style="flex-wrap: wrap; padding-top: 10px; align-items: center; gap: 10px;">
+        <div style="flex: 1; min-width: 150px;">
+            <input type="text" id="attSearch" placeholder="بحث بالاسم أو الرقم..." oninput="filterAttendanceTable()" style="width: 100%; margin: 0; padding: 10px;">
+        </div>
+        
+        <div class="filter-group" id="multiAttRankContainer" style="margin:0; flex: 1; min-width: 140px;">
+            <div class="multi-select-box" onclick="toggleAttRankMenu()">
+               <span id="att-rank-selected-text">كل الرتب</span>
+               <i class="fa-solid fa-chevron-down" style="color:#102a43;"></i>
+            </div>
+            <div class="multi-select-options" id="attRankOptions"></div>
+        </div>
+        
+        <div class="filter-group" id="multiAttSpecContainer" style="margin:0; flex: 1; min-width: 140px;">
+            <div class="multi-select-box" onclick="toggleAttSpecMenu()">
+               <span id="att-spec-selected-text">كل التخصصات</span>
+               <i class="fa-solid fa-chevron-down" style="color:#102a43;"></i>
+            </div>
+            <div class="multi-select-options" id="attSpecOptions"></div>
+        </div>
+
+        <div class="filter-group" id="multiAttGroupContainer" style="margin:0; flex: 1; min-width: 140px;">
+            <div class="multi-select-box" onclick="toggleAttGroupMenu()">
+               <span id="att-group-selected-text">كل الأفواج</span>
+               <i class="fa-solid fa-chevron-down" style="color:#102a43;"></i>
+            </div>
+            <div class="multi-select-options" id="attGroupOptions"></div>
+        </div>
+        
+        <div class="filter-group" id="multiAttStatusContainer" style="margin:0; flex: 1; min-width: 140px;">
+            <div class="multi-select-box" onclick="toggleAttStatusMenu()">
+               <span id="att-status-selected-text">كل الحالات</span>
+               <i class="fa-solid fa-chevron-down" style="color:#102a43;"></i>
+            </div>
+            <div class="multi-select-options" id="attStatusOptions"></div>
+        </div>
+      </div>
+
       <div class="att-table-container">
         <table id="attTable" class="att-table">
           <thead>
             <tr>
-              <th style="width: 50px;">#</th>
+              <th style="width: 40px;">#</th>
               <th>الرقم الوظيفي</th>
               <th>الاسم واللقب</th>
+              <th style="width: 100px;">رقم الهاتف</th> <!-- العمود الجديد -->
               <th>الرتبة</th>
               <th>مادة التخصص</th>
-              <th>الفوج</th> <!-- تمت إضافة الفوج هنا -->
+              <th>الفوج</th> 
               <th>مكان العمل</th>
-              <th style="width: 200px; text-align: center;">الوضعية والتوقيت</th>
+              <th style="width: 180px; text-align: center;">الوضعية والتوقيت</th>
             </tr>
           </thead>
           <tbody id="attTableBody">
@@ -537,6 +634,18 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// ================= إعدادات الصور والمطابقة =================
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
+let employeePhotosMap = {}; 
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let str = String(val).trim().toUpperCase();
+    let digitsOnly = str.replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); // إزالة الأصفار من اليسار للمطابقة
+    return core === "" ? digitsOnly : core;
+}
+
 // ================= استدعاء المركز بناءً على جلسة الدخول =================
 let INSPECTOR_CENTER = "";
 
@@ -546,7 +655,7 @@ window.onload = function() {
     const adminName = sessionStorage.getItem("userName");
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
-        window.location.href = "index_2.html";
+        window.location.href = "index.html";
         return;
     }
 
@@ -563,7 +672,7 @@ const rowsPerPage = 10;
 
 function logout() {
     sessionStorage.clear();
-    window.location.href = "index_2.html";
+    window.location.href = "index.html";
 }
 
 // ================= دالة فتح نافذة اختيار إدارة الملفات =================
@@ -614,7 +723,32 @@ function updateSpecText() {
 }
 
 // ================= جلب البيانات الخاصة بالمركز =================
+// ================= جلب البيانات والصور الخاصة بالمركز =================
+// ================= جلب البيانات والصور (بدون تجميد الشاشة) =================
 async function fetchData() {
+    document.getElementById("loader").style.display = "flex";
+
+    // 1. جلب الصور في الخلفية (بدون استخدام await لكي لا نوقف الشاشة)
+    fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
+        const responseText = await photoRes.text();
+        if (responseText && responseText.includes("[")) {
+            const photoData = JSON.parse(responseText);
+            employeePhotosMap = {};
+            photoData.forEach(item => {
+                if(item.jobId && item.photoUrl) {
+                    const coreJobId = extractCoreId(item.jobId);
+                    let directUrl = item.photoUrl;
+                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
+                    employeePhotosMap[coreJobId] = directUrl;
+                }
+            });
+            // إعادة رسم الجداول بصمت لتظهر الصور بعد تحميلها
+            if(filteredData.length > 0) renderTable();
+        }
+    }).catch(e => console.warn("تعذر جلب الصور:", e));
+
+    // 2. جلب بيانات الأساتذة فوراً من Firebase (الآن سيعمل هذا الجزء فوراً)
     try {
         const snapshot = await db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).get();
         centerData = [];
@@ -647,7 +781,7 @@ async function fetchData() {
             if(val.trim() !== "") { rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); }
         });
 
-        document.getElementById("loader").style.display = "none";
+        document.getElementById("loader").style.display = "none"; // إخفاء شاشة التحميل فوراً!
         updateDynamicSpecs(); 
 
     } catch (error) {
@@ -707,15 +841,32 @@ function renderTable() {
 
     paginatedData.forEach((item, index) => {
         const tr = document.createElement("tr");
+        
+        // 🌟 تجهيز الصورة بناءً على المطابقة 🌟
+        const coreEmpId = extractCoreId(item.empId);
+        const photoUrl = employeePhotosMap[coreEmpId];
+        
+        const photoHtml = `
+          <div class="profile-pic-container" style="cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
+              ${photoUrl 
+                  ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة الموظف" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' title=\\'تعذر تحميل الصورة\\'></i>'">` 
+                  : `<i class="fa-solid fa-user profile-pic-placeholder" title="الصورة غير متوفرة"></i>`}
+          </div>
+        `;
+
         const rankPlaceHtml = `
             <div style="line-height: 1.4;">
                 <strong>${item.rank || '-'}</strong><br>
                 <span style="font-size: 12px; color: #555;">${item.workplace || '-'}</span>
             </div>
         `;
+        
         tr.innerHTML = `
             <td style="text-align:center;">${start + index + 1}</td>
-            <td><strong>${item.empId || '-'}</strong></td>
+            <td style="text-align:center;">
+                ${photoHtml} <!-- عرض الصورة فوق الرقم -->
+                <strong>${item.empId || '-'}</strong>
+            </td>
             <td>${item.name || '-'}</td>
             <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
             <td style="font-weight:600; color:#1E68E8;">${item.daira || '-'}</td>
@@ -725,7 +876,7 @@ function renderTable() {
             <td style="font-weight:600; color:#555;">${item.specialty || '-'}</td>
             <td style="text-align:center;">
                 <div class="action-btns" style="justify-content: center;">
-                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="معلومات المتكون"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="البطاقة المهنية"><i class="fa-solid fa-address-card"></i></button>
                     <button class="btn-icon btn-edit" onclick="editRecord('${item.docId}')" title="تعديل"><i class="fa-solid fa-pen"></i></button>
                 </div>
             </td>
@@ -736,30 +887,76 @@ function renderTable() {
     renderPagination(totalPages);
 }
 
-function viewInfo(docId) {
-    const item = centerData.find(d => d.docId === docId);
-    if(!item) return;
-    Swal.fire({
-        title: 'بطاقة معلومات الأستاذ',
-        html: `
-            <div style="text-align:right; line-height:2.2; font-size:15px; padding: 10px;">
-                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee;">
-                    <b>الرقم الوظيفي:</b> ${item.empId || '-'} <br>
-                    <b>الاسم واللقب:</b> ${item.name || '-'} <br>
-                    <b>الجنس:</b> ${item.gender || '-'} <br>
-                    <b>تاريخ الميلاد:</b> <span dir="ltr">${item.dob || '-'}</span> <br>
-                    <b>مكان الميلاد:</b> ${item.pob || '-'} <br>
-                    <b>الدائرة:</b> ${item.daira || '-'} <br>
-                    <b>العنوان:</b> ${item.address || '-'} <br>
-                    <b>رقم الهاتف:</b> <span dir="ltr">${item.phone || '-'}</span> <br>
-                    <hr style="border:0; border-top:1px dashed #ccc; margin: 10px 0;">
-                    <b>الرتبة:</b> ${item.rank || '-'} <br>
-                    <b>مكان العمل:</b> ${item.workplace || '-'} <br>
-                    <b>الفوج:</b> ${item.group || '-'} <br>
-                    <b>مادة التخصص:</b> ${item.specialty || '-'} <br>
+// ================= دالة عرض البطاقة المهنية =================
+window.viewInfo = function(docId) {
+    const data = centerData.find(d => d.docId === docId);
+    if (!data) return;
+
+    // جلب الصورة واستخراج رابط عالي الدقة (w800 للوضوح العالي)
+    const coreEmpId = extractCoreId(data.empId);
+    let photoUrl = employeePhotosMap[coreEmpId];
+    
+    if (photoUrl && photoUrl.includes('sz=w200')) {
+        photoUrl = photoUrl.replace('sz=w200', 'sz=w800');
+    }
+
+    const imgHtml = photoUrl
+        ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\' style=\\'font-size:70px; color:#94a3b8;\\'></i>'">`
+        : `<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>`;
+
+    const html = `
+    <div style="display: flex; flex-wrap: wrap; gap: 30px; align-items: center; text-align: right; font-family: 'Cairo', sans-serif; padding: 20px; background: #ffffff; border-radius: 20px;">
+        
+        <div style="flex-shrink: 0; position: relative; margin: 0 auto;">
+            <div style="width: 180px; height: 180px; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.25);">
+                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 4px solid #fff;">
+                    ${imgHtml}
                 </div>
             </div>
-        `, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+        </div>
+
+        <div style="flex-grow: 1; min-width: 250px;">
+            <h2 style="margin: 0 0 5px 0; font-size: 26px; font-weight: 900; color: #0f172a;">${data.name || '---'}</h2>
+            <h4 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 800; color: #0ea5e9;"><i class="fa-solid fa-briefcase" style="margin-left: 5px;"></i> ${data.rank || '---'}</h4>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.empId || '---'}</span>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الفوج الحالي</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.group || 'غير محدد'}</span>
+                </div>
+
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مؤسسة العمل (المكان)</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${data.workplace || '---'}</span>
+                </div>
+                
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${data.phone || '---'}</span>
+                </div>
+
+                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مادة التخصص</span>
+                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-book" style="color:#94a3b8; margin-left:5px;"></i> ${data.specialty || '---'}</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    `;
+
+    Swal.fire({
+        html: html,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: '700px',
+        background: 'transparent',
+        customClass: { popup: 'swal-modal-custom' }
     });
 }
 
@@ -1067,6 +1264,7 @@ function printFilteredList3() {
 
 
 // ================= دالة طباعة البطاقات المحدثة (حل مشكلة الاختفاء والالتصاق) =================
+// ================= دالة طباعة البطاقات المحدثة (مع عرض الصور الشخصية) =================
 function printIDCards() {
     if (filteredData.length === 0) { 
         Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعة بطاقاتها. تأكد من نتائج الفلترة.', 'warning'); 
@@ -1082,9 +1280,23 @@ function printIDCards() {
         pagesHtml += '<div class="page">';
         
         pageData.forEach(item => {
-            // حماية إضافية: إذا كان الرقم الوظيفي فارغاً نضع أصفاراً حتى لا تتعطل المكتبة
+            // حماية إضافية للرقم الوظيفي
             let empId = (item.empId && item.empId.trim() !== '') ? item.empId : '000000';
             
+            // 🌟 1. جلب الصورة الخاصة بالمتكون للمطابقة 🌟
+            const coreEmpId = extractCoreId(empId);
+            let photoUrl = employeePhotosMap[coreEmpId];
+            
+            // تحسين جودة الصورة للطباعة (w400)
+            if (photoUrl && photoUrl.includes('sz=w200')) {
+                photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
+            }
+
+            // 🌟 2. تجهيز كود الصورة أو إبقاء المربع الفارغ 🌟
+            const photoContent = photoUrl 
+                ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.outerHTML='صورة<br>الموظف'"/>`
+                : `صورة<br>الموظف`;
+
             pagesHtml += `
                 <div class="card">
                     <div class="card-header">
@@ -1101,7 +1313,7 @@ function printIDCards() {
                         <div class="info-section">
                             <div class="info-row"><b>الاسم واللقب:</b> <span>${item.name || '-'}</span></div>
                             <div class="info-row"><b>الرتبة:</b> <span>${item.rank || '-'}</span></div>
-                            <div class="info-row"><b>مكان العمل:</b> <span>${item.workplace || '-'}</span></div>
+                           <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b>مكان العمل:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${item.workplace || '-'}</span></div></div>
                             <div class="info-row"><b>مادة التخصص:</b> <span>${item.specialty || '-'}</span></div>
                             <div class="info-row"><b>الفوج:</b> <span>${item.group || '-'}</span></div>
                             <div class="barcode-wrapper">
@@ -1110,7 +1322,10 @@ function printIDCards() {
                         </div>
                         
                         <div class="photo-section">
-                            <div class="photo-box">صورة<br>الموظف</div>
+                            <!-- 🌟 3. إدراج الصورة هنا وتعديل الحواف لعدم خروج الصورة 🌟 -->
+                            <div class="photo-box" style="overflow: hidden; padding: 0;">
+                                ${photoContent}
+                            </div>
                             <div class="signature">رئيس المركز</div>
                         </div>
                     </div>
@@ -1126,6 +1341,7 @@ function printIDCards() {
     <head>
         <meta charset="UTF-8">
         <title>طباعة بطاقات المتكونين</title>
+
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
         <!-- استدعاء مكتبة الباركود -->
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
@@ -1260,6 +1476,18 @@ function printIDCards() {
                     textMargin: 2,
                     margin: 0,           
                     font: "Cairo"
+                });
+
+             // كود التصغير التلقائي لنص مكان العمل فقط (مع الحفاظ على المستوى العمودي)
+                document.querySelectorAll('.shrink-workplace').forEach(function(el) {
+                    var availableWidth = el.parentElement.clientWidth; // المساحة المتاحة بجانب العنوان
+                    var textWidth = el.scrollWidth; // العرض الحقيقي للنص
+                    
+                    if (textWidth > availableWidth && availableWidth > 0) {
+                        var scale = availableWidth / textWidth;
+                        // نطبق نسبة التصغير مع الاحتفاظ بالتوسيط العمودي
+                        el.style.transform = 'translateY(-50%) scale(' + scale + ')';
+                    }
                 });
                 
                 // فتح نافذة الطباعة بعد التأكد من الرسم
@@ -1411,77 +1639,136 @@ async function saveSystemState(mode) {
     await db.collection('attendance_daily').doc(docId).set({ systemMode: mode }, { merge: true });
 }
 
-// تعبئة قائمة الأفواج في نافذة الحضور
-function populateAttGroups() {
-    const groupSelect = document.getElementById('attGroupFilter');
-    let groups = new Set();
-    centerData.forEach(item => { if (item.group && item.group !== '-') groups.add(item.group); });
-    groupSelect.innerHTML = '<option value="الكل">كل الأفواج</option>';
-    groups.forEach(g => { groupSelect.innerHTML += `<option value="${g}">${g}</option>`; });
+// تعبئة البيانات في القوائم المتعددة
+function populateAttFilters() {
+    const groupOptions = document.getElementById('attGroupOptions');
+    const rankOptions = document.getElementById('attRankOptions');
+    const specOptions = document.getElementById('attSpecOptions');
+    
+    let groups = new Set(), ranks = new Set(), specs = new Set();
+    
+    centerData.forEach(item => { 
+        if (item.group && item.group !== '-') groups.add(item.group); 
+        if (item.rank && item.rank !== '-') ranks.add(item.rank);
+        if (item.specialty && item.specialty !== '-') specs.add(item.specialty);
+    });
+    
+    if(groupOptions) {
+        groupOptions.innerHTML = `<label><input type="checkbox" id="att-group-all" value="الكل" checked onchange="handleAttGroupAll()"> كل الأفواج</label>`;
+        Array.from(groups).sort().forEach(g => { groupOptions.innerHTML += `<label><input type="checkbox" class="att-group-checkbox" value="${g}" onchange="handleAttGroupChange()"> ${g}</label>`; });
+    }
+
+    if(rankOptions) {
+        rankOptions.innerHTML = `<label><input type="checkbox" id="att-rank-all" value="الكل" checked onchange="handleAttRankAll()"> كل الرتب</label>`;
+        Array.from(ranks).sort().forEach(r => { rankOptions.innerHTML += `<label><input type="checkbox" class="att-rank-checkbox" value="${r}" onchange="handleAttRankChange()"> ${r}</label>`; });
+    }
+
+    if(specOptions) {
+        specOptions.innerHTML = `<label><input type="checkbox" id="att-spec-all" value="الكل" checked onchange="handleAttSpecAll()"> كل التخصصات</label>`;
+        Array.from(specs).sort().forEach(s => { specOptions.innerHTML += `<label><input type="checkbox" class="att-spec-checkbox" value="${s}" onchange="handleAttSpecChange()"> ${s}</label>`; });
+    }
+    
+    const statusOptions = document.getElementById('attStatusOptions');
+    if(statusOptions && statusOptions.innerHTML.trim() === '') {
+         statusOptions.innerHTML = `
+            <label><input type="checkbox" id="att-status-all" value="الكل" checked onchange="handleAttStatusAll()"> كل الحالات</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="غير محدد" onchange="handleAttStatusChange()"> غير محدد</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="غائب" onchange="handleAttStatusChange()"> غائب</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="حاضر" onchange="handleAttStatusChange()"> حاضر</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="متأخر" onchange="handleAttStatusChange()"> متأخر</label>
+         `;
+    }
 }
 
-// بناء جدول الحضور (محدث ليشمل الفوج)
-// ================= بناء جدول الحضور (محدث ليشمل حالة: غير محدد) =================
+// ================= بناء جدول الحضور (محدث ليشمل الفلترة المتعددة والترتيب التلقائي) =================
 function renderAttendanceTable() {
+    // ✅ 1. استدعاء دالة بناء الفلاتر أولاً (قبل محاولة قراءتها لتجنب خطأ البرمجة)
+    if (document.querySelectorAll('.att-group-checkbox').length === 0) {
+        populateAttFilters();
+    }
+
     const search = document.getElementById('attSearch').value.toLowerCase();
-    const filterStatus = document.getElementById('attStatusFilter').value;
-    const filterGroup = document.getElementById('attGroupFilter').value;
+    
+    // ✅ 2. جلب قيم القوائم المتعددة مع شرط (if exists) لتفادي الأخطاء
+    let selRanks = []; if(document.getElementById('att-rank-all') && !document.getElementById('att-rank-all').checked) selRanks = Array.from(document.querySelectorAll('.att-rank-checkbox:checked')).map(cb => cb.value);
+    let selSpecs = []; if(document.getElementById('att-spec-all') && !document.getElementById('att-spec-all').checked) selSpecs = Array.from(document.querySelectorAll('.att-spec-checkbox:checked')).map(cb => cb.value);
+    let selGroups = []; if(document.getElementById('att-group-all') && !document.getElementById('att-group-all').checked) selGroups = Array.from(document.querySelectorAll('.att-group-checkbox:checked')).map(cb => cb.value);
+    let selStatuses = []; if(document.getElementById('att-status-all') && !document.getElementById('att-status-all').checked) selStatuses = Array.from(document.querySelectorAll('.att-status-checkbox:checked')).map(cb => cb.value);
+
     const tbody = document.getElementById('attTableBody');
+    if(!tbody) return;
     tbody.innerHTML = '';
 
     let total = 0, present = 0, absent = 0, late = 0;
+    let itemsToRender = [];
 
-    if (document.getElementById('attGroupFilter').options.length <= 1) populateAttGroups();
-
-    centerData.forEach((item, index) => {
-        // الحالة الافتراضية الآن أصبحت "غير محدد" بدلاً من "غائب"
+     centerData.forEach(item => {
         let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
         
         const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
-        const matchStatus = filterStatus === "الكل" || record.status === filterStatus;
-        const matchGroup = filterGroup === "الكل" || item.group === filterGroup;
+        const matchStatus = selStatuses.length === 0 || selStatuses.includes(record.status);
+        const matchGroup = selGroups.length === 0 || selGroups.includes(item.group);
+        const matchRank = selRanks.length === 0 || selRanks.includes(item.rank);
+        const matchSpec = selSpecs.length === 0 || selSpecs.includes(item.specialty);
 
-        if (matchGroup) {
+        if (matchGroup && matchRank && matchSpec) {
             total++;
-            // حساب الإحصائيات بدقة
             if (record.status === 'حاضر') present++;
             else if (record.status === 'متأخر') late++;
             else if (record.status === 'غائب') absent++;
         }
 
-        if (matchSearch && matchStatus && matchGroup) {
-            const tr = document.createElement('tr');
-            
-            // تحديد ألوان السطر والقائمة المنسدلة
-            let rowClass = 'row-unspecified'; // افتراضياً أبيض لغير المحدد
-            let selectClass = 'sel-unspecified';
-            
-            if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
-            else if (record.status === 'متأخر') { rowClass = 'row-late'; selectClass = 'sel-late'; }
-            else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
-
-            tr.className = rowClass;
-
-            tr.innerHTML = `
-                <td style="text-align:center;">${index + 1}</td>
-                <td><strong>${item.empId}</strong></td>
-                <td><b>${item.name}</b></td>
-                <td>${item.rank || '-'}</td>
-                <td>${item.specialty || '-'}</td>
-                <td><span style="background:#eee; padding:2px 8px; border-radius:10px; font-size:12px;">${item.group || '-'}</span></td>
-                <td>${item.workplace || '-'}</td>
-                <td style="text-align: center; white-space: nowrap;">
-                    <span class="att-time">${record.time || '--:--'}</span>
-                    <select class="att-select ${selectClass}" onchange="changeRecordStatus('${item.empId}', this.value, this)">
-                        <option value="غير محدد" ${record.status === 'غير محدد' ? 'selected' : ''}>غير محدد</option>
-                        <option value="غائب" ${record.status === 'غائب' ? 'selected' : ''}>غائب</option>
-                        <option value="حاضر" ${record.status === 'حاضر' ? 'selected' : ''}>حاضر</option>
-                        <option value="متأخر" ${record.status === 'متأخر' ? 'selected' : ''}>متأخر</option>
-                    </select>
-                </td>
-            `;
-            tbody.appendChild(tr);
+        if (matchSearch && matchStatus && matchGroup && matchRank && matchSpec) {
+            itemsToRender.push({ item: item, record: record });
         }
+    });
+
+    // ✅ الترتيب التلقائي (الأحدث وقتاً يرتفع للأعلى فوراً)
+    itemsToRender.sort((a, b) => {
+        let timeA = a.record.time || "";
+        let timeB = b.record.time || "";
+        
+        if (timeA === "" && timeB === "") return 0;
+        if (timeA === "") return 1; // "غير محدد" ينزل للأسفل
+        if (timeB === "") return -1; // "غير محدد" ينزل للأسفل
+        
+        return timeB.localeCompare(timeA); // ترتيب تنازلي بناءً على الوقت
+    });
+
+    itemsToRender.forEach((obj, index) => {
+        let item = obj.item;
+        let record = obj.record;
+
+        const tr = document.createElement('tr');
+        let rowClass = 'row-unspecified';
+        let selectClass = 'sel-unspecified';
+        
+        if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
+        else if (record.status === 'متأخر') { rowClass = 'row-late'; selectClass = 'sel-late'; }
+        else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
+
+        tr.className = rowClass;
+
+        tr.innerHTML = `
+            <td style="text-align:center;">${index + 1}</td>
+            <td><strong>${item.empId}</strong></td>
+            <td><b>${item.name}</b></td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
+            <td>${item.rank || '-'}</td>
+            <td>${item.specialty || '-'}</td>
+            <td style="white-space: nowrap;"><span style="background:#eee; padding:2px 8px; border-radius:10px; font-size:12px;">${item.group || '-'}</span></td> <!-- منع التفاف الفوج -->
+            <td>${item.workplace || '-'}</td>
+            <td style="text-align: center; white-space: nowrap;">
+                <span class="att-time">${record.time || '--:--'}</span>
+                <select class="att-select ${selectClass}" onchange="changeRecordStatus('${item.empId}', this.value, this)">
+                    <option value="غير محدد" ${record.status === 'غير محدد' ? 'selected' : ''}>غير محدد</option>
+                    <option value="غائب" ${record.status === 'غائب' ? 'selected' : ''}>غائب</option>
+                    <option value="حاضر" ${record.status === 'حاضر' ? 'selected' : ''}>حاضر</option>
+                    <option value="متأخر" ${record.status === 'متأخر' ? 'selected' : ''}>متأخر</option>
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
     });
 
     document.getElementById('st-total').innerText = total;
@@ -1490,27 +1777,34 @@ function renderAttendanceTable() {
     document.getElementById('st-absent').innerText = `${absent} (${((absent/total)*100 || 0).toFixed(1)}%)`;
 }
 
-// ================= دالة طباعة قائمة الحضور اليومية (تنسيق رسمي مع تسطير العنوان) =================
+// ================= دالة طباعة قائمة الحضور اليومية (محدثة للفلاتر المتعددة) =================
 function printAttendanceList() {
-    const selGroup = document.getElementById('attGroupFilter').value;
+    // ✅ إضافة حماية (if exists) لتفادي خطأ null في الطباعة أيضاً
+    let selRanks = []; if(document.getElementById('att-rank-all') && !document.getElementById('att-rank-all').checked) selRanks = Array.from(document.querySelectorAll('.att-rank-checkbox:checked')).map(cb => cb.value);
+    let selSpecs = []; if(document.getElementById('att-spec-all') && !document.getElementById('att-spec-all').checked) selSpecs = Array.from(document.querySelectorAll('.att-spec-checkbox:checked')).map(cb => cb.value);
+    let selGroups = []; if(document.getElementById('att-group-all') && !document.getElementById('att-group-all').checked) selGroups = Array.from(document.querySelectorAll('.att-group-checkbox:checked')).map(cb => cb.value);
+    let selStatuses = []; if(document.getElementById('att-status-all') && !document.getElementById('att-status-all').checked) selStatuses = Array.from(document.querySelectorAll('.att-status-checkbox:checked')).map(cb => cb.value);
+    
     const search = document.getElementById('attSearch').value.toLowerCase();
-    const filterStatus = document.getElementById('attStatusFilter').value;
 
     let hasData = false;
     let phasesSet = new Set();
 
     centerData.forEach(item => {
         let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
-        if ((item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search)) {
-            if (filterStatus === "الكل" || record.status === filterStatus) {
-                if (selGroup === "الكل" || item.group === selGroup) {
-                    hasData = true;
-                    if (item.rank) {
-                        if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
-                        else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
-                        else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
-                    }
-                }
+        
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchStatus = selStatuses.length === 0 || selStatuses.includes(record.status);
+        const matchGroup = selGroups.length === 0 || selGroups.includes(item.group);
+        const matchRank = selRanks.length === 0 || selRanks.includes(item.rank);
+        const matchSpec = selSpecs.length === 0 || selSpecs.includes(item.specialty);
+
+        if (matchSearch && matchStatus && matchGroup && matchRank && matchSpec) {
+            hasData = true;
+            if (item.rank) {
+                if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+                else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+                else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
             }
         }
     });
@@ -1531,35 +1825,31 @@ function printAttendanceList() {
         <title>سجل الحضور اليومي</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
-            @page { size: A4 portrait; margin: 10mm; }
-            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
-            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
-            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
-            /* إضافة خاصية التسطير هنا للعنوان الرئيسي */
-            .main-title { text-align: center; font-size: 20px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
-            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: table; margin: 0 auto 20px auto;}
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #000; padding: 4px 6px; text-align: right; font-size: 11.5px; }
-            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 12.5px;}
-            .nowrap { white-space: nowrap; }
+            @page { size: A4 portrait; margin: 5mm; } 
+            body { font-family: 'Cairo', sans-serif; padding: 5px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 15px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 15px; }
+            .main-title { text-align: center; font-size: 19px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; color: #333; background: #f9f9f9; padding: 8px 15px; border-radius: 5px; border: 1px dashed #ccc; display: table; margin: 0 auto 20px auto;}
+            table { width: 100%; border-collapse: collapse; table-layout: fixed; } 
+            th, td { border: 1px solid #000; padding: 4px 4px; text-align: right; font-size: 11px; word-wrap: break-word; } 
+            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 12px;}
+            .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             td.center-text { text-align: center; }
+            @media print { body { padding: 0; } } 
         </style>
     </head>
     <body>
         <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
-        
         <div class="header-flex">
             <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
             <div style="text-align:left;">مركز التكوين البيداغوجي<br><span style="color: #000; font-size: 14px; font-weight: bold;">${INSPECTOR_CENTER}</span></div>
         </div>
-
         <div class="main-title">
             قائمة الحضور اليومي للمتكونين 
             <span style="color: red; text-decoration: underline; direction: ltr; display: inline-block;">(${currentAttDate})</span>
         </div>
-        
         <div class="sub-titles">الطور: ${phaseText}</div>
-        
         <table>
             <thead>
                 <tr>
@@ -1581,10 +1871,12 @@ function printAttendanceList() {
         let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
         
         const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
-        const matchStatus = filterStatus === "الكل" || record.status === filterStatus;
-        const matchGroup = selGroup === "الكل" || item.group === selGroup;
+        const matchStatus = selStatuses.length === 0 || selStatuses.includes(record.status);
+        const matchGroup = selGroups.length === 0 || selGroups.includes(item.group);
+        const matchRank = selRanks.length === 0 || selRanks.includes(item.rank);
+        const matchSpec = selSpecs.length === 0 || selSpecs.includes(item.specialty);
 
-        if (matchSearch && matchStatus && matchGroup) {
+        if (matchSearch && matchStatus && matchGroup && matchRank && matchSpec) {
             let printStatus = record.status === 'غير محدد' ? '-' : record.status;
             let printTime = record.time ? record.time : '-';
 
@@ -1594,7 +1886,7 @@ function printAttendanceList() {
                 <td class="nowrap">${item.rank || '-'}</td>
                 <td class="nowrap">${item.specialty || '-'}</td>
                 <td class="center-text nowrap">${item.group || '-'}</td>
-                <td class="nowrap">${item.workplace || '-'}</td>
+                <td>${item.workplace || '-'}</td>
                 <td class="center-text nowrap" style="font-weight:bold;">${printStatus}</td>
                 <td class="center-text nowrap" style="direction:ltr;">${printTime}</td>
             </tr>`;
@@ -2833,6 +3125,53 @@ window.deletePermission = function(docId, permId, arrayIndex) {
         }
     });
 };
+
+// ================= دوال التحكم في القوائم المتعددة لجدول الحضور =================
+function toggleAttRankMenu() { const m = document.getElementById("attRankOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+function toggleAttSpecMenu() { const m = document.getElementById("attSpecOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+function toggleAttGroupMenu() { const m = document.getElementById("attGroupOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+function toggleAttStatusMenu() { const m = document.getElementById("attStatusOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+
+// إغلاق القوائم عند النقر خارجها
+document.addEventListener('click', function(e) {
+    if(!e.target.closest('#multiAttRankContainer')) { let m = document.getElementById("attRankOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiAttSpecContainer')) { let m = document.getElementById("attSpecOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiAttGroupContainer')) { let m = document.getElementById("attGroupOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiAttStatusContainer')) { let m = document.getElementById("attStatusOptions"); if(m) m.style.display = "none"; }
+});
+
+function handleAttRankAll() { document.querySelectorAll('.att-rank-checkbox').forEach(cb => cb.checked = false); updateAttRankText(); filterAttendanceTable(); }
+function handleAttRankChange() { const any = Array.from(document.querySelectorAll('.att-rank-checkbox')).some(cb => cb.checked); document.getElementById('att-rank-all').checked = !any; updateAttRankText(); filterAttendanceTable(); }
+function updateAttRankText() {
+    if(document.getElementById('att-rank-all').checked) { document.getElementById('att-rank-selected-text').innerText = "كل الرتب"; return; }
+    const checked = document.querySelectorAll('.att-rank-checkbox:checked');
+    document.getElementById('att-rank-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+function handleAttSpecAll() { document.querySelectorAll('.att-spec-checkbox').forEach(cb => cb.checked = false); updateAttSpecText(); filterAttendanceTable(); }
+function handleAttSpecChange() { const any = Array.from(document.querySelectorAll('.att-spec-checkbox')).some(cb => cb.checked); document.getElementById('att-spec-all').checked = !any; updateAttSpecText(); filterAttendanceTable(); }
+function updateAttSpecText() {
+    if(document.getElementById('att-spec-all').checked) { document.getElementById('att-spec-selected-text').innerText = "كل التخصصات"; return; }
+    const checked = document.querySelectorAll('.att-spec-checkbox:checked');
+    document.getElementById('att-spec-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+function handleAttGroupAll() { document.querySelectorAll('.att-group-checkbox').forEach(cb => cb.checked = false); updateAttGroupText(); filterAttendanceTable(); }
+function handleAttGroupChange() { const any = Array.from(document.querySelectorAll('.att-group-checkbox')).some(cb => cb.checked); document.getElementById('att-group-all').checked = !any; updateAttGroupText(); filterAttendanceTable(); }
+function updateAttGroupText() {
+    if(document.getElementById('att-group-all').checked) { document.getElementById('att-group-selected-text').innerText = "كل الأفواج"; return; }
+    const checked = document.querySelectorAll('.att-group-checkbox:checked');
+    document.getElementById('att-group-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+function handleAttStatusAll() { document.querySelectorAll('.att-status-checkbox').forEach(cb => cb.checked = false); updateAttStatusText(); filterAttendanceTable(); }
+function handleAttStatusChange() { const any = Array.from(document.querySelectorAll('.att-status-checkbox')).some(cb => cb.checked); document.getElementById('att-status-all').checked = !any; updateAttStatusText(); filterAttendanceTable(); }
+function updateAttStatusText() {
+    if(document.getElementById('att-status-all').checked) { document.getElementById('att-status-selected-text').innerText = "كل الحالات"; return; }
+    const checked = document.querySelectorAll('.att-status-checkbox:checked');
+    document.getElementById('att-status-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
 
 
 </script>
