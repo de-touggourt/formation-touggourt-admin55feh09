@@ -1603,36 +1603,36 @@ function getCenterOptionsHtml(selectedCenter) {
 let isFirstLoad = true;
 
 // ================= جلب البيانات والصور (بنظام التحديث اللحظي الصامت) =================
-async function fetchData() {
-    // 1. جلب الصور أولاً (مرة واحدة فقط)
-    try {
-        const photoRes = await fetch(`${PHOTO_SCRIPT_URL}?type=employees`);
-        const responseText = await photoRes.text();
-        if (responseText && responseText.includes("[")) {
-            const photoData = JSON.parse(responseText);
-            employeePhotosMap = {};
-            photoData.forEach(item => {
-                if(item.jobId && item.photoUrl) {
-                    const coreJobId = extractCoreId(item.jobId);
-                    let directUrl = item.photoUrl;
-                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                    if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
-                    employeePhotosMap[coreJobId] = directUrl;
-                }
-            });
-        }
-    } catch (e) {
-        console.warn("تعذر جلب الصور:", e);
-    }
+// ================= جلب البيانات والصور (بسرعة عالية) =================
+function fetchData() {
+    // 1. جلب الصور في الخلفية (بدون إيقاف جلب البيانات الأساسية)
+    fetch(`${PHOTO_SCRIPT_URL}?type=employees`)
+        .then(res => res.text())
+        .then(responseText => {
+            if (responseText && responseText.includes("[")) {
+                const photoData = JSON.parse(responseText);
+                employeePhotosMap = {};
+                photoData.forEach(item => {
+                    if(item.jobId && item.photoUrl) {
+                        const coreJobId = extractCoreId(item.jobId);
+                        let directUrl = item.photoUrl;
+                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                        if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
+                        employeePhotosMap[coreJobId] = directUrl;
+                    }
+                });
+                // إعادة رسم الجدول برفق بعد تحميل الصور إذا كنا في الصفحة الأولى
+                if(!isFirstLoad) applyFilters(true);
+            }
+        })
+        .catch(e => console.warn("تعذر جلب الصور:", e));
 
-    // 2. الاتصال اللحظي بقاعدة البيانات (Real-time Listener)
+    // 2. الاتصال اللحظي بقاعدة البيانات (Real-time Listener) فوراً
     db.collection("employeescomnew").onSnapshot((snapshot) => {
-        // استخدام docChanges لمعالجة ما تغير فقط (سريع جداً وخفيف)
         snapshot.docChanges().forEach((change) => {
             const doc = change.doc;
             const data = doc.data();
             
-            // تهيئة بيانات السطر
             let item = {
                 docId: doc.id,
                 empId: data.id || doc.id,
@@ -1651,7 +1651,6 @@ async function fetchData() {
                 group: data.group || data.fawj || "-" 
             };
 
-            // تهيئة التاريخ
             if (item.dob && typeof item.dob.toDate === 'function') {
                 let d = item.dob.toDate();
                 let day = ("0" + d.getDate()).slice(-2);
@@ -1662,7 +1661,6 @@ async function fetchData() {
                 item.dob = item.dob.replace(/\//g, '-');
             }
 
-            // تحديث المصفوفة المحلية بناءً على نوع التغيير (إضافة، تعديل، حذف)
             if (change.type === "added") {
                 allData.push(item);
             }
@@ -1672,27 +1670,18 @@ async function fetchData() {
             }
             if (change.type === "removed") {
                 allData = allData.filter(d => d.docId !== doc.id);
-                selectedTrainees.delete(doc.id); // مسح التحديد إذا تم حذفه
+                selectedTrainees.delete(doc.id); 
                 selectedGroupsTrainees.delete(doc.id);
             }
         });
 
-        // ================== التصحيح تم هنا ==================
-        // إذا كان هذا هو التحميل الأول للموقع
         if (isFirstLoad) {
             document.getElementById("loader").style.display = "none";
             isFirstLoad = false;
-            
-            // توليد وبناء الرتب والتخصصات تلقائياً بناءً على ما تم جلبه
             updateDynamicRanks(); 
-            
-            // استدعاء دالة الفلترة التي تقوم فعلياً برسم الجدول بالبيانات (كانت مفقودة)
             applyFilters();
         } else {
-            // إذا كان مجرد تحديث صامت (مثلا شخص قام بتعديل أو إضافة)
-            applyFilters(true); // إرسال true يعني "تحديث صامت"
-            
-            // تحديث نافذة الأفواج إذا كانت مفتوحة
+            applyFilters(true); 
             if (document.getElementById('groupingModal') && document.getElementById('groupingModal').style.display === 'flex') {
                 renderGroupingTable(); 
             }
@@ -1780,8 +1769,7 @@ function updateStats() {
 
 function renderTable() {
     const tbody = document.getElementById("tableBody");
-    tbody.innerHTML = "";
-
+    
     if(filteredData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة للبحث</td></tr>`;
         renderPagination(0);
@@ -1795,10 +1783,12 @@ function renderTable() {
     const end = start + rowsPerPage;
     const paginatedData = filteredData.slice(start, end);
 
+    // تجهيز قائمة المراكز مرة واحدة خارج حلقة التكرار لتسريع الأداء
+    const centersList = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES) ? SITE_SETTINGS.UI_NAMES.centers : UI_NAMES.centers;
+    
+    let htmlContent = ""; // تجميع الأسطر هنا
+
     paginatedData.forEach(item => {
-        const tr = document.createElement("tr");
-        
-        // 🌟 تجهيز الصورة بناءً على المطابقة 🌟
         const coreEmpId = extractCoreId(item.empId);
         const photoUrl = employeePhotosMap[coreEmpId];
         
@@ -1819,10 +1809,19 @@ function renderTable() {
 
         const isChecked = selectedTrainees.has(item.docId) ? 'checked' : '';
 
-        tr.innerHTML = `
+        // بناء خيارات المركز بسرعة
+        let centerOptionsHtml = `<option value="">-- اختر المركز --</option>`;
+        for (let key in centersList) {
+            const centerName = centersList[key];
+            const isSelected = (item.center === centerName) ? 'selected' : '';
+            centerOptionsHtml += `<option value="${centerName}" ${isSelected}>${centerName}</option>`;
+        }
+
+        htmlContent += `
+        <tr>
             <td style="vertical-align: middle;"><input type="checkbox" class="row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleSelect(this, '${item.docId}')"></td>
             <td style="text-align:center; vertical-align: middle;">
-                ${photoHtml} <!-- 🌟 عرض الصورة هنا فوق الرقم -->
+                ${photoHtml}
                 <strong>${item.empId || '-'}</strong>
             </td>
             <td style="vertical-align: middle;">${item.name || '-'}</td>
@@ -1831,30 +1830,27 @@ function renderTable() {
             <td style="font-weight:600; color:#1E68E8; vertical-align: middle;">${item.daira || '-'}</td>
             <td style="vertical-align: middle;">${item.address || '-'}</td>
             <td style="direction: ltr; text-align: right; white-space: nowrap; vertical-align: middle;">${item.phone || '-'}</td>
-            
             <td style="vertical-align: middle;">${rankPlaceHtml}</td>
             <td style="font-weight:600; color:#555; vertical-align: middle;">${item.specialty || '-'}</td>
-            
             <td style="vertical-align: middle;">
                 <div style="display:flex; align-items:center; gap: 5px;">
                     <select id="center-select-${item.docId}" class="center-select">
-                        ${getCenterOptionsHtml(item.center)}
+                        ${centerOptionsHtml}
                     </select>
                     <button class="btn-assign-single" onclick="assignSingleCenter('${item.docId}')">إدراج</button>
                 </div>
             </td>
             <td style="vertical-align: middle;">
                 <div class="action-btns">
-                    <!-- تحويل الأيقونة لبطاقة الهوية -->
                     <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="البطاقة المهنية"><i class="fa-solid fa-address-card"></i></button>
                     <button class="btn-icon btn-edit" onclick="editRecord('${item.docId}')" title="تعديل"><i class="fa-solid fa-pen"></i></button>
                     <button class="btn-icon btn-delete" onclick="deleteRecord('${item.docId}')" title="حذف"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
-        `;
-        tbody.appendChild(tr);
+        </tr>`;
     });
 
+    tbody.innerHTML = htmlContent; // تحديث DOM مرة واحدة فقط
     document.getElementById("selectAll").checked = (filteredData.length > 0 && selectedTrainees.size === filteredData.length);
     renderPagination(totalPages);
 }
@@ -3093,7 +3089,6 @@ function renderGroupingTable() {
     document.getElementById('grpFilterCount').innerText = currentFilteredGroupData.length;
 
     const tbody = document.getElementById('grpTableBody');
-    tbody.innerHTML = '';
 
     if (currentFilteredGroupData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; font-weight:bold;">لا توجد بيانات مطابقة للفلتر</td></tr>`;
@@ -3107,6 +3102,8 @@ function renderGroupingTable() {
     const start = (currentGroupPage - 1) * groupsPerPage;
     const end = start + groupsPerPage;
     const paginatedData = currentFilteredGroupData.slice(start, end);
+
+    let htmlContent = ""; // تجميع الأسطر
 
     paginatedData.forEach(item => {
         let genderIcon = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') 
@@ -3125,8 +3122,8 @@ function renderGroupingTable() {
 
         const isChecked = selectedGroupsTrainees.has(item.docId) ? 'checked' : '';
 
-        let tr = document.createElement('tr');
-        tr.innerHTML = `
+        htmlContent += `
+        <tr>
             <td style="text-align:center;"><input type="checkbox" class="grp-row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleGroupSelect(this, '${item.docId}')"></td>
             <td><strong>${item.empId}</strong></td>
             <td><b>${item.name}</b></td>
@@ -3140,14 +3137,13 @@ function renderGroupingTable() {
                     ${optionsHtml}
                 </select>
             </td>
-        `;
-        tbody.appendChild(tr);
+        </tr>`;
     });
 
+    tbody.innerHTML = htmlContent; // تحديث DOM مرة واحدة
     document.getElementById("selectAllGroups").checked = (currentFilteredGroupData.length > 0 && selectedGroupsTrainees.size === currentFilteredGroupData.length);
     renderGroupPagination(totalPages);
 }
-
 
 // === نظام الصفحات (الترقيم) ===
 function renderGroupPagination(totalPages) {
