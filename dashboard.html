@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>فضاء التكوين البيداغوجي - توقرت</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="database.js"></script> 
+
+<style>
+/* 1. تنسيقات الجسم */
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body{
+  font-family:'Cairo',sans-serif;
+  margin:0;
+  background:linear-gradient(135deg,#e8fbf0,#dcf7e6);
+  text-align:center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+/* ===========================
+   شريط الأخبار
+   =========================== */
+.news-ticker-container {
+    background-color: #085d28;
+    color: #fff;
+    width: 100%;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    padding: 10px 15px;
+}
+
+.typewriter-text {
+    font-size: 17px;
+    font-weight: 700;
+    display: inline-block;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: 95%;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.typewriter-text.fade-out {
+    opacity: 0;
+}
+
+/* ===========================
+   تنسيقات الشعار
+   =========================== */
+.logo-container {
+  position: relative;
+  display: inline-block;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 0px; 
+  transition: transform 0.3s ease;
+}
+
+.logo-container img {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  object-fit: cover;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff; 
+  z-index: 2;
+  animation: pulseLogo 2.5s ease-in-out infinite;
+}
+
+.logo-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 3px dashed #fff; 
+  background: transparent;
+  transform: translate(-50%, -50%);
+  animation: rotateRing 10s linear infinite;
+  z-index: 1;
+}
+
+@keyframes rotateRing {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes pulseLogo {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+header{
+  background:#0FBA50;
+  color:#fff;
+  padding:30px 15px;
+  border-bottom-left-radius:25px;
+  border-bottom-right-radius:25px;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
+  width: 100%;
+}
+
+header h1 {
+    margin-top: 5px;
+    margin-bottom: 10px;
+    font-size: 1.8rem;
+    padding: 0 10px;
+    line-height: 1.5;
+}
+
+.services{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+  gap:25px;
+  padding:40px 20px;
+  max-width:1000px;
+  margin:auto;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+}
+
+.service{
+  background:#fff;
+  border-radius:20px;
+  padding:30px 15px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.1);
+  transition:.4s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+}
+.service:hover{transform:translateY(-8px) scale(1.02);}
+.service:active{transform:scale(0.98);}
+
+.service i{
+  font-size:55px;
+  color:#0FBA50;
+  margin-bottom:15px;
+}
+
+.service h3{
+  color:#0e7a40;
+  font-size: 1.1rem;
+  margin: 0;
+  line-height:1.6;
+}
+
+/* ===========================
+   تنسيقات النافذة المنبثقة
+   =========================== */
+.icon-container{
+  display:flex;
+  justify-content:center;
+  gap: 20px; 
+  flex-wrap:wrap;
+  width: 100%;
+  padding: 10px;
+}
+
+.icon-btn{
+  width: 140px;
+  height: 140px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 2px solid #0FBA50;
+  background: #f0fdf4;
+  cursor: pointer;
+  transition: .3s;
+  text-align: center;
+  padding: 10px;
+  font-size: 0.95rem;
+}
+
+.icon-btn i {
+    font-size: 30px;
+    margin-bottom: 10px;
+    color: #0FBA50;
+}
+
+.icon-btn:hover, .icon-btn:active {
+  background:#0FBA50;
+  color:#fff;
+  transform: scale(1.05);
+}
+.icon-btn:hover i, .icon-btn:active i {
+    color: #fff;
+}
+
+footer{
+  background:#0FBA50;
+  color:#fff;
+  padding:15px;
+  border-top-left-radius:25px;
+  border-top-right-radius:25px;
+  width: 100%;
+  margin-top: auto;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+/* تنسيقات SweetAlert */
+.swal2-popup {
+    border-radius: 20px !important;
+    max-width: 95vw !important;
+    width: auto !important;
+}
+
+.swal2-title {
+    font-size: 1.3rem !important;
+    padding: 15px 10px !important;
+    line-height: 1.5 !important;
+}
+
+.swal2-html-container {
+    padding: 10px !important;
+}
+
+.swal2-confirm {
+  background: #939393 !important;
+  color: #fff !important;
+  border-radius: 20px !important;
+  padding: 10px 30px !important; 
+  font-family: 'Cairo', sans-serif;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  margin: 5px !important;
+  transition: background 0.3s ease;
+  font-size: 0.95rem !important;
+}
+
+.swal2-confirm:hover {
+  background: #d6d6d6 !important;
+}
+
+.swal2-deny {
+    background: #0FBA50 !important;
+    color: #fff !important;
+    border-radius: 20px !important;
+    padding: 10px 30px !important;
+    font-family: 'Cairo', sans-serif;
+    margin: 5px !important;
+    transition: background 0.3s ease;
+    font-size: 0.95rem !important;
+}
+
+.swal2-deny:hover {
+    background: #0b963f !important;
+}
+
+.swal2-actions {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    padding: 10px !important;
+}
+
+/* شاشة التحميل (Loader) */
+#loader { 
+  display: flex; position: fixed; top:0; left:0; width:100%; height:100%; 
+  background:rgba(255,255,255,0.9); z-index:9999; justify-content:center; 
+  align-items:center; flex-direction:column; 
+}
+.spinner { 
+  border: 5px solid #f3f3f3; border-top: 5px solid #0FBA50; 
+  border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; 
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ============================================================
+   📱 تحسينات التجاوب (Media Queries)
+   ============================================================ */
+@media (max-width: 400px) {
+    .news-ticker-container { min-height: 60px; padding: 8px 10px; }
+    .typewriter-text { font-size: 12px; line-height: 1.3; }
+    .logo-container { width: 110px; height: 110px; margin-bottom: 5px; }
+    .logo-container img { width: 85px; height: 85px; }
+    .logo-ring { width: 100px; height: 100px; border-width: 2px; }
+    header { padding: 20px 10px; }
+    header h1 { font-size: 1.1rem; line-height: 1.4; padding: 0 5px; }
+    .services { padding: 15px 10px; gap: 12px; grid-template-columns: 1fr; }
+    .service { flex-direction: row; text-align: right; padding: 15px; gap: 12px; align-items: center; justify-content: flex-start; min-height: 80px; }
+    .service i { font-size: 32px; margin-bottom: 0; min-width: 40px; text-align: center; }
+    .service h3 { font-size: 0.9rem; text-align: right; line-height: 1.4; }
+    .icon-container { gap: 10px; padding: 5px; }
+    .icon-btn { width: 100%; height: 70px; flex-direction: row; gap: 12px; justify-content: flex-start; padding: 10px 15px; font-size: 0.9rem; }
+    .icon-btn i { font-size: 24px; margin-bottom: 0; min-width: 35px; }
+    .swal2-popup { padding: 15px !important; }
+    .swal2-title { font-size: 1.1rem !important; }
+    .swal2-confirm, .swal2-deny { padding: 8px 20px !important; font-size: 0.85rem !important; }
+    footer { font-size: 0.75rem; padding: 10px; }
+}
+
+@media (min-width: 401px) and (max-width: 768px) {
+    .news-ticker-container { min-height: 55px; }
+    .typewriter-text { font-size: 14px; }
+    .logo-container { width: 130px; height: 130px; margin-bottom: 5px; }
+    .logo-container img { width: 100px; height: 100px; }
+    .logo-ring { width: 120px; height: 120px; }
+    header h1 { font-size: 1.4rem; line-height: 1.4; }
+    .services { padding: 25px 15px; gap: 15px; grid-template-columns: 1fr; }
+    .service { flex-direction: row; text-align: right; padding: 20px; gap: 15px; align-items: center; justify-content: flex-start; min-height: 100px; }
+    .service i { font-size: 40px; margin-bottom: 0; min-width: 50px; text-align: center; }
+    .service h3 { font-size: 1rem; text-align: right; }
+    .icon-container { gap: 15px; }
+    .icon-btn { width: 47%; height: 120px; font-size: 0.9rem; }
+    .icon-btn i { font-size: 28px; }
+    .swal2-title { font-size: 1.2rem !important; }
+    footer { font-size: 0.85rem; padding: 12px; }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .services { grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 30px 20px; }
+    .icon-btn { width: 45%; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    header { padding: 15px 10px; }
+    .logo-container { width: 100px; height: 100px; }
+    .logo-container img { width: 75px; height: 75px; }
+    .logo-ring { width: 90px; height: 90px; }
+    header h1 { font-size: 1.2rem; }
+    .services { padding: 20px 15px; grid-template-columns: repeat(2, 1fr); }
+    .service { padding: 15px; min-height: 80px; }
+}
+
+@media (min-width: 1025px) {
+    .swal2-popup { width: 550px !important; padding: 30px !important; }
+    .swal2-title { font-size: 1.8rem !important; margin-bottom: 15px !important; }
+    .icon-container { gap: 25px; }
+    .icon-btn { width: 180px; height: 160px; font-size: 1.1rem; }
+    .icon-btn i { font-size: 40px; margin-bottom: 15px; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- شاشة التحميل الأولية -->
+<div id="loader">
+  <div class="spinner"></div>
+  <h3 style="color: #0FBA50; margin-top: 15px; font-family: 'Cairo';">جاري التحقق من هويتك وتأمين الدخول...</h3>
+</div>
+
+<div class="news-ticker-container">
+    <span id="typewriter-text" class="typewriter-text"></span>
+</div>
+
+<header>
+  <div class="logo-container">
+    <div class="logo-ring"></div>
+    <img 
+      src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
+      onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'"
+      alt="شعار"
+    >
+  </div>
+
+  <h1>فضاء التكوين البيداغوجي توقرت</h1>
+</header>
+
+<section class="services">
+  <div class="service" onclick="openCenter(1)">
+    <i class="fa-solid fa-school"></i>
+    <h3>مركز التكوين<br>ثانوية عبد الرحمان الكواكبي</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(2)">
+    <i class="fa-solid fa-school"></i>
+     <h3>مركز التكوين<br>متوسطة دقعة الطاهر بن الزاوي</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(3)">
+    <i class="fa-solid fa-school"></i>
+     <h3>مركز التكوين<br>ثانوية البشير الإبراهيمي</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(4)">
+    <i class="fa-solid fa-school"></i>
+    <h3>مركز التكوين<br>متوسطة أحمد زبانة</h3>
+  </div>
+
+  <div class="service" onclick="openCenter(5)">
+    <i class="fa-solid fa-school"></i>
+    <h3>مركز التكوين<br>ثانوية لحسيني محمد</h3>
+  </div>
+</section>
+
+<footer>مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة © 2026</footer>
+
+<script>
+// ================= إعدادات Firebase =================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+
+// تهيئة Firebase إذا لم يكن قد تم تهيئته مسبقاً
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.firestore();
+
+// ==========================================
+// المتغيرات العامة وبيانات المستخدم
+// ==========================================
+let loggedInUser = null;
+let userDocId = null;
+
+// خريطة المراكز لربط الأزرار بأسماء المراكز في قاعدة البيانات
+const CENTER_MAP = {
+    1: "ثانوية عبد الرحمان الكواكبي",
+    2: "متوسطة دقعة الطاهر بن الزاوي",
+    3: "ثانوية البشير الإبراهيمي",
+    4: "متوسطة أحمد زبانة",
+    5: "ثانوية لحسيني محمد"
+};
+
+// ==========================================
+// 🔡 كود الكتابة السلسة
+// ==========================================
+const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
+const typeWriterElement = document.getElementById('typewriter-text');
+let charIndex = 0;
+
+function typeWriter() {
+    if (charIndex < textToType.length) {
+        typeWriterElement.innerHTML += textToType.charAt(charIndex);
+        charIndex++;
+        setTimeout(typeWriter, 45); 
+    } else {
+        setTimeout(startFadeOut, 3000); 
+    }
+}
+
+function startFadeOut() {
+    typeWriterElement.classList.add('fade-out');
+    setTimeout(() => {
+        typeWriterElement.innerHTML = "";
+        charIndex = 0;
+        typeWriterElement.classList.remove('fade-out'); 
+        setTimeout(typeWriter, 500); 
+    }, 1000);
+}
+
+// ==========================================
+// 🔒 التحقق الأمني وجلب بيانات المتكون عند الدخول
+// ==========================================
+window.onload = async function() {
+    typeWriter();
+    
+    // التحقق من الجلسة
+    const empId = sessionStorage.getItem("userEmpId");
+    if(!empId) {
+        window.location.href = "index_2.html"; 
+        return;
+    }
+
+    if(empId === "ADMIN_ACCESS") {
+        document.getElementById("loader").style.display = "none";
+        loggedInUser = { center: "ADMIN" }; 
+        return;
+    }
+
+    try {
+        const docRef = db.collection("employeescomnew").doc(empId);
+        const docSnap = await docRef.get();
+        
+        if(docSnap.exists) {
+            loggedInUser = docSnap.data();
+            userDocId = docSnap.id;
+        } else {
+            let querySnapshot = await db.collection("employeescomnew").where("id", "==", empId).get();
+            if(!querySnapshot.empty) {
+                loggedInUser = querySnapshot.docs[0].data();
+                userDocId = querySnapshot.docs[0].id;
+            }
+        }
+
+        if(!loggedInUser) {
+            Swal.fire('خطأ', 'لم يتم العثور على بياناتك، يرجى مراجعة الإدارة.', 'error')
+            .then(() => { sessionStorage.clear(); window.location.href="index_2.html"; });
+            return;
+        }
+
+        document.getElementById("loader").style.display = "none";
+        checkAndFillMissingInfo();
+
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        document.getElementById("loader").style.display = "none";
+        Swal.fire('خطأ في الاتصال', 'تعذر الاتصال بقاعدة البيانات. تأكد من جودة الإنترنت.', 'error');
+    }
+};
+
+// ==========================================
+// منع إدخال غير الحروف العربية في حقل مكان الميلاد
+// ==========================================
+function forceArabicText(inputElement) {
+    // هذا التعبير يمسح أي شيء ليس من الحروف العربية أو مسافة
+    inputElement.value = inputElement.value.replace(/[^\u0600-\u06FF\s]/g, '');
+}
+
+// ==========================================
+// 📝 نافذة إكمال المعلومات (تظهر لمرة واحدة فقط)
+// ==========================================
+function checkAndFillMissingInfo() {
+    if(loggedInUser.infoCompleted === true) return;
+    showCompletionForm();
+}
+
+function showCompletionForm() {
+    const prevPob = (loggedInUser.pob && loggedInUser.pob !== '-') ? loggedInUser.pob : '';
+    const prevAdrs = (loggedInUser.adrs && loggedInUser.adrs !== '-') ? loggedInUser.adrs : '';
+    const prevPhone = (loggedInUser.phone && loggedInUser.phone !== '-') ? formatPhoneString(loggedInUser.phone) : '';
+    const prevDaira = (loggedInUser.daira && loggedInUser.daira !== '-') ? loggedInUser.daira : '';
+
+    Swal.fire({
+        title: 'أهلاً بك.. تحديث أمني للمعلومات',
+        html: `
+            <div style="text-align:right; font-size:14px; direction:rtl;">
+                <p style="color: #dc3545; font-weight: bold; font-size: 13px; text-align:center;">⚠️ يرجى إكمال هذه المعلومات بدقة (لمرة واحدة فقط) لتفعيل حسابك بالكامل.</p>
+                
+                <div style="background: #e8fbf0; padding: 10px; border-radius: 8px; border: 1px solid #0FBA50; margin-bottom: 15px; line-height:1.7;">
+                    <b>الاسم واللقب:</b> ${loggedInUser.name || '-'} <br>
+                    <b>الرتبة:</b> ${loggedInUser.grade || loggedInUser.rank || '-'} <br>
+                    <b>مادة التخصص:</b> ${loggedInUser.maty || loggedInUser.specialty || '-'} <br>
+                    <b>مركز التكوين:</b> <span style="color:#0FBA50; font-weight:bold;">${loggedInUser.center || 'لم يحدد لك مركز بعد'}</span>
+                </div>
+
+                <!-- حقل مكان الميلاد -->
+                <label style="font-weight:bold; color:#333; font-size:13px;">مكان الميلاد (حروف عربية فقط): <span style="color:red">*</span></label>
+                <input type="text" id="setup-pob" class="swal2-input" value="${prevPob}" style="margin: 5px 0 15px 0; width: 100%; height: 40px; font-size:14px; font-family: 'Cairo', sans-serif; text-align: center;" placeholder="أدخل مكان الميلاد باللغة العربية" oninput="forceArabicText(this)">
+                
+                <!-- حقل الدائرة -->
+                <label style="font-weight:bold; color:#333; font-size:13px;">دائرة الإقامة: <span style="color:red">*</span></label>
+                <select id="setup-daira" class="swal2-select" style="margin: 5px 0 15px 0; width: 100%; height: 40px; font-size:14px; padding: 0 10px; font-family: 'Cairo', sans-serif; text-align: center;">
+                    <option value="">-- اختر الدائرة --</option>
+                    <option value="توقرت" ${prevDaira === 'توقرت' ? 'selected' : ''}>توقرت</option>
+                    <option value="تماسين" ${prevDaira === 'تماسين' ? 'selected' : ''}>تماسين</option>
+                    <option value="المقارين" ${prevDaira === 'المقارين' ? 'selected' : ''}>المقارين</option>
+                    <option value="الحجيرة" ${prevDaira === 'الحجيرة' ? 'selected' : ''}>الحجيرة</option>
+                    <option value="الطيبات" ${prevDaira === 'الطيبات' ? 'selected' : ''}>الطيبات</option>
+                </select>
+
+                <!-- حقل العنوان -->
+                <label style="font-weight:bold; color:#333; font-size:13px;">العنوان: <span style="color:red">*</span></label>
+                <input type="text" id="setup-adrs" class="swal2-input" value="${prevAdrs}" style="margin: 5px 0 15px 0; width: 100%; height: 40px; font-size:14px; font-family: 'Cairo', sans-serif; text-align: center;" placeholder="أدخل العنوان الشخصي">
+
+                <!-- حقل الهاتف -->
+                <label style="font-weight:bold; color:#333; font-size:13px;">رقم الهاتف (موبيليس، جيزي، أوريدو): <span style="color:red">*</span></label>
+                <input type="text" id="setup-phone" class="swal2-input" value="${prevPhone}" style="margin: 5px 0 15px 0; width: 100%; height: 40px; text-align:center; direction:ltr; font-size:15px; letter-spacing:1px; font-family: 'Cairo', sans-serif;" placeholder="0X XX XX XX XX" oninput="liveFormatPhone(this)">
+            </div>
+        `,
+        allowOutsideClick: false, 
+        allowEscapeKey: false, 
+        showCancelButton: false,
+        confirmButtonText: 'تأكيد وحفظ البيانات',
+        confirmButtonColor: '#0FBA50',
+        preConfirm: () => {
+            const pob = document.getElementById('setup-pob').value.trim();
+            const daira = document.getElementById('setup-daira').value;
+            const adrs = document.getElementById('setup-adrs').value.trim();
+            const phoneRaw = document.getElementById('setup-phone').value.trim();
+            const phoneClean = phoneRaw.replace(/\s/g, ''); 
+
+            if(!pob || !daira || !adrs || !phoneClean) {
+                Swal.showValidationMessage('الرجاء ملء جميع الحقول الإجبارية أولاً.');
+                return false;
+            }
+            
+            const arabicRegex = /^[\u0600-\u06FF\s]+$/;
+            if(!arabicRegex.test(pob)) {
+                Swal.showValidationMessage('عذراً.. حقل مكان الميلاد يجب أن يحتوي على حروف عربية فقط.');
+                return false;
+            }
+
+            const phoneRegex = /^(05|06|07)[0-9]{8}$/;
+            if(!phoneRegex.test(phoneClean)) {
+                Swal.showValidationMessage('رقم الهاتف غير صحيح! يجب أن يتكون من 10 أرقام ويبدأ بـ (05، 06، 07).');
+                return false;
+            }
+
+            return { pob: pob, daira: daira, adrs: adrs, phone: phoneRaw, infoCompleted: true };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري تسجيل بياناتك...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("employeescomnew").doc(userDocId).update(result.value);
+                loggedInUser = { ...loggedInUser, ...result.value };
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم بنجاح!',
+                    text: 'تم توثيق معلوماتك، يمكنك الآن متابعة التكوين.',
+                    confirmButtonColor: '#0FBA50'
+                });
+            } catch (e) {
+                console.error("Update Error: ", e);
+                Swal.fire('خطأ غير متوقع', 'تعذر حفظ البيانات، يرجى المحاولة مرة أخرى.', 'error')
+                .then(() => showCompletionForm()); 
+            }
+        }
+    });
+}
+
+function liveFormatPhone(input) {
+    let val = input.value.replace(/\D/g, ''); 
+    if(val.length > 10) val = val.substring(0, 10); 
+    
+    let formatted = '';
+    for(let i = 0; i < val.length; i++){
+        if(i > 0 && i % 2 === 0) formatted += ' '; 
+        formatted += val[i];
+    }
+    input.value = formatted;
+}
+
+function formatPhoneString(val) {
+    if(!val) return "";
+    val = val.replace(/\D/g, '');
+    let formatted = '';
+    for(let i = 0; i < val.length; i++){
+        if(i > 0 && i % 2 === 0) formatted += ' ';
+        formatted += val[i];
+    }
+    return formatted;
+}
+
+// ==========================================
+// 🔗 ربط الأزرار والمراكز والدخول
+// ==========================================
+const swalConfig = {
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    confirmButtonColor: '#939393',
+    showCloseButton: false,
+    scrollbarPadding: false
+};
+
+function openCenter(centerId) {
+  if (loggedInUser.center !== "ADMIN") {
+      const requiredCenterName = CENTER_MAP[centerId];
+      
+      if (!loggedInUser.center || loggedInUser.center.trim() === "" || loggedInUser.center === "-") {
+          Swal.fire({
+              icon: 'warning',
+              title: 'غير مصرح!',
+              text: 'لم يتم إدراجك في أي مركز تكوين حتى الآن. يرجى مراجعة إدارة التكوين والتفتيش.',
+              confirmButtonColor: '#ff9800'
+          });
+          return; 
+      }
+
+      if (loggedInUser.center !== requiredCenterName) {
+          Swal.fire({
+              icon: 'error',
+              title: 'ممنوع الدخول!',
+              html: `أنت تحاول الدخول لمركز غير مخصص لك.<br><br><b>مركزك المعتمد هو:</b> <span style="color:#0FBA50">${loggedInUser.center}</span>`,
+              confirmButtonColor: '#dc3545',
+              confirmButtonText: 'العودة'
+          });
+          return; 
+      }
+  }
+
+  let html = '<div class="icon-container">';
+  let popupTitle = '';
+
+  if (centerId === 1) {
+    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
+    html += `
+      <div class="icon-btn" onclick="openLink(1, 'arabic')">
+        <i class="fa-solid fa-book-open"></i> تخصص اللغة العربية
+      </div>
+      <div class="icon-btn" onclick="openLink(1, 'french')">
+       <i class="fa-solid fa-language"></i> تخصص اللغة الفرنسية
+      </div>`;
+  } 
+  else if (centerId === 2) {
+    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
+    html += `
+      <div class="icon-btn" onclick="openLink(2, 'english')">
+        <i class="fa-solid fa-font"></i> تخصص اللغة الإنجليزية
+      </div>
+      <div class="icon-btn" onclick="openLink(2, 'sport')">
+        <i class="fa-solid fa-person-running"></i> تخصص التربية البدنية والرياضة
+      </div>`;
+  } 
+  else if (centerId === 3) {
+      popupTitle = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
+      html += `
+        <div class="icon-btn" onclick="openLink(3, 'french')">
+            <i class="fa-solid fa-language"></i> اللغة الفرنسية
+        </div>
+        <div class="icon-btn" onclick="openLink(3, 'english')">
+            <i class="fa-solid fa-font"></i> اللغة الإنجليزية
+        </div>
+        <div class="icon-btn" onclick="openLink(3, 'sport')">
+            <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
+        </div>
+        <div class="icon-btn" onclick="openLink(3, 'others')">
+            <i class="fa-solid fa-layer-group"></i> باقي التخصصات
+        </div>`;
+  } 
+  else if (centerId === 4 || centerId === 5) {
+      popupTitle = 'اختر الطور:';
+      html += `
+        <div class="icon-btn" onclick="openSubMenu('primary', ${centerId})">
+          <i class="fa-solid fa-child-reaching"></i>
+          الطور الابتدائي
+        </div>
+        <div class="icon-btn" onclick="openSubMenu('middle_secondary', ${centerId})">
+          <i class="fa-solid fa-user-graduate"></i>
+          الطور المتوسط والثانوي
+        </div>`;
+  }
+
+  html += '</div>';
+
+  Swal.fire({
+    ...swalConfig, 
+    title: popupTitle,
+    html: html
+  });
+}
+
+function openSubMenu(level, parentId) {
+    let html = '<div class="icon-container">';
+    let title = '';
+
+    if (level === 'primary') {
+        title = 'أساتذة الطور الابتدائي - اختر التخصص:';
+        html += `
+            <div class="icon-btn" onclick="openLink(${parentId}, 'arabic', 'primary')">
+                <i class="fa-solid fa-book-open"></i> اللغة العربية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'primary')">
+                <i class="fa-solid fa-language"></i> اللغة الفرنسية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'primary')">
+                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'primary')">
+                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
+            </div>
+        `;
+    } else if (level === 'middle_secondary') {
+        title = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
+        html += `
+            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'middle_secondary')">
+                <i class="fa-solid fa-language"></i> اللغة الفرنسية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'middle_secondary')">
+                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'middle_secondary')">
+                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
+            </div>
+            <div class="icon-btn" onclick="openLink(${parentId}, 'others', 'middle_secondary')">
+                <i class="fa-solid fa-layer-group"></i> باقي التخصصات
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    Swal.fire({
+        ...swalConfig,
+        title: title,
+        html: html,
+        showDenyButton: true,
+        denyButtonText: 'عودة للخلف',
+        denyButtonColor: '#0FBA50',
+    }).then((result) => {
+        if (result.isDenied) {
+            openCenter(parentId);
+        }
+    });
+}
+
+function openLink(centerId, type, level = null) {
+    if (!level) {
+        if (centerId === 1 || centerId === 2) {
+            level = 'primary';
+        } else if (centerId === 3) {
+            level = 'middle_secondary';
+        }
+    }
+    const targetUrl = `courses.html?c=${centerId}&l=${level}&s=${type}`;
+    window.location.href = targetUrl;
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>فضاء التكوين البيداغوجي توقرت</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="database.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+/* 1. تنسيقات الجسم والأساسيات */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+/* --- الحل الجذري لثبات الخلفية --- */
+/* نقوم بإنشاء طبقة خلفية ثابتة لا تتأثر بالسكرول بار */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #e8fbf0 0%, #dcf7e6 100%);
+  z-index: -1; /* وضعها خلف المحتوى */
+  background-size: cover;
+}
+
+body {
+  font-family: 'Cairo', sans-serif;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  background: transparent; /* الجسم شفاف */
+}
+
+/* --- تنسيق شريط التمرير (رمادي افتراضي) --- */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+  border: 3px solid #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* --- منع القفز عند فتح النوافذ (Fix Scroll Jump) --- */
+body.swal2-shown {
+  overflow-y: auto !important; /* الإبقاء على السكرول بار ظاهراً ولكن معطلاً */
+  padding-right: 0 !important; /* منع SweetAlert من إزاحة الصفحة لليسار */
+  height: auto !important; /* منع تغيير الارتفاع */
+}
+
+/* ===========================
+   شريط الأخبار
+   =========================== */
+.news-ticker-container {
+    background-color: #085d28;
+    color: #fff;
+    width: 100%;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 10;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    padding: 10px 15px;
+}
+
+.typewriter-text {
+    font-size: 17px;
+    font-weight: 700;
+    display: inline-block;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    word-wrap: break-word;
+    max-width: 100%;
+}
+
+.typewriter-text.fade-out {
+    opacity: 0;
+}
+
+/* ===========================
+   تنسيقات الشعار
+   =========================== */
+.logo-container {
+  position: relative;
+  display: inline-block;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 0px; 
+  transition: 0.3s ease;
+}
+
+.logo-container img {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  object-fit: cover;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff; 
+  z-index: 2;
+  animation: pulseLogo 2.5s ease-in-out infinite;
+  transition: 0.3s ease;
+}
+
+.logo-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 3px dashed #fff; 
+  background: transparent;
+  mask: none;
+  -webkit-mask: none;
+  transform: translate(-50%, -50%);
+  animation: rotateRing 10s linear infinite;
+  z-index: 1;
+  transition: 0.3s ease;
+}
+
+@keyframes rotateRing {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes pulseLogo {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ===========================
+   تنسيقات الهيدر
+   =========================== */
+header{
+  background:#0FBA50;
+  color:#fff;
+  padding:30px 15px;
+  border-bottom-left-radius:25px;
+  border-bottom-right-radius:25px;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
+  transition: 0.3s ease;
+}
+
+header h1 {
+    margin-top: 5px;
+    margin-bottom: 10px;
+    font-size: 28px;
+    line-height: 1.4;
+    transition: 0.3s ease;
+}
+
+header p {
+    font-size: 1.1em;
+    opacity: 0.9;
+    margin-top: 0;
+}
+
+/* ===========================
+   تنسيقات الخدمات
+   =========================== */
+.services{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:25px;
+  padding:40px 20px;
+  max-width: 1300px; 
+  width: 95%;
+  margin:auto;
+  flex: 1;
+}
+
+.service{
+  background:#fff;
+  border-radius:20px;
+  padding:30px 15px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.1);
+  transition:.4s;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.service:hover{transform:translateY(-8px) scale(1.05);}
+.service:active{transform:translateY(-4px) scale(1.02);}
+
+.service i{
+  font-size:55px;
+  color:#0FBA50;
+  margin-bottom:15px;
+}
+
+.service h3{
+  color:#0e7a40;
+  font-size: 18px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* --- تنسيقات نافذة اختيار الدورة --- */
+.icon-container{
+  display:flex;
+  justify-content:center;
+  gap:20px;
+  flex-wrap:wrap;
+  padding: 10px;
+}
+
+.icon-btn{
+  width:130px;
+  height:130px;
+  border-radius:20px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  border:2px solid #0FBA50;
+  background:#f0fdf4;
+  cursor:pointer;
+  transition:.3s;
+  font-size: 16px;
+}
+
+.icon-btn:hover:not(.closed){
+  background:#0FBA50;
+  color:#fff;
+}
+
+.icon-btn:active:not(.closed){
+  transform: scale(0.95);
+}
+
+.icon-btn.closed{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+.badge{
+  margin-top:6px;
+  padding:4px 10px;
+  border-radius:12px;
+  font-size:13px;
+}
+.badge.open{background:#e8fbf0;color:#0e7a40;}
+.badge.closed{background:#ffebee;color:#c62828;}
+
+/* --- تنسيق زر فتح الدرايف --- */
+.drive-link-btn {
+  display: inline-block;
+  margin-top: 15px;
+  background-color: #0FBA50;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 50px;
+  text-decoration: none;
+  font-weight: bold;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transition: 0.3s;
+  font-size: 16px;
+}
+.drive-link-btn:hover {
+  background-color: #0a8a3a;
+  transform: scale(1.05);
+}
+.drive-link-btn:active {
+  transform: scale(0.98);
+}
+
+/* --- تنسيقات قائمة الفيديوهات --- */
+.video-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px; 
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.video-btn {
+  background: #fff;
+  border: 2px solid #0FBA50;
+  color: #0FBA50;
+  padding: 15px;
+  border-radius: 15px;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+}
+
+.video-btn:hover {
+  background: #0FBA50;
+  color: #fff;
+}
+
+.video-btn:active {
+  transform: scale(0.98);
+}
+
+.video-btn i {
+  font-size: 24px;
+  color: #0FBA50;
+  flex-shrink: 0;
+}
+.video-btn:hover i {
+  color: #fff;
+}
+
+.video-btn span {
+  flex: 1;
+  text-align: right;
+  padding-right: 10px;
+}
+
+/* --- تنسيق مشغل الفيديو --- */
+.video-wrapper {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: 15px;
+  border: 4px solid #0FBA50;
+  background: #000;
+}
+
+.video-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.loader-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0fdf4;
+  z-index: 1;
+}
+
+.loader {
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #0FBA50;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+footer{
+  background:#0FBA50;
+  color:#fff;
+  padding:16px;
+  font-weight:600;
+  border-top-left-radius:25px;
+  border-top-right-radius:25px;
+  margin-top: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* --- تنسيق أزرار SweetAlert --- */
+.swal2-container {
+  padding: 15px !important;
+  z-index: 99999 !important;
+}
+
+.swal2-popup {
+  border-radius: 20px !important;
+  padding: 20px !important;
+  font-family: 'Cairo', sans-serif !important;
+}
+
+/* تخصيص العرض في الشاشات الصغيرة فقط */
+@media (max-width: 768px) {
+  .swal2-popup {
+    width: 95% !important;
+    max-width: 95% !important;
+  }
+}
+
+.swal2-title {
+  font-size: 24px !important;
+  padding: 10px !important;
+}
+
+.swal2-html-container {
+  margin: 15px 0 !important;
+}
+
+.swal2-confirm{
+  background:#939393 !important;
+  color:#333 !important;
+  border-radius:20px !important;
+  padding:10px 30px !important;
+  font-family:'Cairo',sans-serif;
+  font-weight:600;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);
+  border: none !important;
+  margin: 5px !important;
+  font-size: 16px !important;
+  min-width: 100px;
+}
+
+.swal2-confirm:hover{
+  background:#d6d6d6 !important;
+}
+
+.swal2-deny{
+  background:#0FBA50 !important;
+  color:#fff !important;
+  border-radius:20px !important;
+  padding:10px 30px !important;
+  font-family:'Cairo',sans-serif;
+  font-weight:600;
+  border: none !important;
+  margin: 5px !important;
+  font-size: 16px !important;
+  min-width: 100px;
+}
+.swal2-deny:hover{
+    background: #0b963f !important;
+}
+
+.swal2-cancel{
+  background:#d33 !important;
+  color:#fff !important;
+  border-radius:20px !important;
+  padding:10px 30px !important;
+  font-family:'Cairo',sans-serif;
+  font-weight:600;
+  border: none !important;
+  font-size: 16px !important;
+  min-width: 100px;
+}
+
+.green-confirm-btn {
+  background: #0FBA50 !important;
+  color: #fff !important;
+}
+
+.info-box{
+  max-width: 850px;
+  margin: 20px auto;
+  padding: 25px 20px;
+  border: 3px solid rgba(255,255,255,0.8);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.08);
+  color: #ffffff;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+.info-box h1{
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.info-box hr{
+  width: 60%;
+  margin: 10px auto;
+  border: none;
+  height: 2px;
+  background: rgba(255,255,255,0.7);
+}
+
+.info-box p{
+  font-size: 18px;
+  font-weight:700;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* =========================================
+   تنسيقات خاصة بالكمبيوتر (شاشات كبيرة)
+   ========================================= */
+@media (min-width: 992px) {
+  header {
+    padding: 50px 15px;
+  }
+  
+  header h1 {
+    font-size: 36px;
+    margin-top: 15px;
+  }
+
+  .logo-container {
+    width: 200px;
+    height: 200px;
+  }
+
+  .logo-container img {
+    width: 160px;
+    height: 160px;
+  }
+
+  .logo-ring {
+    width: 185px;
+    height: 185px;
+  }
+
+  .service h3 {
+    font-size: 20px;
+  }
+  
+  .service i {
+    font-size: 65px;
+  }
+}
+
+/* ====== RESPONSIVE - TABLET & MOBILE ====== */
+@media (max-width: 992px) {
+  .services {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    padding: 30px 15px;
+  }
+}
+
+@media (max-width: 768px) {
+
+  .news-ticker-container {
+    min-height: 60px;
+    padding: 10px;
+  }
+
+  .typewriter-text {
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: center;
+    padding: 0 5px;
+  }
+
+  header {
+    padding: 20px 12px;
+  }
+
+  header h1 {
+    font-size: 20px;
+    line-height: 1.5;
+    padding: 0 5px;
+  }
+
+  .logo-container {
+    width: 110px;
+    height: 110px;
+    margin-bottom: 5px;
+  }
+
+  .logo-container img {
+    width: 90px;
+    height: 90px;
+  }
+
+  .logo-ring {
+    width: 105px;
+    height: 105px;
+    border-width: 2px;
+  }
+
+  .info-box {
+    margin: 15px 10px;
+    padding: 18px 12px;
+  }
+
+  .info-box h1 {
+    font-size: 18px;
+    line-height: 1.5;
+  }
+
+  .info-box hr {
+    width: 70%;
+  }
+
+  .info-box p {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .services {
+    grid-template-columns: 1fr;
+    padding: 20px 12px;
+    gap: 15px;
+  }
+
+  .service {
+    padding: 25px 15px;
+    min-height: 140px;
+  }
+
+  .service i {
+    font-size: 45px;
+    margin-bottom: 12px;
+  }
+
+  .service h3 {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .icon-container {
+    gap: 12px;
+    padding: 5px;
+  }
+
+  .icon-btn {
+    width: 110px;
+    height: 110px;
+    font-size: 14px;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .drive-link-btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    margin-top: 12px;
+  }
+
+  .video-list-container {
+    max-height: 350px;
+    padding: 5px;
+  }
+
+  .video-btn {
+    padding: 12px;
+    font-size: 14px;
+    min-height: 55px;
+  }
+
+  .video-btn i {
+    font-size: 20px;
+  }
+
+  .video-wrapper {
+    border-width: 3px;
+    border-radius: 12px;
+  }
+
+  /* --- تنسيق خاص للنوافذ المنبثقة على الجوال --- */
+  .swal2-title {
+    font-size: 20px !important;
+    line-height: 1.4 !important;
+  }
+
+  .swal2-html-container {
+    font-size: 14px !important;
+  }
+
+  .swal2-confirm,
+  .swal2-deny,
+  .swal2-cancel {
+    padding: 8px 20px !important;
+    font-size: 14px !important;
+    min-width: 80px !important;
+  }
+
+  .swal2-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    justify-content: center !important;
+  }
+
+  footer {
+    font-size: 12px;
+    padding: 14px 10px;
+    line-height: 1.7;
+  }
+}
+
+/* ====== RESPONSIVE - SMALL MOBILE ====== */
+@media (max-width: 480px) {
+   
+  .typewriter-text {
+    font-size: 12px;
+  }
+
+  header h1 {
+    font-size: 18px;
+  }
+
+  .logo-container {
+    width: 100px;
+    height: 100px;
+  }
+
+  .logo-container img {
+    width: 80px;
+    height: 80px;
+  }
+
+  .logo-ring {
+    width: 95px;
+    height: 95px;
+  }
+
+  .info-box h1 {
+    font-size: 16px;
+  }
+
+  .info-box p {
+    font-size: 13px;
+  }
+
+  .service {
+    padding: 20px 12px;
+    min-height: 130px;
+  }
+
+  .service i {
+    font-size: 40px;
+  }
+
+  .service h3 {
+    font-size: 15px;
+  }
+
+  .icon-btn {
+    width: 100px;
+    height: 100px;
+    font-size: 13px;
+  }
+
+  .video-btn {
+    font-size: 13px;
+    padding: 10px;
+  }
+
+  .swal2-title {
+    font-size: 18px !important;
+  }
+
+  footer {
+    font-size: 11px;
+  }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="news-ticker-container">
+    <span id="typewriter-text" class="typewriter-text"></span>
+</div>
+
+<header>
+  <div class="logo-container">
+    <div class="logo-ring"></div>
+    <img 
+      src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
+      onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'"
+      alt="شعار"
+    >
+  </div>
+
+  <h1>فضاء التكوين البيداغوجي توقرت</h1>
+    
+<div class="info-box">
+  <h1 id="page-title">جاري التحميل...</h1>
+  <hr>
+  <p id="page-subtitle">الرجاء الانتظار</p>
+</div>
+
+</header>
+
+<section class="services">
+
+  <div class="service" onclick="openCourses('didactique')">
+    <i class="fa-solid fa-chalkboard"></i>
+    <h3>تعليمية مادة التخصص</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('tasyire')">
+    <i class="fa-solid fa-users-gear"></i>
+    <h3>تقنيات تسيير القسم</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('takwime')">
+    <i class="fa-solid fa-clipboard-check"></i>
+    <h3>التقويم و المعالجة البيداغوجية</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('informatique')">
+    <i class="fa-solid fa-computer"></i>
+    <h3>الإعلام الآلي</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('nidame')">
+    <i class="fa-solid fa-school"></i>
+    <h3>النظام التربوي و المناهج</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('akhlakiyate')">
+    <i class="fa-solid fa-scale-balanced"></i>
+    <h3>أخلاقيات المهنة</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('handasa')">
+    <i class="fa-solid fa-network-wired"></i>
+    <h3>هندسة التكوين</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('wasata')">
+    <i class="fa-solid fa-handshake"></i>
+    <h3>الوساطة المدرسية</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('tachri')">
+    <i class="fa-solid fa-gavel"></i>
+    <h3>التشريع المدرسي</h3>
+  </div>
+
+  <div class="service" onclick="openCourses('psycho')">
+    <i class="fa-solid fa-brain"></i>
+    <h3>علوم التربية وعلم النفس</h3>
+  </div>
+
+  <div class="service" onclick="handleLessonsClick()">
+    <i class="fa-solid fa-clapperboard"></i>
+    <h3>دروس تطبيقية</h3>
+  </div>
+
+</section>
+
+<footer>مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة  © 2025</footer>
+
+<script>
+/* ==========================================
+   إعدادات التحكم
+   ========================================== */
+const SHOW_DRIVE_BUTTON = false; 
+
+/* ==========================================
+   🔡 كود الكتابة السلسة (شريط الأخبار)
+   ========================================== */
+const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
+const typeWriterElement = document.getElementById('typewriter-text');
+let charIndex = 0;
+
+function typeWriter() {
+    if (charIndex < textToType.length) {
+        typeWriterElement.innerHTML += textToType.charAt(charIndex);
+        charIndex++;
+        setTimeout(typeWriter, 45); 
+    } else {
+        setTimeout(startFadeOut, 3000); 
+    }
+}
+
+function startFadeOut() {
+    typeWriterElement.classList.add('fade-out');
+    setTimeout(() => {
+        typeWriterElement.innerHTML = "";
+        charIndex = 0;
+        typeWriterElement.classList.remove('fade-out'); 
+        setTimeout(typeWriter, 500); 
+    }, 1000);
+}
+
+/* =========================================
+   1. جلب البيانات من الرابط (URL Parameters)
+   ========================================= */
+const params = new URLSearchParams(window.location.search);
+const cId = params.get('c');
+const lvl = params.get('l');
+const spc = params.get('s');
+
+// تحديث العناوين في الواجهة والشعار الخاص بالمركز تلقائياً
+if(cId && lvl && spc && typeof UI_NAMES !== 'undefined') {
+    document.getElementById('page-title').innerText = "مركز التكوين " + (UI_NAMES.centers[cId] || "");
+    document.getElementById('page-subtitle').innerText = (UI_NAMES.levels[lvl] || "") + " - " + (UI_NAMES.specs[spc] || "");
+    
+    // تغيير شعار المركز إذا كان متوفراً في قاعدة البيانات
+    const logoImg = document.querySelector('.logo-container img');
+    if(logoImg && UI_NAMES.centerLogos && UI_NAMES.centerLogos[cId] && UI_NAMES.centerLogos[cId] !== "") {
+        logoImg.src = UI_NAMES.centerLogos[cId];
+    }
+}
+
+// جلب الروابط والفيديوهات الخاصة بالمركز والطور والتخصص
+let currentLinks = {};
+if(typeof dbLinks !== 'undefined' && dbLinks[cId] && dbLinks[cId][lvl] && dbLinks[cId][lvl][spc]) {
+    currentLinks = dbLinks[cId][lvl][spc];
+}
+
+// دالة التحقق من حالة الفتح والغلق (للدورات)
+function isCycleOpen(module, cycle) {
+  if(typeof GLOBAL_CYCLE_STATUS === 'undefined' || !GLOBAL_CYCLE_STATUS[cycle]) {
+      return false;
+  }
+  return MODULE_CYCLE_STATUS[module] && MODULE_CYCLE_STATUS[module][cycle];
+}
+
+function getFolderId(url) {
+    if (!url) return null;
+    const match = url.match(/folders\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : null;
+}
+
+/* =======================================================
+   2. كود فتح الدورات والمقاييس (Google Drive)
+   ======================================================= */
+function openCourses(module) {
+  let html = '<div class="icon-container">';
+  for(let i=1; i<=3; i++) {
+    const open = isCycleOpen(module, i);
+    
+    html += `
+      <div class="icon-btn ${open ? '' : 'closed'}"
+        onclick="${open ? `showDriveEmbed('${module}',${i})` : ''}">
+        الدورة ${i===1 ? 'الأولى' : i===2 ? 'الثانية' : 'الثالثة'}
+        <span class="badge ${open ? 'open' : 'closed'}">
+          ${open ? 'مفتوحة' : 'مغلقة'}
+        </span>
+      </div>`;
+  }
+  html += '</div>';
+
+  Swal.fire({
+    title: 'اختر الدورة',
+    html: html,
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    width: '600px',
+    padding: '1.5em',
+  });
+}
+
+function showDriveEmbed(module, cycle) {
+  const url = (currentLinks[module] && currentLinks[module][cycle]) ? currentLinks[module][cycle] : "";
+  const folderId = getFolderId(url);
+
+  if (!url || !folderId) {
+    Swal.fire({
+      icon: 'info',
+      title: 'قريباً',
+      text: 'ملفات هذه الدورة غير متوفرة حالياً.',
+      confirmButtonColor: '#0FBA50'
+    });
+    return;
+  }
+
+  const embedUrl = `https://drive.google.com/embeddedfolderview?id=${folderId}#list`;
+  
+  const driveBtn = SHOW_DRIVE_BUTTON ? 
+    `<a href="${url}" target="_blank" class="drive-link-btn">
+        <i class="fa-brands fa-google-drive"></i> فتح في Google Drive
+     </a>` : '';
+
+  Swal.fire({
+    title: `ملفات الدورة ${cycle === 1 ? 'الأولى' : cycle === 2 ? 'الثانية' : 'الثالثة'}`,
+    html: `
+      <div style="border: 2px solid #0FBA50; border-radius: 10px; overflow: hidden; height: 50vh; margin-bottom: 15px;">
+        <iframe src="${embedUrl}" style="width:100%; height:100%; border:none;"></iframe>
+      </div>
+      ${driveBtn}
+    `,
+    width: '800px',
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    showDenyButton: true,
+    denyButtonText: 'عودة للخلف',
+  }).then((res) => {
+    if (res.isDenied) openCourses(module); 
+  });
+}
+
+/* =======================================================
+   3. كود الدروس التطبيقية (الديناميكي) بدون رقم سري
+   ======================================================= */
+function handleLessonsClick() {
+  openVideoList();
+}
+
+function convertToPreviewUrl(url) {
+  return url.replace(/\/view.*/, '/preview');
+}
+
+function openVideoList() {
+  // جلب الفيديوهات المحددة للتخصص الحالي من قاعدة البيانات
+  const videoData = (currentLinks && currentLinks.videos) ? currentLinks.videos : [];
+  
+  if(videoData.length === 0) {
+     Swal.fire({
+       icon: 'info',
+       title: 'تنبيه',
+       text: 'لا توجد دروس تطبيقية متوفرة حالياً لهذا التخصص.',
+       confirmButtonColor: '#0FBA50'
+     });
+     return;
+  }
+
+  let listHtml = '<div class="video-list-container">';
+  let hasVideos = false;
+  
+  videoData.forEach((video) => {
+    if(video.url && video.url.trim() !== "") {
+        hasVideos = true;
+        listHtml += `
+          <div class="video-btn" onclick="playVideo('${video.url}', '${video.title}')">
+            <span>${video.title}</span>
+           <i class="fa-solid fa-circle-play"></i>
+          </div>
+        `;
+    }
+  });
+
+  listHtml += '</div>';
+
+  if(!hasVideos) {
+     Swal.fire({
+       icon: 'info',
+       title: 'قريباً',
+       text: 'الروابط قيد التحديث، سيتم إضافتها قريباً.',
+       confirmButtonColor: '#0FBA50'
+     });
+     return;
+  }
+
+  Swal.fire({
+    title: 'الدروس التطبيقية',
+    html: listHtml,
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    width: '600px',
+  });
+}
+
+function playVideo(url, title) {
+  if(!url) return;
+  const previewUrl = convertToPreviewUrl(url);
+
+  Swal.fire({
+    title: title,
+    html: `
+      <div class="video-wrapper">
+        <div class="loader-container" id="videoLoader">
+          <div class="loader"></div>
+        </div>
+        <iframe 
+          src="${previewUrl}" 
+          frameborder="0" 
+          allow="autoplay; encrypted-media" 
+          allowfullscreen
+          onload="document.getElementById('videoLoader').style.display='none';"
+          style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2;"
+        ></iframe>
+      </div>
+    `,
+    width: '800px', 
+    showCloseButton: false,
+    showConfirmButton: false,
+    showDenyButton: true,
+    denyButtonText: 'عودة للقائمة',
+    denyButtonColor: '#0FBA50',
+  }).then((result) => {
+    if (result.isDenied) {
+      openVideoList();
+    }
+  });
+}
+
+window.onload = function() {
+    typeWriter();
+};
+</script>
+
+</body>
+</html>
+
+

@@ -3,42 +3,279 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>فضاء التكوين البيداغوجي توقرت</title>
+  <title>فضاء التكوين البيداغوجي توقرت - تسجيل الدخول</title>
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <style>
-    /* الإعدادات الأساسية */
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Cairo', sans-serif; margin: 0; background: linear-gradient(135deg, #e3f2fd, #bbdefb); text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-x: hidden; padding: 15px; }
-    .container { background: white; padding: 30px 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 480px; margin: 0 auto; position: relative; transition: all 0.3s ease; }
-    .header-text { margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; }
-    .header-text p { margin: 3px 0; font-size: 16px; font-weight: 700; color: #444; line-height: 1.5; }
-    .login-title { color: #1E68E8; margin-bottom: 5px; font-size: 20px; font-weight: 700; margin-top: 20px; }
-    .sub-title { color: #d32f2f; margin-top: 0; margin-bottom: 25px; font-size: 18px; font-weight: 700; border: 1px dashed #d32f2f; display: inline-block; padding: 5px 15px; border-radius: 8px; background-color: #ffebee; }
-    .login-logo-wrapper { position: relative; width: 130px; height: 130px; margin: 10px auto; display: flex; justify-content: center; align-items: center; }
-    .login-logo { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; z-index: 2; }
-    .login-logo-ring { position: absolute; width: 155px; height: 155px; border: 2px dashed #1E68E8; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: rotateRing 15s linear infinite; z-index: 1; }
-    @keyframes rotateRing { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-    .input-wrapper { position: relative; width: 100%; margin-bottom: 15px; }
-    input { width: 100%; padding: 14px 14px 14px 45px; border-radius: 12px; border: 2px solid #e0e0e0; font-size: 16px; text-align: center; font-family: 'Cairo', sans-serif; transition: 0.3s; background: #fafafa; direction: ltr; }
-    input:focus { outline: none; border-color: #1E68E8; background: #fff; box-shadow: 0 0 0 4px rgba(30, 104, 232, 0.1); }
-    .toggle-password { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #aaa; cursor: pointer; font-size: 18px; z-index: 10; padding: 5px; }
-    .toggle-password:hover { color: #1E68E8; }
-    button { background: #1E68E8; color: white; border: none; padding: 14px 0; border-radius: 12px; font-size: 16px; cursor: pointer; font-weight: 700; width: 100%; font-family: 'Cairo', sans-serif; transition: 0.3s; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    button:hover, button:active { background: #1557c0; transform: translateY(-1px); }
-    .swal2-popup { border-radius: 20px !important; font-family: 'Cairo', sans-serif !important; }
-    .swal2-confirm { background: #1E68E8 !important; box-shadow: 0 4px 10px rgba(30, 104, 232, 0.3) !important; border-radius: 10px !important; }
-    @media (max-width: 380px) { .container { padding: 20px 15px; } .header-text p { font-size: 12px; } .login-logo-wrapper { width: 100px; height: 100px; } .login-logo { width: 80px; height: 80px; } .login-logo-ring { width: 95px; height: 95px; } .login-title { font-size: 18px; } button, input { font-size: 14px; } }
+    /* ===========================
+       1. إعدادات أساسية للتجاوب
+       =========================== */
+    * { 
+        box-sizing: border-box; 
+        -webkit-tap-highlight-color: transparent; /* إزالة وميض النقر في الموبايل */
+    }
+
+   body {
+      font-family: 'Cairo', sans-serif;
+      margin: 0;
+      /* =======================================
+         إعدادات الخلفية الجديدة
+         ======================================= */
+      /* ضع رابط الصورة url() */
+      background-image: url('https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1920&auto=format&fit=crop');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      
+      /* إضافة طبقة لونية نصف شفافة (Overlay) فوق الصورة لجعلها هادئة */
+      position: relative;
+      
+      text-align: center;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow-x: hidden;
+      padding: 15px; 
+    }
+
+    /* طبقة شفافة خضراء فوق الخلفية للتماشي مع ألوان الموقع */
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(135deg, rgba(232, 251, 240, 0.60), rgba(220, 247, 230, 0.90));
+      z-index: -1;
+    }
+
+    /* ===========================
+       2. الحاوية الرئيسية (متجاوبة)
+       =========================== */
+    .container {
+      background: white;
+      padding: 30px 25px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      text-align: center;
+      width: 100%;
+      max-width: 480px; /* عرض مثالي للهواتف والتابلت */
+      margin: 0 auto;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    /* ===========================
+       3. النصوص والعناوين
+       =========================== */
+    .header-text {
+        margin-bottom: 30px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 15px;
+    }
+
+    .header-text p {
+        margin: 3px 0;
+        font-size: 16px; /* حجم مناسب للموبايل */
+        font-weight: 700;
+        color: #444;
+        line-height: 1.5;
+    }
+
+    .login-title {
+        color: #0FBA50;
+        margin-bottom: 15px;
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 20px;
+    }
+
+    /* ===========================
+       4. الشعار وحركته (متجاوب)
+       =========================== */
+    .login-logo-wrapper {
+        position: relative;
+        width: 130px;
+        height: 130px;
+        margin: 10px auto;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .login-logo {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #fff;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        position: relative;
+        z-index: 2;
+    }
+
+    .login-logo-ring {
+        position: absolute;
+        width: 155px;
+        height: 155px;
+        border: 2px dashed #0FBA50;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        animation: rotateRing 15s linear infinite;
+        z-index: 1;
+    }
+
+    @keyframes rotateRing {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* ===========================
+       5. حقول الإدخال والأزرار
+       =========================== */
+    input {
+        width: 100%;
+        padding: 14px;
+        margin-bottom: 15px;
+        border-radius: 12px;
+        border: 2px solid #e0e0e0;
+        font-size: 16px; /* يمنع التكبير التلقائي في آيفون */
+        text-align: center;
+        font-family: 'Cairo', sans-serif;
+        transition: 0.3s;
+        background: #fafafa;
+    }
+
+    input:focus {
+        outline: none;
+        border-color: #0FBA50;
+        background: #fff;
+        box-shadow: 0 0 0 4px rgba(15, 186, 80, 0.1);
+    }
+
+    button {
+        background: #0FBA50;
+        color: white;
+        border: none;
+        padding: 14px 0;
+        border-radius: 12px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: 700;
+        width: 100%;
+        font-family: 'Cairo', sans-serif;
+        transition: 0.3s;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    button:hover, button:active {
+        background: #0a8a3a;
+        transform: translateY(-1px);
+    }
+
+    .barcode-btn {
+        background: #fff;
+        color: #0FBA50;
+        border: 2px solid #0FBA50;
+    }
+
+    .barcode-btn:hover, .barcode-btn:active {
+        background: #0FBA50;
+        color: white;
+    }
+
+    /* تنسيق منطقة الكاميرا لتكون متجاوبة */
+    #reader {
+        width: 100% !important;
+        max-width: 300px;
+        margin: 15px auto;
+        display: none;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 2px solid #0FBA50;
+    }
+
+    /* ===========================
+       6. شاشة التحميل والرسائل
+       =========================== */
+    #imageLoaderOverlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.4); display: none;
+        justify-content: center; align-items: center; z-index: 99999;
+        backdrop-filter: blur(2px);
+    }
+
+    #loaderBox {
+        background: #ffffff; padding: 25px 35px; border-radius: 16px;
+        box-shadow: 0 8px 35px rgba(0,0,0,0.25); text-align: center;
+        width: 85%; max-width: 300px;
+    }
+
+    .loader-circle {
+        border: 5px solid #e6e6e6; border-top: 5px solid #0FBA50;
+        border-radius: 50%; width: 50px; height: 50px; margin: auto;
+        animation: spinLoader 0.9s linear infinite;
+    }
+
+    @keyframes spinLoader {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loader-text {
+        margin-top: 15px; font-size: 16px; font-weight: 700;
+        color: #0FBA50; font-family: 'Cairo', sans-serif;
+    }
+
+    .note-blink {
+        animation: softBlink 1.6s infinite ease-in-out;
+    }
+    @keyframes softBlink {
+        0% { opacity: 1; } 50% { opacity: 0.65; } 100% { opacity: 1; }
+    }
+
+    .swal2-popup {
+        border-radius: 20px !important;
+        font-family: 'Cairo', sans-serif !important;
+    }
+    
+    .swal2-confirm {
+        background: #0FBA50 !important;
+        box-shadow: 0 4px 10px rgba(15, 186, 80, 0.3) !important;
+        border-radius: 10px !important;
+    }
+
+    /* ===========================
+       7. استعلامات الوسائط (الشاشات الصغيرة جداً)
+       =========================== */
+    @media (max-width: 380px) {
+        .container { padding: 20px 15px; }
+        .header-text p { font-size: 12px; }
+        .login-logo-wrapper { width: 100px; height: 100px; }
+        .login-logo { width: 80px; height: 80px; }
+        .login-logo-ring { width: 95px; height: 95px; }
+        .login-title { font-size: 18px; }
+        button, input { font-size: 14px; }
+    }
   </style>
 </head>
 
 <body>
   <div class="container" id="mainContainer">
+    
       <div class="header-text">
         <p>الجمهورية الجزائرية الديمقراطية الشعبية</p>
         <p>وزارة التربية الوطنية</p>
@@ -51,20 +288,31 @@
       </div>
 
       <h2 class="login-title">الفضاء الرقمي للتكوين البيداغوجي توقرت</h2>
-      <h3 class="sub-title">لوحة التحكم</h3>
       
-      <div class="input-wrapper">
-          <i class="fa-solid fa-eye toggle-password" id="toggleIcon" onclick="togglePasswordVisibility()"></i>
-          <input type="password" id="accessCode" placeholder="أدخل كود الدخول الخاص">
-      </div>
+      <input type="text" id="empId" placeholder="أدخل رقم التعريف الوظيفي" oninput="validateNumber(this)">
       
-      <button onclick="checkAccessCode()">
-        <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
+      <button onclick="checkEmployee()">تسجيل الدخول</button>
+
+      <button type="button" class="barcode-btn" onclick="startBarcodeScanner()">
+        <i class="fa-solid fa-camera"></i>
+        مسح الباركود
       </button>
+
+      <div id="reader"></div>
+
+      <input type="file" id="barcodeImage" accept="image/*" style="display:none; margin-top:8px;">
+      
   </div>
 
+<div id="imageLoaderOverlay">
+    <div id="loaderBox">
+        <div class="loader-circle"></div>
+        <div class="loader-text">جاري تحليل الصورة…</div>
+    </div>
+</div>
+
 <script>
-// ================= إعدادات Firebase المحدثة للمشروع الأساسي =================
+// ================= إعدادات Firebase =================
 const firebaseConfig = {
   apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
   authDomain: "voyage-touggourt-48755.firebaseapp.com",
@@ -78,101 +326,264 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// 🔑 أكواد الدخول السرية للإدارة المركزية
-const CODE_FILES = "feh@2026"; 
-const CODE_ADMIN = "admin@2026"; 
 
-function togglePasswordVisibility() {
-    const inputField = document.getElementById("accessCode");
-    const icon = document.getElementById("toggleIcon");
-    if (inputField.type === "password") {
-        inputField.type = "text"; icon.classList.remove("fa-eye"); icon.classList.add("fa-eye-slash");
-    } else {
-        inputField.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye");
-    }
+const DASHBOARD_PAGE = "dashboard.html"; 
+
+const REGEX_PATTERNS = {
+  nonDigit: /\D/g
+};
+
+
+function validateNumber(input) {
+  input.value = input.value.replace(REGEX_PATTERNS.nonDigit, '');
+  if (input.value.length > 16) input.value = input.value.slice(0, 16);
 }
 
-async function checkAccessCode() {
-  const inputVal = document.getElementById("accessCode").value.trim();
 
-  if (!inputVal) {
-    Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى إدخال كود الدخول', confirmButtonText: 'حسناً' });
+async function checkEmployee() {
+  const empId = document.getElementById("empId").value.trim();
+
+  
+  if (empId.length < 16) {
+    Swal.fire({ 
+      icon: 'warning', 
+      title: 'خطأ', 
+      text: 'رقم التعريف الوظيفي يجب أن يتكون من 16 رقمًا',
+      confirmButtonText: 'حسناً'
+    });
     return;
   }
 
+ 
   Swal.fire({ title: 'جاري التحقق...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-  // 1. التحقق من كود إدارة الملفات (الإدارة العليا)
-  if (inputVal === CODE_FILES) {
-      sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
-      sessionStorage.setItem("userName", "مسؤول الملفات"); 
-      sessionStorage.setItem("isLoggedIn", "true");
-      Swal.fire({ icon: 'success', title: 'مرحباً بك', text: 'جاري التوجيه إلى لوحة إدارة الملفات...', timer: 1500, showConfirmButton: false })
-      .then(() => window.location.href = "dashboard_finale_upload.html");
-      return;
-  } 
-  
-  // 2. التحقق من كود الإدارة (الإدارة العليا)
-  if (inputVal === CODE_ADMIN) {
-      sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
-      sessionStorage.setItem("userName", "مدير النظام"); 
-      sessionStorage.setItem("isLoggedIn", "true");
-      Swal.fire({ icon: 'success', title: 'مرحباً بك', text: 'جاري التوجيه إلى لوحة تحكم المديرية...', timer: 1500, showConfirmButton: false })
-      .then(() => window.location.href = "admin_dashboard.html");
-      return;
-  }
-
-  // 3. التحقق من قاعدة بيانات رؤساء المراكز (المفتشين/المدراء)
   try {
-      const querySnapshot = await db.collection("center_admins").where("password", "==", inputVal).get();
-      
-      if (!querySnapshot.empty) {
-          const adminData = querySnapshot.docs[0].data();
-          
-          // التحقق إذا كان الحساب معطلاً من قبل الإدارة
-          if (adminData.disabled === true) {
-              Swal.fire({ icon: 'error', title: 'حساب معطل', text: 'عذراً، تم تعطيل هذا الحساب من قبل الإدارة المركزية.', confirmButtonText: 'حسناً' });
-              return;
-          }
+    // 2. البحث في Firebase
+    const docRef = db.collection("employeescomnew").doc(empId);
+    const docSnap = await docRef.get();
 
-          // تسجيل بيانات المشرف في الجلسة ليتم استخدامها في لوحة المفتش
-          sessionStorage.setItem("userEmpId", adminData.id); 
-          sessionStorage.setItem("userName", adminData.name); 
-          sessionStorage.setItem("inspectorCenter", adminData.center); // المركز المعين له
-          sessionStorage.setItem("isLoggedIn", "true");
+    if (!docSnap.exists) {
+      Swal.close();
+      // رسالة الخطأ المخصصة (استبدال 1 بـ 0)
+      Swal.fire({
+        icon: "error",
+        title: "❌ خطأ",
+        html: `
+         رقم الموظف غير موجود ضمن قاعدة بيانات الأساتذة المربصين<br>
+يرجى مراجعة الرقم المدخل أو التواصل مع مصالح المديرية.<br><br>
+        `,
+        confirmButtonText: "حسناً"
+      });
+      return;
+    }
 
-          Swal.fire({
-            icon: 'success',
-            title: `مرحباً بك ${adminData.name}`,
-            text: `جاري توجيهك إلى مركزك: ${adminData.center}`,
-            timer: 2000,
-            showConfirmButton: false
-          }).then(() => {
-            window.location.href = "inspector_dashboard.html";
-          });
+    // 3. نجاح التحقق
+    const data = docSnap.data();
+    
+    // حفظ البيانات في الجلسة لاستخدامها في صفحة الداشبورد
+    sessionStorage.setItem("userEmpId", empId);
+    sessionStorage.setItem("userName", data.name || "الموظف");
+    sessionStorage.setItem("isLoggedIn", "true");
 
-      } else {
-          // لم يتم العثور على الكود في أي مكان
-          Swal.fire({ icon: "error", title: "كود خاطئ", text: "يرجى التأكد من الرقم السري والمحاولة مرة أخرى", confirmButtonText: "حسناً" });
+    Swal.close();
+    
+    // رسالة ترحيب ثم التوجيه
+    Swal.fire({
+      icon: 'success',
+      title: 'تم التحقق بنجاح',
+      html: `مرحباً بك <b>${data.name || ''}</b><br>جاري تسجيل الدخول ...`,
+      timer: 1500,
+      timerProgressBar: true,
+      showConfirmButton: false,
+      willClose: () => {
+        window.location.href = DASHBOARD_PAGE;
       }
-  } catch (error) {
-      console.error("Error connecting to DB:", error);
-      Swal.fire({ icon: 'error', title: 'خطأ في الاتصال', text: 'يرجى التحقق من جودة الإنترنت لديك.' });
+    });
+
+  } catch (err) {
+    Swal.close();
+    Swal.fire({
+      icon: "error",
+      title: "❌ خطأ",
+      text: "حدث خطأ أثناء الاتصال بقاعدة البيانات",
+      confirmButtonText: "حسناً"
+    });
+    console.error("Firebase error:", err);
   }
+}
+
+// ================= كود ماسح الباركود (كاميرا + صورة) =================
+let scanner = null;
+
+function startBarcodeScanner() {
+    const readerDiv = document.getElementById("reader");
+    const imageInput = document.getElementById("barcodeImage");
+
+    // إظهار زر رفع الصورة
+    imageInput.style.display = "block";
+
+    // تنظيف الإطار
+    readerDiv.innerHTML = "";
+    readerDiv.style.display = "block";
+
+    // منع إنشاء ماسح جديد إذا كان يعمل
+    if (scanner) return;
+
+    scanner = new Html5Qrcode("reader");
+
+    // تشغيل الكاميرا الخلفية
+    scanner.start(
+        { facingMode: { exact: "environment" } },
+        { fps: 12, qrbox: 250 },
+        decodedText => {
+            if (navigator.vibrate) navigator.vibrate(200);
+
+            document.getElementById("empId").value = decodedText;
+
+            scanner.stop().then(() => {
+                scanner = null;
+                readerDiv.style.display = "none";
+                imageInput.style.display = "none";
+            });
+
+            // ✅ تشغيل الدخول التلقائي للكاميرا
+            checkEmployee();
+        }
+    ).catch(() => {
+        // محاولة الكاميرا الخلفية ثم الأمامية
+        Html5Qrcode.getCameras().then(cameras => {
+            if (!cameras.length) {
+                Swal.fire("خطأ", "لا توجد كاميرات متاحة", "error");
+                return;
+            }
+
+            const backCam = cameras.find(c =>
+                c.label.toLowerCase().includes("back") ||
+                c.label.toLowerCase().includes("rear")
+            );
+
+            const camToUse = backCam ? backCam.id : cameras[0].id;
+
+            scanner.start(
+                camToUse,
+                { fps: 12, qrbox: 250 },
+                decodedText => {
+                    if (navigator.vibrate) navigator.vibrate(200);
+
+                    document.getElementById("empId").value = decodedText;
+
+                    scanner.stop().then(() => {
+                        scanner = null;
+                        readerDiv.style.display = "none";
+                        imageInput.style.display = "none";
+                    });
+
+                    // ✅ تشغيل الدخول التلقائي للكاميرا الاحتياطية
+                    checkEmployee();
+                }
+            );
+        });
+    });
+
+    // 🖼 مسح باركود من الصورة
+    imageInput.onchange = function (e) {
+        let file = e.target.files[0];
+        if (!file) return;
+
+        // 1. إظهار اللودر
+        document.getElementById("imageLoaderOverlay").style.display = "flex";
+
+        readerDiv.innerHTML = "";
+
+        // إنشاء عنصر مؤقت
+        let hiddenDiv = document.createElement("div");
+        hiddenDiv.id = "temp-file-scan";
+        hiddenDiv.style.display = "none";
+        document.body.appendChild(hiddenDiv);
+
+        const fileScanner = new Html5Qrcode("temp-file-scan");
+
+        fileScanner.scanFile(file, true)
+            .then(decodedText => {
+                // 2. إخفاء اللودر فوراً
+                document.getElementById("imageLoaderOverlay").style.display = "none";
+
+                if (navigator.vibrate) navigator.vibrate(200);
+                
+                // ملء الحقل بالرقم
+                document.getElementById("empId").value = decodedText;
+                
+                // تنظيف آمن
+                try { 
+                    if (hiddenDiv.parentNode) hiddenDiv.parentNode.removeChild(hiddenDiv); 
+                } catch(err) { console.log(err); }
+                
+                if (scanner) { 
+                    scanner.stop().then(() => {
+                        scanner = null;
+                        readerDiv.style.display = "none";
+                        imageInput.style.display = "none";
+                        imageInput.value = ""; // تفريغ الحقل للسماح بإعادة الرفع
+                    }).catch(()=>{}); 
+                } else {
+                    readerDiv.style.display = "none";
+                    imageInput.style.display = "none";
+                    imageInput.value = "";
+                }
+
+                // ✅ 3. تشغيل الدخول التلقائي مع تأخير بسيط جداً
+                setTimeout(() => {
+                    checkEmployee();
+                }, 100);
+
+            })
+            .catch((err) => {
+                // إخفاء اللودر عند الفشل فقط
+                document.getElementById("imageLoaderOverlay").style.display = "none";
+                try { 
+                    if (hiddenDiv.parentNode) hiddenDiv.parentNode.removeChild(hiddenDiv); 
+                } catch(err) { console.log(err); }
+                
+                console.error("Scan Error:", err);
+                
+                Swal.fire({
+                    icon: "warning",
+                    title: "تنبيه",
+                    text: "لم يتم العثور على باركود واضح في الصورة",
+                    confirmButtonText: "حسناً",
+                    confirmButtonColor: "#0FBA50"
+                }).then(() => {
+                    imageInput.value = "";
+                });
+            });
+    };
 }
 
 // 🔒 تحكم في فتح وغلق الموقع
 const registrationOpen = true; 
+
 window.onload = function() {
     if (!registrationOpen) {
-        document.querySelector(".input-wrapper").style.display = "none";
+        document.getElementById("empId").style.display = "none";
         const buttons = document.querySelectorAll("button");
         buttons.forEach(btn => btn.style.display = "none");
+
         const msg = document.createElement("div");
-        msg.innerHTML = `<div style="background: #cce5ff; color: #004085; border: 1px solid #b8daff; border-radius: 10px; padding: 15px; margin-bottom: 20px; font-size: 18px; font-weight: 600;">الموقع مغلق حاليًا<br></div>`;
+        msg.innerHTML = `
+        <div style="background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 10px; padding: 15px; margin-bottom: 20px; font-size: 18px; font-weight: 600;">
+            الموقع مغلق حاليًا<br>
+        </div>`;
         document.querySelector(".header-text").appendChild(msg);
     }
-};    
+};   
+
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
