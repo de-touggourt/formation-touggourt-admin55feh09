@@ -284,7 +284,7 @@
       
       <div class="login-logo-wrapper">
           <div class="login-logo-ring"></div>
-          <img src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار اللجنة" class="login-logo">
+          <img src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار اللجنة" class="login-logo" onclick="handleLogoClick()" style="user-select: none; -webkit-user-select: none;">
       </div>
 
       <h2 class="login-title">الفضاء الرقمي للتكوين البيداغوجي توقرت</h2>
@@ -575,7 +575,96 @@ window.onload = function() {
         </div>`;
         document.querySelector(".header-text").appendChild(msg);
     }
-};   
+};  
+
+// ================= كود الدخول المخفي (10 نقرات على الشعار) =================
+let logoClickCount = 0;
+let clickTimer;
+
+function handleLogoClick() {
+    logoClickCount++;
+    
+    // إعادة تصفير العداد إذا توقف المستخدم عن النقر لمدة ثانيتين (لتجنب النقرات العشوائية المتباعدة)
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+        logoClickCount = 0;
+    }, 2000);
+
+    // التحقق مما إذا وصل عدد النقرات إلى 10
+    if (logoClickCount === 10) {
+        logoClickCount = 0; // تصفير العداد
+        promptSecretAdminPassword();
+    }
+}
+
+async function promptSecretAdminPassword() {
+    // إظهار نافذة إدخال الرقم السري
+    const { value: password } = await Swal.fire({
+        title: '🔒 ولوج خاص',
+        text: 'الرجاء إدخال الرقم السري للوحة التحكم',
+        input: 'password',
+        inputPlaceholder: 'أدخل الرقم السري هنا...',
+        showCancelButton: true,
+        confirmButtonText: 'دخول',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#0FBA50',
+        cancelButtonColor: '#d33',
+        inputAttributes: {
+            autocapitalize: 'off',
+            autocorrect: 'off'
+        }
+    });
+
+    if (password) {
+        // إظهار شاشة التحميل
+        Swal.fire({
+            title: 'جاري التحقق...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            // جلب الرقم السري من Firebase 
+            // Collection: config | Document: pass | Field: admin panel
+            const docRef = db.collection("config").doc("pass");
+            const docSnap = await docRef.get();
+
+            if (docSnap.exists) {
+                const data = docSnap.data();
+                const correctPassword = data['admin panel'];
+
+                if (password === correctPassword) {
+                    // نجاح العملية والتحويل
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم التحقق بنجاح',
+                        text: 'جاري تحويلك إلى لوحة التحكم...',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        willClose: () => {
+                            window.location.href = "admin095526.html";
+                        }
+                    });
+                } else {
+                    // كلمة المرور خاطئة
+                    Swal.fire({
+                        icon: 'error',
+                        title: '❌ خطأ',
+                        text: 'الرقم السري غير صحيح',
+                        confirmButtonText: 'حسناً',
+                        confirmButtonColor: '#0FBA50'
+                    });
+                }
+            } else {
+                Swal.fire('خطأ', 'لم يتم العثور على إعدادات الحماية في قاعدة البيانات', 'error');
+            }
+        } catch (error) {
+            console.error("Error verifying admin password:", error);
+            Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات', 'error');
+        }
+    }
+}
+// ========================================================================= 
 
 </script>
 </body>
