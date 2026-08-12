@@ -903,7 +903,7 @@ async function fetchData() {
         snapshot.forEach(doc => {
             const data = doc.data();
             let item = {
-                docId: doc.id, empId: data.id || doc.id, name: data.name || "", gender: data.gnr || "",
+                docId: doc.id, empId: data.id || doc.id, photoUrl_fb: data.photoUrl_fb || null, name: data.name || "", gender: data.gnr || "",
                 dob: data.diz || "", rank: data.grade || "", specialty: data.maty || "", workplace: data.place || "",
                 address: data.adrs || "", daira: data.daira || "-", phone: data.phone || data.tel || "-", 
                 pob: data.pob || "-", center: data.center || "",
@@ -990,7 +990,7 @@ function renderTable() {
         
         // 🌟 تجهيز الصورة بناءً على المطابقة 🌟
         const coreEmpId = extractCoreId(item.empId);
-        const photoUrl = employeePhotosMap[coreEmpId];
+        const photoUrl = item.photoUrl_fb ? item.photoUrl_fb : employeePhotosMap[coreEmpId];
         
         const photoHtml = `
           <div class="profile-pic-container" style="cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
@@ -1043,7 +1043,7 @@ window.viewInfo = function(docId) {
 
     // جلب الصورة واستخراج رابط عالي الدقة (w800 للوضوح العالي)
     const coreEmpId = extractCoreId(data.empId);
-    let photoUrl = employeePhotosMap[coreEmpId];
+    let photoUrl = data.photoUrl_fb ? data.photoUrl_fb : employeePhotosMap[coreEmpId];
     
     if (photoUrl && photoUrl.includes('sz=w200')) {
         photoUrl = photoUrl.replace('sz=w200', 'sz=w800');
@@ -1626,7 +1626,7 @@ function printIDCards() {
             
             // 🌟 1. جلب الصورة الخاصة بالمتكون للمطابقة 🌟
             const coreEmpId = extractCoreId(empId);
-            let photoUrl = employeePhotosMap[coreEmpId];
+            let photoUrl = item.photoUrl_fb ? item.photoUrl_fb : employeePhotosMap[coreEmpId];
             
             // تحسين جودة الصورة للطباعة (w400)
             if (photoUrl && photoUrl.includes('sz=w200')) {
@@ -3660,8 +3660,7 @@ window.printSingleIDCard = function(docId) {
     // حماية وتجهيز الرقم الوظيفي والصورة
     let empId = (item.empId && item.empId.trim() !== '') ? item.empId : '000000';
     const coreEmpId = extractCoreId(empId);
-    let photoUrl = employeePhotosMap[coreEmpId];
-    
+   let photoUrl = item.photoUrl_fb ? item.photoUrl_fb : employeePhotosMap[coreEmpId];    
     if (photoUrl && photoUrl.includes('sz=w200')) {
         photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
     }

@@ -729,7 +729,7 @@ function renderFramersTable(data) {
 
     paginatedData.forEach(f => {
         let b = f.baseInfo || {};
-        const photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+        const photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
         
         const photoHtml = `<div class="profile-pic-container">
             ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
@@ -845,7 +845,7 @@ window.renderShiftsTable = function() {
 
     shiftData.forEach(f => {
         let b = f.baseInfo || {};
-        const photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+        const photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
         const photoHtml = `<div class="profile-pic-container" style="width:36px; height:36px; border-color:#d35400; margin:0 auto;">
             ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
         </div>`;
@@ -1005,7 +1005,7 @@ window.promptAddFramer = function() {
 };
 
 window.showAddFramerForm = function(empId, baseData) {
-    const photoUrl = employeePhotosMap[extractCoreId(empId)];
+    const photoUrl = (baseData && baseData.photoUrl_fb) ? baseData.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
     const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; border:2px solid #e67e22;">` : `<div style="width:65px; height:65px; border-radius:50%; background:#e2e8f0; display:flex; justify-content:center; align-items:center;"><i class="fa-solid fa-user" style="font-size:30px; color:#94a3b8;"></i></div>`;
     
     let rolesHtml = '<option value="" disabled selected>اختر الوظيفة...</option>';
@@ -1594,7 +1594,7 @@ window.viewFramer = function(docId) {
     if (!f) return;
     let b = f.baseInfo;
     
-    let photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+   let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
     if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
     
     const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : `<i class="fa-solid fa-user" style="font-size:60px; color:#ccc;"></i>`;
@@ -1816,7 +1816,7 @@ window.printFramerIDCards = function() {
             let empId = f.empId || '000000';
             let b = f.baseInfo;
             
-            let photoUrl = employeePhotosMap[extractCoreId(empId)];
+            let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
             if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
 
             const photoContent = photoUrl 
@@ -2746,7 +2746,7 @@ function renderFramerAttendanceTable() {
         if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
         else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
 
-        const photoUrl = employeePhotosMap[extractCoreId(f.empId)];
+        let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
         const photoHtml = `<div class="profile-pic-container" style="width:30px; height:30px; margin:0 auto;">
             ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
         </div>`;
@@ -2916,7 +2916,7 @@ window.printSingleFramerCard = function(docId) {
         return '#8e44ad'; 
     };
 
-    let photoUrl = employeePhotosMap[extractCoreId(empId)];
+    let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
     if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
 
     const photoContent = photoUrl 
