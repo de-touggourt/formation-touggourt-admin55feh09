@@ -576,14 +576,34 @@ async function fetchEmployeeBaseData(empId) {
     if (framersBaseDataCache[safeId]) return framersBaseDataCache[safeId];
     
     try {
-        let snap = await db.collection("employeescomnew").doc(safeId).get();
-        if (!snap.exists) snap = await db.collection("employeescomplus").doc(safeId).get();
-        
-        if (snap.exists) {
-            framersBaseDataCache[safeId] = snap.data();
-            return snap.data();
+        let finalData = null;
+
+        // 1. البحث في القاعدة الكلية (employeescomplus) لأنها تضم المؤطرين أساساً
+        let snapPlus = await db.collection("employeescomplus").doc(safeId).get();
+        if (snapPlus.exists) {
+            finalData = snapPlus.data();
         }
-    } catch (e) { }
+
+        // 2. البحث في قاعدة المتكونين (employeescomnew) كإجراء احتياطي
+        let snapNew = await db.collection("employeescomnew").doc(safeId).get();
+        if (snapNew.exists) {
+            if (!finalData) {
+                finalData = snapNew.data();
+            } else {
+                // دمج البيانات: إذا لم تكن الصورة في القاعدة الكلية ووجدت في المتكونين، نأخذها
+                if (!finalData.photoUrl_fb && snapNew.data().photoUrl_fb) {
+                    finalData.photoUrl_fb = snapNew.data().photoUrl_fb;
+                }
+            }
+        }
+        
+        if (finalData) {
+            framersBaseDataCache[safeId] = finalData;
+            return finalData;
+        }
+    } catch (e) { 
+        console.error("Error fetching base data:", e); 
+    }
     return null;
 }
 
@@ -2746,7 +2766,8 @@ function renderFramerAttendanceTable() {
         if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
         else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
 
-        let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
+        // 🌟 تصحيح الخطأ هنا (empId إلى f.empId) لضمان ظهور الصورة في نافذة الحضور 🌟
+        let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
         const photoHtml = `<div class="profile-pic-container" style="width:30px; height:30px; margin:0 auto;">
             ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
         </div>`;
