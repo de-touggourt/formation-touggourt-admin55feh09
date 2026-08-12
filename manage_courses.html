@@ -7,20 +7,21 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<!-- ربط قاعدة البيانات -->
-<script src="database.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- ربط Firebase بدلاً من ملف قاعدة البيانات القديم -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
 <style>
 /* ============================================================
-   1. التنسيقات العامة 
+   التنسيقات الأساسية
    ============================================================ */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body { font-family:'Cairo',sans-serif; margin:0; background:linear-gradient(135deg,#e3f2fd,#bbdefb); text-align:center; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; padding: 0; }
 
 .news-ticker-container { background-color: #0d47a1; color: #fff; width: 100%; min-height: 50px; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1000; box-shadow: 0 4px 8px rgba(0,0,0,0.3); padding: 10px 15px; }
 .typewriter-text { font-size: 17px; font-weight: 700; display: inline-block; opacity: 1; transition: opacity 1s ease-in-out; text-shadow: 0 2px 4px rgba(0,0,0,0.3); white-space: normal; overflow: visible; text-overflow: clip; max-width: 95%; line-height: 1.4; text-align: center; }
-.typewriter-text.fade-out { opacity: 0; }
 
 .logo-container { position: relative; display: inline-block; width: 160px; height: 160px; margin-bottom: 0px; transition: transform 0.3s ease; }
 .logo-container img { width: 130px; height: 130px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; z-index: 2; animation: pulseLogo 2.5s ease-in-out infinite; }
@@ -35,55 +36,21 @@ header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 
 
 /* البطاقات (المقاييس) */
 .services { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:25px; padding:40px 20px; max-width:1000px; margin:auto; justify-content: center; flex: 1; width: 100%; }
-.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; }
+.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; border: 2px solid transparent;}
 .service:hover { transform:translateY(-8px) scale(1.05); border: 2px solid #1E68E8; }
+.service.video-card:hover { border: 2px solid #dc2626; }
 .service:active { transform:scale(0.98); }
 .service i { font-size:55px; color:#1E68E8; margin-bottom:15px; transition: 0.3s; }
+.service.video-card i { color: #dc2626; }
 .service:hover i { transform: scale(1.1); }
 .service h3 { color:#1557c0; font-size: 1.1rem; margin: 0; line-height: 1.6; }
+.service.video-card h3 { color: #b91c1c; }
 
-/* ============================================================
-   2. نوافذ الدورات المنبثقة (التنسيق الأفقي الجديد)
-   ============================================================ */
-.cycles-container { 
-    display: flex; 
-    flex-direction: row; 
-    justify-content: center; 
-    gap: 20px; 
-    width: 100%; 
-    padding: 15px; 
-    flex-wrap: nowrap; /* إجبار العرض الأفقي في الشاشات الكبيرة */
-}
-.cycle-btn { 
-    flex: 1; 
-    min-width: 150px; 
-    height: 180px; /* تكبير الزر */
-    border-radius: 20px; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center; 
-    font-weight: 700; 
-    border: 3px solid #1E68E8; 
-    background: #f0f7ff; 
-    color: #000; 
-    cursor: pointer; 
-    transition: .3s; 
-    text-align: center; 
-    padding: 15px; 
-    font-size: 1.2rem; /* تكبير الخط */
-}
-.cycle-btn i { 
-    font-size: 50px; /* تكبير الأيقونة */
-    margin-bottom: 15px; 
-    color: #1E68E8; 
-}
-.cycle-btn:hover:not(.closed), .cycle-btn:active:not(.closed) { 
-    background: #1E68E8; 
-    color: #fff; 
-    transform: scale(1.05); 
-    box-shadow: 0 8px 15px rgba(30,104,232,0.3);
-}
+/* نوافذ الدورات المنبثقة */
+.cycles-container { display: flex; flex-direction: row; justify-content: center; gap: 20px; width: 100%; padding: 15px; flex-wrap: nowrap; }
+.cycle-btn { flex: 1; min-width: 150px; height: 180px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; border: 3px solid #1E68E8; background: #f0f7ff; color: #000; cursor: pointer; transition: .3s; text-align: center; padding: 15px; font-size: 1.2rem; }
+.cycle-btn i { font-size: 50px; margin-bottom: 15px; color: #1E68E8; }
+.cycle-btn:hover:not(.closed), .cycle-btn:active:not(.closed) { background: #1E68E8; color: #fff; transform: scale(1.05); box-shadow: 0 8px 15px rgba(30,104,232,0.3); }
 .cycle-btn:hover:not(.closed) i, .cycle-btn:active:not(.closed) i { color: #fff; }
 .cycle-btn.closed { opacity:.5; cursor:not-allowed; border-color: #ccc; background: #f5f5f5; color: #777;}
 .cycle-btn.closed i { color: #777; }
@@ -93,10 +60,8 @@ header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 
 
 footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25px; border-top-right-radius:25px; width: 100%; margin-top: auto; font-size: 0.9rem; }
 
-/* ============================================================
-   3. تنسيقات مدير الملفات (المكبرة والمتناسقة)
-   ============================================================ */
-.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; font-family:'Cairo',sans-serif !important; }
+/* تنسيقات مدير الملفات (SweetAlert) */
+.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; font-family:'Cairo',sans-serif !important; z-index: 999999 !important;}
 .swal2-title { font-size: 1.6rem !important; font-weight: 800 !important; }
 .swal2-confirm { background:#939393 !important; color:#fff !important; border-radius:20px !important; padding:12px 35px !important; font-weight:700; border:none !important; margin: 5px !important; transition: 0.3s; font-size: 1.1rem !important; }
 .swal2-confirm:hover { background: #d6d6d6 !important; }
@@ -119,15 +84,12 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1E68E8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 30px auto; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* ============================================================
-   4. الميديا كويري (لتجاوب النوافذ الجديدة مع الهواتف)
-   ============================================================ */
+/* الميديا كويري */
 @media (max-width: 768px) {
     .cycles-container { flex-direction: column; flex-wrap: wrap; }
     .cycle-btn { width: 100%; height: 120px; font-size: 1.1rem; flex-direction: row; justify-content: flex-start; gap: 20px; padding: 15px 20px; }
     .cycle-btn i { font-size: 35px; margin-bottom: 0; }
     .badge { margin-top: 0; margin-right: auto; }
-    
     .upload-section { flex-direction: column !important; align-items: stretch; }
     .upload-btn-real { width: 100% !important; justify-content: center; }
     #fileNameDisplay { max-width: 100%; margin: 10px 0; }
@@ -164,7 +126,7 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
     <img id="center-logo" src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" alt="شعار المركز">
   </div>
 
-  <h1 id="page-title">جاري التحميل...</h1>
+  <h1 id="page-title">جاري الاتصال بقاعدة البيانات...</h1>
   <p id="page-subtitle" style="margin:0; font-size:14px; color:#bbdefb; font-weight:600;">الرجاء الانتظار</p>
 </header>
 
@@ -179,58 +141,74 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
     <div class="service" onclick="openCourses('wasata')"><i class="fa-solid fa-handshake"></i><h3>الوساطة المدرسية</h3></div>
     <div class="service" onclick="openCourses('tachri')"><i class="fa-solid fa-gavel"></i><h3>التشريع المدرسي</h3></div>
     <div class="service" onclick="openCourses('psycho')"><i class="fa-solid fa-brain"></i><h3>علوم التربية وعلم النفس</h3></div>
+    <div class="service" onclick="openCourses('fasad')"><i class="fas fa-shield-halved"></i></i><h3>الشفافية والوقاية من الفساد</h3></div>
+    <!-- قسم الفيديوهات الجديد -->
+    <div class="service video-card" onclick="openVideos()"><i class="fa-solid fa-circle-play"></i><h3>الفيديوهات المرفقة</h3></div>
 </section>
 
 <footer>© 2025 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
 
 <script>
-// ==================== إعدادات الجلسة والحماية (Security Check) ====================
+// ==================== إعدادات Firebase والاتصال اللحظي ====================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const db = firebase.firestore();
+
+let SITE_SETTINGS = null;
+let currentLinks = {};
+
+// إعدادات الجلسة والحماية
 const userEmpId = sessionStorage.getItem("userEmpId");
 const inspectorCenter = sessionStorage.getItem("inspectorCenter");
 
-if (!userEmpId) {
-    window.location.href = "index_2.html";
+if (!userEmpId) { window.location.href = "index_2.html"; }
+
+// ==================== فحص صلاحيات المسؤول الإداري ====================
+async function checkUserPermissions() {
+    if (userEmpId !== "ADMIN_ACCESS") {
+        try {
+            // جلب بيانات المسؤول من قاعدة البيانات للتحقق من وظيفته
+            const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
+            if (adminDoc.exists) {
+                const data = adminDoc.data();
+                if (data.jobTitle === "المسؤول الإداري") {
+                    document.body.innerHTML = ""; // إخفاء محتوى الصفحة بالكامل فوراً للحماية
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'صلاحيات مقيدة',
+                        text: 'عذراً أستاذي الكريم، إدارة ملفات المقاييس هي صلاحية حصرية للمسؤول البيداغوجي.',
+                        allowOutsideClick: false,
+                        confirmButtonText: 'العودة للوحة التحكم',
+                        confirmButtonColor: '#1E68E8'
+                    }).then(() => {
+                        window.location.href = "inspector_dashboard.html"; // إرجاعه للوحة
+                    });
+                    return false; // منع إكمال تحميل الصفحة
+                }
+            }
+        } catch(e) {
+            console.warn("خطأ في التحقق من الصلاحيات:", e);
+        }
+    }
+    return true; // السماح بالمرور إذا كان مسؤولاً بيداغوجياً أو مديرية
 }
 
-// استخراج المعطيات من الرابط (المركز، الطور، التخصص)
+// استخراج المعطيات من الرابط بالطريقة الأصلية
 const params = new URLSearchParams(window.location.search);
 const cId = params.get('c');
 const lvl = params.get('l');
 const spc = params.get('s');
 
-// خريطة أسماء المراكز لمطابقتها مع الرابط بدقة
-const centerNamesMap = {
-    1: "ثانوية عبد الرحمان الكواكبي",
-    2: "متوسطة دقعة الطاهر بن الزاوي",
-    3: "ثانوية البشير الإبراهيمي",
-    4: "متوسطة أحمد زبانة",
-    5: "ثانوية لحسيني محمد"
-};
+function goBack() { window.location.href = "dashboard_finale_upload.html"; }
 
-// الجدار الأمني: التحقق من أن المفتش لا يتلاعب بالرابط
-if (userEmpId !== "ADMIN_ACCESS" && cId) {
-    const selectedCenterName = centerNamesMap[cId];
-    
-    if (selectedCenterName !== inspectorCenter) {
-        document.body.innerHTML = ""; // إخفاء المحتوى فوراً لمنع الاختراق
-        Swal.fire({
-            icon: 'error',
-            title: 'تنبيه أمني صارم',
-            text: 'ليس لديك صلاحية لإدارة ملفات هذا المركز!',
-            allowOutsideClick: false,
-            confirmButtonText: 'العودة للوحة التحكم',
-            confirmButtonColor: '#d33'
-        }).then(() => {
-            window.location.href = "inspector_dashboard.html";
-        });
-    }
-}
-
-function goBack() {
-    window.location.href = "dashboard_finale_upload.html";
-}
-
-// تأثير الكتابة السلسة
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
 let charIndex = 0;
@@ -241,52 +219,103 @@ function typeWriter() {
         setTimeout(typeWriter, 45); 
     }
 }
-window.onload = function() { typeWriter(); };
 
-// تحديث الواجهة لتتوافق مع المركز والتخصص المختار بشكل جذاب
-if(cId && lvl && spc) {
-    // تحديث اسم المركز
-    document.getElementById('page-title').innerText = "مركز التكوين " + (centerNamesMap[cId] || "");
+// دالة جلب الإعدادات اللحظية من Firestore
+function initSiteSettings() {
+    const docRef = db.collection("site_settings").doc("main");
     
-    // قاموس الأطوار
-    const levelNames = {
-        'primary': 'الطور الابتدائي',
-        'middle_secondary': 'الطور المتوسط والثانوي'
-    };
-    
-    // قاموس التخصصات
-    const specNames = {
-        'arabic': 'اللغة العربية',
-        'french': 'اللغة الفرنسية',
-        'english': 'اللغة الإنجليزية',
-        'sport': 'التربية البدنية والرياضة',
-        'others': 'باقي التخصصات'
-    };
-    
-    const levelName = levelNames[lvl] || lvl;
-    const specName = specNames[spc] || spc;
-    
-    document.getElementById('page-subtitle').innerText = "إدارة ملفات: " + levelName + " - " + specName;
-    
-    // تحديث الشعار إن وجد في قاعدة البيانات
-    const logoImg = document.getElementById('center-logo');
-    if(logoImg && typeof UI_NAMES !== 'undefined' && UI_NAMES.centerLogos && UI_NAMES.centerLogos[cId]) {
-        logoImg.src = UI_NAMES.centerLogos[cId];
-    }
+    docRef.onSnapshot((doc) => {
+        if (doc.exists) {
+            SITE_SETTINGS = doc.data();
+            
+            if (userEmpId !== "ADMIN_ACCESS" && cId) {
+                const selectedCenterName = SITE_SETTINGS.UI_NAMES.centers[cId];
+                if (selectedCenterName !== inspectorCenter) {
+                    document.body.innerHTML = ""; 
+                    Swal.fire({
+                        icon: 'error', title: 'تنبيه أمني صارم', text: 'ليس لديك صلاحية لإدارة ملفات هذا المركز!',
+                        allowOutsideClick: false, confirmButtonText: 'العودة للوحة التحكم', confirmButtonColor: '#d33'
+                    }).then(() => { window.location.href = "inspector_dashboard.html"; });
+                    return;
+                }
+            }
+
+            if(cId && lvl && spc) {
+                const centerName = SITE_SETTINGS.UI_NAMES.centers[cId] || "غير معروف";
+                document.getElementById('page-title').innerText = "مركز التكوين " + centerName;
+                
+                const levelName = SITE_SETTINGS.UI_NAMES.levels[lvl] || lvl;
+                const specName = SITE_SETTINGS.UI_NAMES.specs[spc] || spc;
+                
+                document.getElementById('page-subtitle').innerText = "إدارة ملفات: " + levelName + " - " + specName;
+                
+                if(SITE_SETTINGS.UI_NAMES.centerLogos && SITE_SETTINGS.UI_NAMES.centerLogos[cId]) {
+                    const logoImg = document.getElementById('center-logo');
+                    if(logoImg) logoImg.src = SITE_SETTINGS.UI_NAMES.centerLogos[cId];
+                }
+
+                if(SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
+                    currentLinks = SITE_SETTINGS.dbLinks[cId][lvl][spc];
+                }
+            }
+        } else {
+            Swal.fire('خطأ', 'لم يتم العثور على إعدادات الموقع المركزية في قاعدة البيانات.', 'error');
+        }
+    });
 }
 
-// رابط السكريبت للتعامل مع Google Drive
+window.onload = async function() { 
+    typeWriter(); 
+    
+    // تشغيل الجدار الأمني أولاً
+    const hasPermission = await checkUserPermissions();
+    
+    // إذا كان لديه الصلاحية، قم بتحميل بيانات الصفحة
+    if (hasPermission) {
+        initSiteSettings();
+    }
+};
+
+// ==================== الفيديوهات المرفقة ====================
+function openVideos() {
+    if(!SITE_SETTINGS) return;
+    let videos = currentLinks['videos'] || [];
+    let html = '<div style="display:flex; flex-direction:column; gap:15px; padding:10px; text-align:right; direction:rtl;">';
+    
+    if (videos.length === 0) {
+        html += `
+        <div style="text-align:center; padding:40px 20px; color:#94a3b8; border:2px dashed #cbd5e1; border-radius:12px; background:#f8fafc;">
+            <i class="fa-solid fa-video-slash" style="font-size:40px; margin-bottom:15px; color:#cbd5e1;"></i>
+            <br><span style="font-size:16px; font-weight:bold;">لا توجد فيديوهات مرفقة حالياً في هذا التخصص.</span>
+        </div>`;
+    } else {
+        videos.forEach((vid) => {
+            html += `
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+                <div style="font-weight:bold; color:#1e293b; font-size:16px; flex:1; display:flex; align-items:center; gap:10px;">
+                    <div style="width:40px; height:40px; background:#fee2e2; color:#dc2626; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-play"></i></div>
+                    ${vid.title || 'فيديو تعليمي بدون عنوان'}
+                </div>
+                ${vid.url ? `<a href="${vid.url}" target="_blank" style="background:#dc2626; color:white; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:14px;"><i class="fa-solid fa-eye"></i> مشاهدة</a>` : `<span style="color:#94a3b8; font-size:13px; font-weight:bold; background:#f1f5f9; padding:5px 10px; border-radius:6px;">الرابط غير متوفر</span>`}
+            </div>`;
+        });
+    }
+    html += '</div>';
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-circle-play" style="color:#dc2626;"></i> الفيديوهات المرفقة',
+        html: html, showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#1e293b', width: window.innerWidth < 768 ? '95%' : '700px'
+    });
+}
+
+// ==================== دوال فتح الدورات وإدارة الملفات ====================
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
 
-// جلب الروابط الخاصة بالمركز والطور والتخصص
-let currentLinks = {};
-if(typeof dbLinks !== 'undefined' && dbLinks[cId] && dbLinks[cId][lvl] && dbLinks[cId][lvl][spc]) {
-    currentLinks = dbLinks[cId][lvl][spc];
-}
-
 function isCycleOpen(module, cycle) {
-  if(typeof GLOBAL_CYCLE_STATUS === 'undefined' || !GLOBAL_CYCLE_STATUS[cycle]) return false;
-  return MODULE_CYCLE_STATUS[module] && MODULE_CYCLE_STATUS[module][cycle];
+  if(!SITE_SETTINGS) return false;
+  const isGlobalOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS && SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle];
+  if(!isGlobalOpen) return false;
+  return SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module] && SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
 }
 
 function getFolderId(url) {
@@ -295,65 +324,44 @@ function getFolderId(url) {
     return match ? match[1] : null;
 }
 
-// فتح نافذة اختيار الدورة للمقياس
 function openCourses(module){
+  if(!SITE_SETTINGS) return;
   let html='<div class="cycles-container">';
   for(let i=1;i<=3;i++){
     const open = isCycleOpen(module,i);
     html+=`
-      <div class="cycle-btn ${open?'':'closed'}"
-        onclick="${open?`openFileManager('${module}',${i})`:''}">
+      <div class="cycle-btn ${open?'':'closed'}" onclick="${open?`openFileManager('${module}',${i})`:''}">
         <i class="fa-solid ${open?'fa-folder-open':'fa-folder-closed'}"></i>
         الدورة ${i===1?'الأولى':i===2?'الثانية':'الثالثة'}
-        <span class="badge ${open?'open':'closed'}">
-          ${open?'مفتوحة':'مغلقة'}
-        </span>
+        <span class="badge ${open?'open':'closed'}">${open?'مفتوحة':'مغلقة'}</span>
       </div>`;
   }
   html+='</div>';
 
-  Swal.fire({
-    title: 'اختر الدورة للإدارة',
-    html: html,
-    showConfirmButton: true,
-    confirmButtonText: 'إغلاق',
-    width: window.innerWidth < 768 ? '95%' : '850px' /* تم التكبير هنا */
-  });
+  Swal.fire({ title: 'اختر الدورة للإدارة', html: html, showConfirmButton: true, confirmButtonText: 'إغلاق', width: window.innerWidth < 768 ? '95%' : '850px' });
 }
 
-// فتح مدير الملفات لدورة معينة
 function openFileManager(module, cycle) {
   const url = (currentLinks[module] && currentLinks[module][cycle]) ? currentLinks[module][cycle] : "";
   const folderId = getFolderId(url);
 
   if (!url || !folderId) {
-    Swal.fire('تنبيه', 'لم يتم إضافة رابط Google Drive لهذا المقياس في قاعدة البيانات بعد.', 'info');
+    Swal.fire('تنبيه', 'لم يقم مدير المديرية بتعيين رابط مسار (Google Drive) لهذا المقياس.', 'info');
     return;
   }
 
-  Swal.fire({
-    title: 'جاري جلب الملفات...',
-    html: '<div class="spinner"></div>',
-    showConfirmButton: false,
-    width: window.innerWidth < 768 ? '95%' : '850px',
-    allowOutsideClick: false
-  });
+  Swal.fire({ title: 'جاري جلب الملفات...', html: '<div class="spinner"></div>', showConfirmButton: false, width: window.innerWidth < 768 ? '95%' : '850px', allowOutsideClick: false });
 
   fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
   .then(res => res.json())
   .then(data => {
-    if(data.error) {
-        Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد', 'error');
-    } else {
-        renderFileManager(folderId, data.files, module, cycle);
-    }
-  })
-  .catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ في قراءة الملفات.', 'error'));
+    if(data.error) Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد', 'error');
+    else renderFileManager(folderId, data.files, module, cycle);
+  }).catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ في قراءة الملفات.', 'error'));
 }
 
 function renderFileManager(folderId, files, module, cycle) {
     let filesHtml = '';
-    
     if(!files || files.length === 0) {
         filesHtml = '<div style="text-align:center; padding:30px; color:#777; font-size:16px;">المجلد فارغ حالياً</div>';
     } else {
@@ -365,14 +373,9 @@ function renderFileManager(folderId, files, module, cycle) {
 
             filesHtml += `
             <div class="file-row">
-                <a href="${file.url}" target="_blank" class="file-name-group">
-                    <i class="fa-solid ${iconClass} file-icon"></i> ${file.name}
-                </a>
-                <button class="delete-btn" onclick="deleteFile('${file.id}', '${folderId}', '${module}', ${cycle})">
-                    <i class="fa-solid fa-trash"></i> حذف
-                </button>
-            </div>
-            `;
+                <a href="${file.url}" target="_blank" class="file-name-group"><i class="fa-solid ${iconClass} file-icon"></i> ${file.name}</a>
+                <button class="delete-btn" onclick="deleteFile('${file.id}', '${folderId}', '${module}', ${cycle})"><i class="fa-solid fa-trash"></i> حذف</button>
+            </div>`;
         });
     }
 
@@ -380,61 +383,30 @@ function renderFileManager(folderId, files, module, cycle) {
     <div class="file-manager-container">
         <div class="upload-section">
             <input type="file" id="fileInput" style="display:none" onchange="document.getElementById('fileNameDisplay').innerText = this.files[0].name">
-            <button class="upload-btn-real" onclick="document.getElementById('fileInput').click()" title="اختر ملفاً">
-                <i class="fa-solid fa-folder-open"></i> <span>اختر ملف</span>
-            </button>
-
+            <button class="upload-btn-real" onclick="document.getElementById('fileInput').click()" title="اختر ملفاً"><i class="fa-solid fa-folder-open"></i> <span>اختر ملف</span></button>
             <span id="fileNameDisplay">لم يتم اختيار أي ملف</span>
-
-            <button class="upload-btn-real" style="background:#1E68E8" onclick="uploadFile('${folderId}', '${module}', ${cycle})" title="رفع الملف">
-                <i class="fa-solid fa-cloud-arrow-up"></i> <span>بدء الرفع</span>
-            </button>
+            <button class="upload-btn-real" style="background:#1E68E8" onclick="uploadFile('${folderId}', '${module}', ${cycle})" title="رفع الملف"><i class="fa-solid fa-cloud-arrow-up"></i> <span>بدء الرفع</span></button>
         </div>
-
-        <div class="file-list">
-            ${filesHtml}
-        </div>
-    </div>
-    `;
+        <div class="file-list">${filesHtml}</div>
+    </div>`;
 
     Swal.fire({
-        title: `إدارة ملفات الدورة ${cycle}`,
-        html: htmlContent,
-        width: window.innerWidth < 768 ? '95%' : '950px', /* تم التكبير هنا بشكل متناسق */
-        showConfirmButton: true,
-        confirmButtonText: 'إغلاق نافذة الملفات',
-        showDenyButton: true,
-        denyButtonText: 'العودة للمقاييس',
-        scrollbarPadding: false
-    }).then((res) => {
-        if(res.isDenied) openCourses(module);
-    });
+        title: `إدارة ملفات الدورة ${cycle}`, html: htmlContent, width: window.innerWidth < 768 ? '95%' : '950px', 
+        showConfirmButton: true, confirmButtonText: 'إغلاق', showDenyButton: true, denyButtonText: 'العودة للمقاييس', scrollbarPadding: false
+    }).then((res) => { if(res.isDenied) openCourses(module); });
 }
 
 function deleteFile(fileId, folderId, module, cycle) {
     Swal.fire({
-        title: 'هل أنت متأكد؟',
-        text: "لا يمكن التراجع عن هذا الإجراء وسيتم حذف الملف نهائياً!",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'نعم، احذفه!',
-        cancelButtonText: 'إلغاء',
-        width: window.innerWidth < 768 ? '95%' : '600px'
+        title: 'هل أنت متأكد؟', text: "لا يمكن التراجع عن هذا الإجراء وسيتم حذف الملف نهائياً!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'نعم، احذفه!', cancelButtonText: 'إلغاء', width: window.innerWidth < 768 ? '95%' : '600px'
     }).then((result) => {
         if (result.isConfirmed) {
             Swal.fire({title: 'جاري الحذف...', showConfirmButton: false, allowOutsideClick: false});
-            
             fetch(`${APPS_SCRIPT_URL}?action=delete&fileId=${fileId}&folderId=${folderId}`, {method: 'POST'})
             .then(res => res.json())
             .then(data => {
-                if(data.status === 'success') {
-                    Swal.fire('تم!', 'تم حذف الملف بنجاح.', 'success')
-                    .then(() => openFileManager(module, cycle)); 
-                } else {
-                    Swal.fire('خطأ', 'فشل الحذف', 'error');
-                }
+                if(data.status === 'success') { Swal.fire('تم!', 'تم حذف الملف بنجاح.', 'success').then(() => openFileManager(module, cycle)); }
+                else { Swal.fire('خطأ', 'فشل الحذف', 'error'); }
             });
         }
     });
@@ -442,24 +414,14 @@ function deleteFile(fileId, folderId, module, cycle) {
 
 function uploadFile(folderId, module, cycle) {
     const fileInput = document.getElementById('fileInput');
-    if(fileInput.files.length === 0) {
-        Swal.showValidationMessage('الرجاء اختيار ملف أولاً قبل محاولة الرفع');
-        return;
-    }
+    if(fileInput.files.length === 0) return Swal.showValidationMessage('الرجاء اختيار ملف أولاً قبل محاولة الرفع');
 
     const file = fileInput.files[0];
     const reader = new FileReader();
 
     reader.onload = function(e) {
         const rawData = e.target.result.split(',')[1];
-        
-        Swal.fire({
-            title: 'جاري الرفع...',
-            html: 'يرجى الانتظار، لا تقم بإغلاق النافذة <div class="spinner"></div>',
-            showConfirmButton: false,
-            allowOutsideClick: false,
-            width: window.innerWidth < 768 ? '95%' : '600px'
-        });
+        Swal.fire({ title: 'جاري الرفع...', html: 'يرجى الانتظار، لا تقم بإغلاق النافذة <div class="spinner"></div>', showConfirmButton: false, allowOutsideClick: false, width: window.innerWidth < 768 ? '95%' : '600px' });
 
         const formData = new FormData();
         formData.append('action', 'upload');
@@ -471,12 +433,8 @@ function uploadFile(folderId, module, cycle) {
         fetch(APPS_SCRIPT_URL, {method: 'POST', body: formData})
         .then(res => res.json())
         .then(data => {
-            if(data.status === 'success') {
-                Swal.fire('نجاح', 'تم رفع الملف بنجاح', 'success')
-                .then(() => openFileManager(module, cycle));
-            } else {
-                Swal.fire('خطأ', 'فشل الرفع، الرجاء المحاولة مرة أخرى', 'error');
-            }
+            if(data.status === 'success') { Swal.fire('نجاح', 'تم رفع الملف بنجاح', 'success').then(() => openFileManager(module, cycle)); }
+            else { Swal.fire('خطأ', 'فشل الرفع، الرجاء المحاولة مرة أخرى', 'error'); }
         })
         .catch(err => Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بالخادم', 'error'));
     };

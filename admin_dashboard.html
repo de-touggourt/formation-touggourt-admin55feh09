@@ -14,7 +14,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   
-  <!-- ملف قاعدة بيانات الموقع -->
+  <!-- مكتبات تصدير وتنسيق الإكسل الاحترافي (ExcelJS) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  
+  <!-- ملف قاعدة بيانات الموقع (سيتم الاستغناء عنه تدريجياً، نتركه مؤقتاً للـ Migration) -->
   <script src="database.js"></script>
 
   <style>
@@ -205,6 +209,10 @@
         overflow: hidden; 
         background: #f8fafc !important; 
     }
+	
+	.btn-detailed-stats { background: linear-gradient(45deg, #ff9800, #ff5722); color: white; border: none; padding: 8px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(255, 87, 34, 0.3); font-family: 'Cairo'; font-size: 14px; transition: 0.3s; animation: pulse 2s infinite; }
+    .btn-detailed-stats:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(255, 87, 34, 0.4); }
+    @keyframes pulse { 0% {box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4);} 70% {box-shadow: 0 0 0 10px rgba(255, 152, 0, 0);} 100% {box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);} }
 
 
   </style>
@@ -219,12 +227,29 @@
 
   <!-- الشريط العلوي -->
   <div class="top-nav">
-    <h2><i class="fa-solid fa-shield-halved"></i> لوحة تحكم المديرية</h2>
+    <!-- 🌟 تم إضافة خاصية onclick للدرع ليعمل كزر خفي 🌟 -->
+<h2><i class="fa-solid fa-shield-halved" onclick="handleShieldClick()" style="cursor: default;"></i> لوحة تحكم المديرية</h2>
     <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+	
+    <!-- 🌟 تم إعطاء الزر ID (btnSettings) وإخفاؤه بـ display: none; 🌟 -->
+	<button id="btnSettings" class="logout-btn" style="background: #34495e; color: white; display: none;" onclick="openSettingsManager()">
+      <i class="fa-solid fa-gears"></i> إعدادات الموقع
+    </button>
+	
       <!-- زر حسابات رؤساء المراكز -->
       <button class="logout-btn" style="background: #ff9800; color: white;" onclick="manageCenterAdmins()">
         <i class="fa-solid fa-user-tie"></i> حسابات رؤساء المراكز
       </button>
+	  
+	  <!-- زر الحجم الساعي المستقل -->
+       <button class="logout-btn" style="background: #8e44ad; color: white;" onclick="openHourlyVolumeModal()">
+         <i class="fa-solid fa-clock"></i> الحجم الساعي
+       </button>
+	  
+	  <button class="logout-btn" style="background: #17a2b8; color: white;" onclick="openAdminFramersModal()">
+        <i class="fa-solid fa-chalkboard-user"></i>   تسيير المؤطرين
+      </button>
+	  
       <button class="logout-btn" style="background: #1E68E8;" onclick="window.location.href='dashboard_finale_upload.html'">
         <i class="fa-solid fa-folder-open"></i> إدارة الملفات
       </button>
@@ -263,13 +288,24 @@
     <div class="stats-grid" id="centersStatsContainer" style="margin-bottom: 25px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));"></div>
 
     <!-- الفلاتر -->
+    <!-- الفلاتر -->
     <div class="filters-section">
       <div class="filters-header">
          <h3 style="margin: 0; color: #333; font-size: 16px;"><i class="fa-solid fa-filter" style="color: #0FBA50;"></i> فلاتر البحث المتقدمة</h3>
          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-             <button class="btn-print" onclick="printFilteredList()">
+            
+            <button class="btn-detailed-stats" onclick="showDetailedStats()">
+                <i class="fa-solid fa-chart-pie"></i> إحصائيات
+             </button>
+
+			<button class="btn-print" onclick="printFilteredList()">
                <i class="fa-solid fa-print"></i> طباعة القوائم
              </button>
+			 
+			 <button class="btn-print" style="background: #107c41;" onclick="exportToExcel()">
+               <i class="fa-solid fa-file-excel"></i> تحميل إكسل
+             </button>
+			 
              <button class="btn-print" style="background: #8e44ad;" onclick="openGroupingModal()">
                <i class="fa-solid fa-users-viewfinder"></i> إدارة الأفواج للمركز المحدد
              </button>
@@ -297,10 +333,18 @@
           <label><input type="checkbox" class="daira-checkbox" value="المقارين" onchange="handleDairaChange()"> المقارين</label>
           <label><input type="checkbox" class="daira-checkbox" value="الطيبات" onchange="handleDairaChange()"> الطيبات</label>
           <label><input type="checkbox" class="daira-checkbox" value="الحجيرة" onchange="handleDairaChange()"> الحجيرة</label>
-          <label><input type="checkbox" class="daira-checkbox" value="البرمة" onchange="handleDairaChange()"> البرمة</label>
+          
         </div>
       </div>
 
+      <!-- تم نقل المركز إلى هنا مع تغيير onchange -->
+      <div class="filter-group">
+        <label>مركز التكوين الحالي</label>
+        <select id="filterCenter" onchange="handleCenterChange()">
+          <option value="الكل">الكل</option>
+          <option value="غير محدد">غير محدد</option>
+        </select>
+      </div>
 
       <div class="filter-group" id="multiSelectRankContainer">
         <label>الرتبة / الطور</label>
@@ -312,20 +356,12 @@
       </div>
 
       <div class="filter-group" id="multiSelectContainer">
-        <label>مادة التخصص (تتحدث حسب الرتبة)</label>
+        <label>مادة التخضض</label>
         <div class="multi-select-box" onclick="toggleSpecMenu()">
            <span id="spec-selected-text">الكل</span>
            <i class="fa-solid fa-chevron-down" style="color:#0FBA50;"></i>
         </div>
         <div class="multi-select-options" id="specOptions"></div>
-      </div>
-
-      <div class="filter-group">
-        <label>مركز التكوين الحالي</label>
-        <select id="filterCenter" onchange="applyFilters()">
-          <option value="الكل">الكل</option>
-          <option value="غير محدد">غير محدد</option>
-        </select>
       </div>
     </div>
 
@@ -333,7 +369,7 @@
     <div class="bulk-action-bar">
       <span><i class="fa-solid fa-layer-group"></i> إدراج جماعي:</span>
       <select id="bulkCenterSelect">
-        <option value="">-- اختر المركز لتسجيلهم فيه --</option>
+        <option value="">-- اختر المركز للتسجيل --</option>
       </select>
       <button class="btn-assign-bulk" onclick="bulkAssignCenter()">
         <i class="fa-solid fa-check-double"></i> إدراج المحددين
@@ -349,7 +385,8 @@
             <th>الرقم الوظيفي</th>
             <th>الاسم واللقب</th>
             <th>تاريخ الميلاد</th>
-            <th>الدائرة</th>
+			<th>مكان الميلاد</th>
+            <th>دائرة الإقامة</th>
             <th>العنوان</th>
             <th>رقم الهاتف</th>
             <th>الرتبة / مكان العمل</th>
@@ -461,24 +498,832 @@
         <!-- حاوية نظام الصفحات (جديد) -->
         <div id="group-pagination-controls" class="pagination-container" style="display: none; margin-top:10px; background:#f8fbff; border: 1px solid #eee;"></div>
       </div>
+    </div>
+  </div>
+	  
+<!-- ================= نافذة إعدادات الموقع المركزية ================= -->
+<style>
+    /* فرض ظهور نوافذ SweetAlert فوق كل شيء */
+    .swal2-container { z-index: 999999 !important; }
+
+    /* تنسيقات النافذة المركزية */
+    .settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
+    .settings-content { background: #f8fafc; width: 95%; max-width: 1400px; height: 95%; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4); font-family: 'Cairo', sans-serif; }
+    .settings-header { background: #1e293b; color: white; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; }
+    .settings-tabs { display: flex; background: #fff; border-bottom: 2px solid #e2e8f0; overflow-x: auto; flex-shrink: 0; }
+    .tab-btn { flex: 1; padding: 16px; border: none; background: #fff; font-weight: bold; font-family: 'Cairo'; cursor: pointer; border-bottom: 3px solid transparent; transition: 0.3s; font-size: 15px; color: #64748b; white-space: nowrap; }
+    .tab-btn:hover { background: #f1f5f9; color: #0f172a; }
+    .tab-btn.active { border-bottom-color: #0FBA50; color: #0FBA50; background: #f0fdf4; }
+    .settings-body { flex: 1; padding: 25px; overflow-y: auto; background: #f1f5f9; }
+    
+    .setting-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); border: 1px solid #e2e8f0; margin-bottom: 25px; }
+    .setting-card h3 { margin-top: 0; color: #0f172a; border-bottom: 2px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 20px; font-size: 18px; display: flex; justify-content: space-between; align-items: center;}
+    
+    /* شبكة عرض المراكز والهيكلة الهرمية */
+    .centers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+    .center-box { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px; transition: 0.3s; position: relative; border-top: 4px solid #1E68E8; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .center-box:hover { box-shadow: 0 8px 16px rgba(0,0,0,0.08); transform: translateY(-3px); }
+    .center-box h4 { margin: 0 0 15px 0; color: #1e293b; font-size: 18px; padding-left: 40px; line-height: 1.4;}
+    
+    .level-block { margin-top: 12px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; border-right: 3px solid #1E68E8;}
+    .level-title { font-weight: bold; color: #1e293b; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .specs-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; background: #fff; color: #0FBA50; border: 1px solid #0FBA50; display: inline-flex; align-items: center; gap: 5px;}
+    
+    /* تصميم الأزرار التفاعلية (Toggle Switch) */
+    .switch { position: relative; display: inline-block; width: 48px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    input:checked + .slider { background-color: #0FBA50; }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+    /* أزرار وجداول */
+    .crud-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; background: white; }
+    .crud-table th, .crud-table td { padding: 12px 15px; border: 1px solid #e2e8f0; text-align: right; }
+    .crud-table th { background: #f8fafc; color: #475569; font-weight: bold; }
+    .crud-input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Cairo'; outline: none; transition: 0.3s; }
+    .crud-input:focus { border-color: #1E68E8; box-shadow: 0 0 0 3px rgba(30,104,232,0.1); }
+    .btn-action { padding: 8px 16px; border: none; border-radius: 8px; font-family: 'Cairo'; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; color: white; transition: 0.3s;}
+    .btn-add { background: #0FBA50; } .btn-add:hover { background: #0a8a3a; }
+    .btn-del { background: #dc3545; } .btn-del:hover { background: #c82333; }
+    .btn-save { background: #1E68E8; font-size: 15px; padding: 12px 25px; } .btn-save:hover { background: #1557c0; }
+</style>
+
+<div id="settingsModal" class="settings-modal">
+    <div class="settings-content">
+        <div class="settings-header">
+            <h2 style="margin: 0;"><i class="fa-solid fa-server"></i> مدير إعدادات الموقع المركزي</h2>
+            <button onclick="document.getElementById('settingsModal').style.display='none'" style="background: rgba(255,255,255,0.1); color: white; border: none; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; transition:0.3s; font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        
+        <div class="settings-tabs">
+            <button class="tab-btn active" onclick="switchSettingTab('centers', this)"><i class="fa-solid fa-school"></i> إدارة المراكز</button>
+            <button class="tab-btn" onclick="switchSettingTab('cycles', this)"><i class="fa-solid fa-toggle-on"></i> نظام الدورات والمقاييس</button>
+            <button class="tab-btn" onclick="switchSettingTab('links', this)"><i class="fa-brands fa-google-drive"></i> روابط التكوين والفيديوهات</button>
+            <button class="tab-btn" onclick="switchSettingTab('hourly_volume', this)"><i class="fa-solid fa-clock"></i> الحجم الساعي</button>
+        </div>
+
+        <div class="settings-body" id="settingsBody">
+            <!-- سيتم حقن المحتوى هنا برمجياً -->
+        </div>
+    </div>
+</div>
+
+<!-- ================= نافذة تسيير المؤطرين الشاملة للمديرية ================= -->
+<div class="modal-overlay" id="adminFramersModal">
+  <div class="modal-content" style="width: 98%; height: 98%;">
+    <div class="modal-header" style="background: #17a2b8;">
+      <h2><i class="fa-solid fa-chalkboard-user"></i> الإدارة الشاملة لمؤطري المراكز بالولاية</h2>
+      <button class="close-modal" style="background: #138496;" onclick="closeAdminFramersModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- شريط الأدوات العلوي (إضافة، بحث، طباعة) -->
+    <div class="att-controls" style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; justify-content: space-between;">
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-print" style="background: #0FBA50;" onclick="adminPromptAddFramer()">
+                <i class="fa-solid fa-user-plus"></i> إضافة مؤطر جديد
+            </button>
+            <button class="btn-print" style="background: #1E68E8;" onclick="adminPrintFramers()">
+                <i class="fa-solid fa-print"></i> طباعة القائمة الحالية
+            </button>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; width: 300px;">
+            <input type="text" id="adminFramerSearch" placeholder="بحث بالاسم أو الرقم..." oninput="renderAdminFramersTableData()" class="crud-input" style="margin:0;">
+        </div>
+    </div>
+
+    <!-- تبويبات المراكز (تُولد ديناميكياً) -->
+    <div class="settings-tabs" id="adminFramerCentersTabs" style="background: #e2e8f0; padding: 5px 5px 0 5px; overflow-x: auto;">
+        <!-- سيتم حقن تبويبات المراكز هنا -->
+    </div>
+
+    <!-- تبويبات الدورات -->
+    <div class="settings-tabs" id="adminFramerSessionsTabs" style="background: #fff; padding: 5px 5px 0 5px; border-bottom: 3px solid #cbd5e1;">
+        <!-- سيتم حقن تبويبات الدورات هنا -->
+    </div>
+
+    <!-- جدول عرض المؤطرين -->
+    <div class="att-table-container" style="padding: 15px; background: white;">
+      <table class="att-table" style="width: 100%; border-collapse: collapse;">
+        <thead style="background: #17a2b8; color: white;">
+          <tr>
+            <th style="padding: 10px; text-align: center; width: 50px;">#</th>
+            <th style="padding: 10px; text-align: center;">الرقم الوظيفي</th>
+            <th style="padding: 10px; text-align: right;">الاسم واللقب</th>
+            <th style="padding: 10px; text-align: center;">المركز المشرف فيه</th>
+            <th style="padding: 10px; text-align: center;">الوظيفة</th>
+            <th style="padding: 10px; text-align: center;" title="الدورة الأولى">د1</th>
+            <th style="padding: 10px; text-align: center;" title="الدورة الثانية">د2</th>
+            <th style="padding: 10px; text-align: center;" title="الدورة الثالثة">د3</th>
+            <th style="padding: 10px; text-align: center; width: 180px;">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="adminFramersTableBody">
+          <!-- البيانات ستظهر هنا -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ================= نافذة الحجم الساعي المستقلة ================= -->
+<div class="modal-overlay" id="hourlyVolumeModal">
+    <div class="modal-content" style="width: 95%; max-width: 1000px; height: auto; max-height: 95%;">
+        <div class="modal-header" style="background: #102a43;">
+            <h2><i class="fa-solid fa-clock"></i> إدارة الحجم الساعي للدورات</h2>
+            <button class="close-modal" onclick="closeHourlyVolumeModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <!-- سيتم حقن الواجهة والجدول هنا برمجياً -->
+        <div id="hourlyVolumeBody" style="flex: 1; padding: 25px; overflow-y: auto; background: #f1f5f9;">
+        </div>
+    </div>
+</div>
 
 <script>
-// ================= إعدادات Firebase المحدثة =================
+// =========================================================================
+// 1. تهيئة فايربيز والبيانات الثابتة
+// =========================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
   authDomain: "voyage-touggourt-48755.firebaseapp.com",
   projectId: "voyage-touggourt-48755",
   storageBucket: "voyage-touggourt-48755.firebasestorage.app",
   messagingSenderId: "712694455348",
-  appId: "1:712694455348:web:5b4e8df57347edf944fe61",
-  measurementId: "G-TTJT4LQ65L"
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
 };
-
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const db = firebase.firestore();
 
+let SITE_SETTINGS = null; 
+let CURRENT_TAB = 'centers';
+
+// --- الثوابت ---
+const FIXED_LEVELS = {
+    "primary": "الطور الابتدائي",
+    "middle_secondary": "الطور المتوسط والثانوي"
+};
+const FIXED_SPECS = {
+    "arabic": "اللغة العربية",
+    "french": "اللغة الفرنسية",
+    "english": "اللغة الإنجليزية",
+    "sport": "التربية البدنية والرياضة",
+    "others": "باقي التخصصات"
+};
+
+const MODULE_AR_NAMES = {
+    "didactique": "تعليمية مادة التخصص وطرق التدريس",
+    "tasyire": "تقنيات تسيير القسم",
+    "takwime": "التقييم والمعالجة البيداغوجية",
+    "nidame": "النظام التربوي الجزائري والمناهج التعليمية",
+    "akhlakiyate": "أخلاقيات وأدبيات المهنة",
+    "handasa": "هندسة التكوين والبيداغوجيا",
+    "wasata": "الوساطة المدرسية",
+    "tachri": "التشريع المدرسي",
+    "psycho": "علوم التربية وعلم النفس",
+    "informatique": "الإعلام الآلي وتكنولوجيا الإعلام و الاتصال",
+	"fasad": "الشفافية والوقاية من الفساد",
+    "videos": "الفيديوهات المرفقة"
+};
+
+// =========================================================================
+// 2. دالة الهجرة وجلب البيانات من Firestore
+// =========================================================================
+async function initSiteSettings() {
+    const docRef = db.collection("site_settings").doc("main");
+    try {
+        const docSnap = await docRef.get();
+        
+        // الهيكل الافتراضي لدورة واحدة (لسهولة التكرار)
+        const defaultSessionVol = {
+            presidents: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            bursars: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            admins: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            teachers: { count: 0, days: 0, hoursPerDay: 0, total: 0 }, // تم توحيد الأساتذة
+            globalTotal: 0
+        };
+
+        if (!docSnap.exists) {
+            console.log("جاري النقل...");
+            const initialData = {
+                UI_NAMES: (typeof UI_NAMES !== 'undefined') ? UI_NAMES : { centers: {}, levels: FIXED_LEVELS, specs: FIXED_SPECS },
+                dbLinks: (typeof dbLinks !== 'undefined') ? dbLinks : {},
+                GLOBAL_CYCLE_STATUS: (typeof GLOBAL_CYCLE_STATUS !== 'undefined') ? GLOBAL_CYCLE_STATUS : {1:true, 2:false, 3:false},
+                MODULE_CYCLE_STATUS: (typeof MODULE_CYCLE_STATUS !== 'undefined') ? MODULE_CYCLE_STATUS : {},
+                HOURLY_VOLUME: {
+                    s1: JSON.parse(JSON.stringify(defaultSessionVol)),
+                    s2: JSON.parse(JSON.stringify(defaultSessionVol)),
+                    s3: JSON.parse(JSON.stringify(defaultSessionVol)),
+                    isLocked: false
+                }
+            };
+            await docRef.set(initialData);
+            SITE_SETTINGS = initialData;
+        } else {
+            SITE_SETTINGS = docSnap.data();
+            SITE_SETTINGS.UI_NAMES.levels = FIXED_LEVELS;
+            SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
+        }
+
+        // الاستماع للتغييرات اللحظية
+        docRef.onSnapshot((doc) => {
+            if (doc.exists) {
+                SITE_SETTINGS = doc.data();
+                
+                // حماية النظام وحقن البيانات إذا كانت النسخة قديمة ولا تحتوي على الدورات الثلاث
+                if (!SITE_SETTINGS.HOURLY_VOLUME || !SITE_SETTINGS.HOURLY_VOLUME.s1) {
+                    SITE_SETTINGS.HOURLY_VOLUME = {
+                        s1: JSON.parse(JSON.stringify(defaultSessionVol)),
+                        s2: JSON.parse(JSON.stringify(defaultSessionVol)),
+                        s3: JSON.parse(JSON.stringify(defaultSessionVol)),
+                        isLocked: false
+                    };
+                }
+                
+                if (SITE_SETTINGS.UI_NAMES) {
+                    SITE_SETTINGS.UI_NAMES.levels = FIXED_LEVELS;
+                    SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
+                }
+
+                populateCentersDropdownsDynamic(); 
+                updateDashboardStatsDynamic(); 
+                
+                if (typeof renderTable === 'function') renderTable(); 
+
+                if (document.getElementById('settingsModal').style.display === 'flex') {
+                    refreshCurrentTab();
+                }
+            }
+        });
+    } catch (error) {
+        console.error("خطأ:", error);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", initSiteSettings);
+
+function openSettingsManager() {
+    if (!SITE_SETTINGS) return Swal.fire('انتظار', 'جاري جلب الإعدادات...', 'info');
+    document.getElementById('settingsModal').style.display = 'flex';
+    refreshCurrentTab();
+}
+
+function switchSettingTab(tabName, btnElement) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    btnElement.classList.add('active');
+    CURRENT_TAB = tabName;
+    refreshCurrentTab();
+}
+function refreshCurrentTab() {
+    if (CURRENT_TAB === 'centers') renderCentersTab();
+    if (CURRENT_TAB === 'cycles') renderCyclesTab();
+    if (CURRENT_TAB === 'links') renderLinksTab();
+    if (CURRENT_TAB === 'hourly_volume') renderHourlyVolumeTab(); 
+}
+
+// =========================================================================
+// 4. التبويب الأول: إدارة المراكز بشكل منظم ومتداخل (Hierarchy) مع إمكانية التعديل
+// =========================================================================
+function renderCentersTab() {
+    const body = document.getElementById('settingsBody');
+    let html = `
+    <div class="setting-card" style="background: transparent; border: none; box-shadow: none; padding: 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; border:none; padding:0;"><i class="fa-solid fa-school"></i> المراكز المعتمدة للتكوين</h3>
+            <button class="btn-action btn-add" style="padding:12px 20px; font-size:15px;" onclick="openAddCenterModal()"><i class="fa-solid fa-plus"></i> إضافة مركز جديد</button>
+        </div>
+        <div class="centers-grid">`;
+
+    for (let key in SITE_SETTINGS.UI_NAMES.centers) {
+        const centerName = SITE_SETTINGS.UI_NAMES.centers[key];
+        const centerLinks = SITE_SETTINGS.dbLinks[key] || {};
+        
+        let hierarchyHtml = '';
+        
+        // بناء الهيكلة: كل طور وتحته تخصصاته
+        for(let lvlKey in centerLinks) {
+            let specsHtml = '';
+            for(let specKey in centerLinks[lvlKey]) {
+                specsHtml += `<span class="badge"><i class="fa-solid fa-book-open"></i> ${FIXED_SPECS[specKey] || specKey}</span>`;
+            }
+            if(specsHtml === '') specsHtml = '<span style="font-size:12px; color:#94a3b8;">لا يوجد تخصصات</span>';
+            
+            hierarchyHtml += `
+            <div class="level-block">
+                <div class="level-title"><i class="fa-solid fa-layer-group"></i> ${FIXED_LEVELS[lvlKey] || lvlKey}</div>
+                <div class="specs-list">${specsHtml}</div>
+            </div>`;
+        }
+
+        if(!hierarchyHtml) hierarchyHtml = '<div style="padding:15px; text-align:center; color:#94a3b8; font-size:13px; font-weight:bold;">لم يتم تعيين أطوار وتخصصات</div>';
+
+        html += `
+        <div class="center-box">
+            <div style="position:absolute; top:15px; left:15px; display:flex; gap:6px;">
+                <button onclick="openEditCenterModal('${key}')" style="background:#eff6ff; color:#1E68E8; border:1px solid #bfdbfe; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="تعديل المركز"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="deleteCenter('${key}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="حذف المركز نهائياً"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            <h4>${centerName}</h4>
+            <div class="center-hierarchy">${hierarchyHtml}</div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:15px; text-align:left;">المعرف المرجعي: ${key}</div>
+        </div>`;
+    }
+    html += `</div></div>`;
+    body.innerHTML = html;
+}
+
+// نافذة إضافة المركز 
+window.openAddCenterModal = function() {
+    let structHtml = '';
+    for(let lKey in FIXED_LEVELS) {
+        let sHtml = '';
+        for(let sKey in FIXED_SPECS) {
+            sHtml += `<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; font-weight:bold; color:#475569;">
+                        <input type="checkbox" class="swal-spec" data-level="${lKey}" value="${sKey}" style="width:18px; height:18px; accent-color:#0FBA50;">
+                        ${FIXED_SPECS[sKey]}
+                      </label>`;
+        }
+        structHtml += `
+        <div style="margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; text-align:right;">
+            <div style="background: #e2e8f0; padding: 12px; font-weight: bold; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-layer-group" style="color:#1E68E8;"></i> ${FIXED_LEVELS[lKey]}
+            </div>
+            <div style="padding: 15px; background: #f8fafc; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                ${sHtml}
+            </div>
+        </div>`;
+    }
+
+    Swal.fire({
+        title: 'إضافة مركز تكوين جديد',
+        html: `
+            <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
+                <input type="text" id="swal-center-name" class="crud-input" placeholder="اكتب اسم المركز الجديد هنا..." style="margin-bottom: 20px; font-weight:bold; font-size:16px;">
+                <h4 style="margin: 0 0 15px 0; color: #1e293b; font-size:15px; border-bottom:2px dashed #ccc; padding-bottom:10px;">اختر التخصصات الخاصة بكل طور:</h4>
+                ${structHtml}
+            </div>
+        `,
+        width: '700px',
+        showCancelButton: true, confirmButtonText: 'إضافة واعتماد', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        preConfirm: () => {
+            const name = document.getElementById('swal-center-name').value.trim();
+            if (!name) { Swal.showValidationMessage('يرجى كتابة اسم المركز'); return false; }
+            
+            let structure = {};
+            let hasAtLeastOneSpec = false;
+
+            for(let lKey in FIXED_LEVELS) {
+                let checkedSpecs = Array.from(document.querySelectorAll(`.swal-spec[data-level="${lKey}"]:checked`)).map(cb => cb.value);
+                if(checkedSpecs.length > 0) {
+                    structure[lKey] = checkedSpecs;
+                    hasAtLeastOneSpec = true;
+                }
+            }
+
+            if (!hasAtLeastOneSpec) { Swal.showValidationMessage('يرجى تحديد تخصص واحد على الأقل'); return false; }
+            return { name, structure };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) { await createNewCenterStruct(result.value); }
+    });
+}
+
+// نافذة تعديل المركز المسجل
+window.openEditCenterModal = function(key) {
+    const centerName = SITE_SETTINGS.UI_NAMES.centers[key];
+    const centerLinks = SITE_SETTINGS.dbLinks[key] || {};
+
+    let structHtml = '';
+    for(let lKey in FIXED_LEVELS) {
+        let sHtml = '';
+        for(let sKey in FIXED_SPECS) {
+            // التحقق مما إذا كان التخصص محدداً مسبقاً في هذا المركز
+            let isChecked = (centerLinks[lKey] && centerLinks[lKey][sKey]) ? 'checked' : '';
+            sHtml += `<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; font-weight:bold; color:#475569;">
+                        <input type="checkbox" class="swal-spec-edit" data-level="${lKey}" value="${sKey}" ${isChecked} style="width:18px; height:18px; accent-color:#1E68E8;">
+                        ${FIXED_SPECS[sKey]}
+                      </label>`;
+        }
+        structHtml += `
+        <div style="margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; text-align:right;">
+            <div style="background: #e2e8f0; padding: 12px; font-weight: bold; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-layer-group" style="color:#1E68E8;"></i> ${FIXED_LEVELS[lKey]}
+            </div>
+            <div style="padding: 15px; background: #f8fafc; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                ${sHtml}
+            </div>
+        </div>`;
+    }
+
+    Swal.fire({
+        title: 'تعديل بيانات المركز',
+        html: `
+            <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">اسم المركز:</label>
+                <input type="text" id="swal-edit-center-name" class="crud-input" value="${centerName}" placeholder="اسم المركز..." style="margin-bottom: 15px; font-weight:bold; font-size:16px;">
+                
+                <div style="background:#fff3cd; color:#856404; padding:10px; border-radius:6px; margin-bottom:15px; font-size:13px; font-weight:bold; display:flex; gap:10px; align-items:center;">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size:18px;"></i>
+                    <span>تنبيه: إزالة التحديد عن أي تخصص سيؤدي إلى حذف الروابط والفيديوهات المسجلة بداخله بشكل نهائي!</span>
+                </div>
+
+                <h4 style="margin: 0 0 15px 0; color: #1e293b; font-size:15px; border-bottom:2px dashed #ccc; padding-bottom:10px;">تعديل التخصصات المتوفرة:</h4>
+                ${structHtml}
+            </div>
+        `,
+        width: '700px',
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: () => {
+            const name = document.getElementById('swal-edit-center-name').value.trim();
+            if (!name) { Swal.showValidationMessage('يرجى كتابة اسم المركز'); return false; }
+            
+            let structure = {};
+            let hasAtLeastOneSpec = false;
+
+            for(let lKey in FIXED_LEVELS) {
+                let checkedSpecs = Array.from(document.querySelectorAll(`.swal-spec-edit[data-level="${lKey}"]:checked`)).map(cb => cb.value);
+                if(checkedSpecs.length > 0) {
+                    structure[lKey] = checkedSpecs;
+                    hasAtLeastOneSpec = true;
+                }
+            }
+
+            if (!hasAtLeastOneSpec) { Swal.showValidationMessage('يرجى تحديد تخصص واحد على الأقل'); return false; }
+            return { key, name, structure };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) { await updateCenterStruct(result.value); }
+    });
+}
+
+// دالة إنشاء مركز جديد
+window.createNewCenterStruct = async function(data) {
+    let keys = Object.keys(SITE_SETTINGS.UI_NAMES.centers).map(Number).filter(n => !isNaN(n));
+    let newKey = keys.length > 0 ? (Math.max(...keys) + 1).toString() : "1";
+
+    SITE_SETTINGS.UI_NAMES.centers[newKey] = data.name;
+    SITE_SETTINGS.dbLinks[newKey] = {};
+
+    for (let lvl in data.structure) {
+        SITE_SETTINGS.dbLinks[newKey][lvl] = {};
+        data.structure[lvl].forEach(spc => {
+            SITE_SETTINGS.dbLinks[newKey][lvl][spc] = { videos: [] };
+            for (let mod in SITE_SETTINGS.MODULE_CYCLE_STATUS) {
+                SITE_SETTINGS.dbLinks[newKey][lvl][spc][mod] = { 1: "", 2: "", 3: "" };
+            }
+        });
+    }
+
+    await saveSettingsToFirestore(true, 'تم إضافة المركز وتكوين هيكلته المخصصة بنجاح');
+}
+
+// دالة تحديث مركز موجود (دمج آمن للبيانات)
+window.updateCenterStruct = async function(data) {
+    const { key, name, structure } = data;
+
+    // 1. تحديث الاسم
+    SITE_SETTINGS.UI_NAMES.centers[key] = name;
+
+    // 2. تحديث الهيكلة مع الحفاظ على الروابط القديمة
+    let oldLinks = SITE_SETTINGS.dbLinks[key] || {};
+    let newLinks = {};
+
+    for (let lvl in structure) {
+        newLinks[lvl] = {};
+        structure[lvl].forEach(spc => {
+            // إذا كان التخصص موجوداً سابقاً، انسخ بياناته كاملة للحفاظ على الروابط
+            if (oldLinks[lvl] && oldLinks[lvl][spc]) {
+                newLinks[lvl][spc] = oldLinks[lvl][spc];
+                
+                // التأكد من إضافة أي مقياس جديد تمت إضافته عالمياً ولم يكن موجوداً في هذا التخصص
+                for (let mod in SITE_SETTINGS.MODULE_CYCLE_STATUS) {
+                    if(!newLinks[lvl][spc][mod]) {
+                       newLinks[lvl][spc][mod] = { 1: "", 2: "", 3: "" };
+                    }
+                }
+            } else {
+                // إذا كان تخصصاً جديداً كلياً، أنشئ له هيكل فارغ
+                newLinks[lvl][spc] = { videos: [] };
+                for (let mod in SITE_SETTINGS.MODULE_CYCLE_STATUS) {
+                    newLinks[lvl][spc][mod] = { 1: "", 2: "", 3: "" };
+                }
+            }
+        });
+    }
+
+    SITE_SETTINGS.dbLinks[key] = newLinks;
+    await saveSettingsToFirestore(true, 'تم تعديل بيانات المركز وهيكلته بنجاح');
+}
+
+// دالة حذف المركز
+window.deleteCenter = async function(key) {
+    Swal.fire({
+        title: 'تأكيد الحذف', text: `هل أنت متأكد من حذف مركز "${SITE_SETTINGS.UI_NAMES.centers[key]}" نهائياً؟ سيتم حذف جميع الروابط المرتبطة به.`, icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#dc2626', confirmButtonText: 'نعم، احذف', cancelButtonText: 'تراجع'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            delete SITE_SETTINGS.UI_NAMES.centers[key];
+            delete SITE_SETTINGS.dbLinks[key];
+            await saveSettingsToFirestore(true, 'تم حذف المركز');
+        }
+    });
+}
+
+// =========================================================================
+// 5. التبويب الثاني: الدورات والمقاييس
+// =========================================================================
+function renderCyclesTab() {
+    const body = document.getElementById('settingsBody');
+    let html = `<div class="setting-card">
+        <h3><i class="fa-solid fa-power-off"></i> لوحة التحكم العامة في الدورات التكوينية</h3>
+        <div style="display:flex; gap:30px; flex-wrap:wrap; justify-content:center; padding: 20px; background: #f8fafc; border-radius: 10px;">`;
+    
+    for (let cycle in SITE_SETTINGS.GLOBAL_CYCLE_STATUS) {
+        let isChecked = SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] ? 'checked' : '';
+        let color = isChecked ? '#0FBA50' : '#dc3545';
+        html += `<div style="display:flex; flex-direction:column; align-items:center; background:white; padding:15px 30px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-bottom: 3px solid ${color};">
+            <span style="font-weight:bold; font-size:18px; margin-bottom:10px; color:#333;">الدورة ${cycle}</span>
+            <label class="switch">
+                <input type="checkbox" onchange="updateGlobalCycle('${cycle}', this.checked)" ${isChecked}>
+                <span class="slider"></span>
+            </label>
+        </div>`;
+    }
+    html += `</div></div>`;
+
+    html += `<div class="setting-card">
+        <h3><span><i class="fa-solid fa-bars-progress"></i> إدارة المقاييس لكل دورة</span> <span style="font-size:13px; color:#777; font-weight:normal;">(افتح أو اغلق المقياس للمتدربين)</span></h3>
+        <table class="crud-table" style="text-align:center;">
+            <thead><tr><th style="text-align:right;">المقياس</th><th style="text-align:center;">الدورة 1</th><th style="text-align:center;">الدورة 2</th><th style="text-align:center;">الدورة 3</th><th style="text-align:center;">إجراء</th></tr></thead>
+            <tbody>`;
+    
+    for (let module in SITE_SETTINGS.MODULE_CYCLE_STATUS) {
+        let arName = MODULE_AR_NAMES[module] || module; 
+        html += `<tr><td style="font-weight:bold; color:#1E68E8; text-align:right; font-size:15px;">${arName}</td>`;
+        for (let i = 1; i <= 3; i++) {
+            let isChecked = SITE_SETTINGS.MODULE_CYCLE_STATUS[module][i] ? 'checked' : '';
+            html += `<td>
+                <label class="switch">
+                    <input type="checkbox" onchange="updateModuleCycle('${module}', '${i}', this.checked)" ${isChecked}>
+                    <span class="slider"></span>
+                </label>
+            </td>`;
+        }
+        html += `<td><button class="btn-action btn-del" onclick="deleteModule('${module}')" title="حذف المقياس نهائياً"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+    }
+    html += `</tbody></table>
+        <div style="display:flex; gap:10px; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e1;">
+            <input type="text" id="new_module_name" class="crud-input" placeholder="المفتاح الانجليزي للمقياس الجديد (مثال: technique)..." style="font-family:monospace;">
+            <button class="btn-action btn-add" onclick="addModule()"><i class="fa-solid fa-plus"></i> إضافة مقياس</button>
+        </div>
+    </div>`;
+    
+    body.innerHTML = html;
+}
+
+async function updateGlobalCycle(cycle, val) { SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] = val; await saveSettingsToFirestore(false); }
+async function updateModuleCycle(module, cycle, val) { SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] = val; await saveSettingsToFirestore(false); }
+
+async function addModule() {
+    let modName = document.getElementById('new_module_name').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (!modName) return Swal.fire('خطأ', 'يرجى إدخال مفتاح إنجليزي صحيح', 'error');
+    if (SITE_SETTINGS.MODULE_CYCLE_STATUS[modName]) return Swal.fire('تنبيه', 'هذا المقياس موجود مسبقاً', 'warning');
+    
+    SITE_SETTINGS.MODULE_CYCLE_STATUS[modName] = {1: false, 2: false, 3: false};
+    await saveSettingsToFirestore(true, 'تمت إضافة المقياس (سيظهر بالمفتاح الإنجليزي لحين تعريبه في الكود)');
+}
+async function deleteModule(modName) {
+    Swal.fire({ title: 'تأكيد الحذف', text: `سيتم حذف المقياس.`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'احذف'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            delete SITE_SETTINGS.MODULE_CYCLE_STATUS[modName];
+            await saveSettingsToFirestore(true, 'تم الحذف');
+        }
+    });
+}
+
+// =========================================================================
+// 6. التبويب الثالث: إدارة الروابط والفيديوهات 
+// =========================================================================
+function renderLinksTab() {
+    const body = document.getElementById('settingsBody');
+    let html = `
+    <div class="setting-card">
+        <h3><i class="fa-solid fa-link"></i> إدراج وتعديل روابط التكوين</h3>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #cbd5e1;">
+            <div>
+                <label style="font-size:13px; font-weight:bold; color:#475569; margin-bottom:5px; display:block;">المركز:</label>
+                <select id="sel_center" class="crud-input" onchange="updateLevelOptions()">
+                    <option value="">-- اختر المركز --</option>
+                    ${Object.keys(SITE_SETTINGS.UI_NAMES.centers).map(k => `<option value="${k}">${SITE_SETTINGS.UI_NAMES.centers[k]}</option>`).join('')}
+                </select>
+            </div>
+            <div>
+                <label style="font-size:13px; font-weight:bold; color:#475569; margin-bottom:5px; display:block;">الطور:</label>
+                <select id="sel_level" class="crud-input" onchange="updateSpecOptions()">
+                    <option value="">-- اختر الطور --</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size:13px; font-weight:bold; color:#475569; margin-bottom:5px; display:block;">التخصص:</label>
+                <select id="sel_spec" class="crud-input" onchange="loadLinkInput()">
+                    <option value="">-- اختر التخصص --</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size:13px; font-weight:bold; color:#475569; margin-bottom:5px; display:block;">المقياس:</label>
+                <select id="sel_module" class="crud-input" onchange="loadLinkInput()" style="border-color:#1E68E8; border-width:2px; background:#eff6ff;">
+                    <option value="">-- اختر المقياس --</option>
+                    ${Object.keys(SITE_SETTINGS.MODULE_CYCLE_STATUS).map(m => `<option value="${m}">${MODULE_AR_NAMES[m] || m}</option>`).join('')}
+                    <option value="videos" style="color:#dc2626; font-weight:bold;">${MODULE_AR_NAMES['videos']}</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="linkEditorArea" style="padding: 25px; background: white; border: 2px dashed #0FBA50; border-radius: 12px; display:none;">
+        </div>
+    </div>`;
+    body.innerHTML = html;
+}
+
+window.updateLevelOptions = function() {
+    const center = document.getElementById('sel_center').value;
+    const selLvl = document.getElementById('sel_level');
+    selLvl.innerHTML = '<option value="">-- اختر الطور --</option>';
+    document.getElementById('sel_spec').innerHTML = '<option value="">-- اختر التخصص --</option>';
+    document.getElementById('linkEditorArea').style.display = 'none';
+    
+    if(!center || !SITE_SETTINGS.dbLinks[center]) return;
+    for(let lvl in SITE_SETTINGS.dbLinks[center]) {
+        selLvl.innerHTML += `<option value="${lvl}">${FIXED_LEVELS[lvl] || lvl}</option>`;
+    }
+}
+
+window.updateSpecOptions = function() {
+    const center = document.getElementById('sel_center').value;
+    const level = document.getElementById('sel_level').value;
+    const selSpec = document.getElementById('sel_spec');
+    selSpec.innerHTML = '<option value="">-- اختر التخصص --</option>';
+    document.getElementById('linkEditorArea').style.display = 'none';
+
+    if(!center || !level || !SITE_SETTINGS.dbLinks[center][level]) return;
+    for(let spc in SITE_SETTINGS.dbLinks[center][level]) {
+        selSpec.innerHTML += `<option value="${spc}">${FIXED_SPECS[spc] || spc}</option>`;
+    }
+}
+
+window.loadLinkInput = function() {
+    const center = document.getElementById('sel_center').value;
+    const level = document.getElementById('sel_level').value;
+    const spec = document.getElementById('sel_spec').value;
+    const module = document.getElementById('sel_module').value;
+    const area = document.getElementById('linkEditorArea');
+
+    if (!center || !level || !spec || !module) { area.style.display = 'none'; return; }
+
+    if(!SITE_SETTINGS.dbLinks[center][level][spec][module]) {
+        SITE_SETTINGS.dbLinks[center][level][spec][module] = module === 'videos' ? [] : {1:"", 2:"", 3:""};
+    }
+
+    let targetData = SITE_SETTINGS.dbLinks[center][level][spec][module];
+    area.style.display = 'block';
+
+    if (module === 'videos') {
+        let vidHtml = `<h4 style="color:#dc2626; margin-top:0; font-size:18px;">${MODULE_AR_NAMES['videos']}</h4>`;
+        targetData.forEach((vid, index) => {
+            vidHtml += `
+            <div style="display:flex; gap:10px; margin-bottom:12px; align-items:center; background:#f8fafc; padding:15px; border-radius:10px; border:1px solid #e2e8f0;">
+                <input type="text" id="vid_title_${index}" class="crud-input" value="${vid.title}" placeholder="عنوان الفيديو..." style="flex:1;">
+                <input type="text" id="vid_url_${index}" class="crud-input" value="${vid.url}" placeholder="رابط يوتيوب/درايف..." dir="ltr" style="flex:2;">
+                <button class="btn-action btn-del" onclick="deleteVideo('${center}', '${level}', '${spec}', ${index})"><i class="fa-solid fa-trash"></i></button>
+            </div>`;
+        });
+        vidHtml += `
+        <div style="display:flex; gap:15px; margin-top:20px;">
+            <button class="btn-action btn-add" onclick="addVideo('${center}', '${level}', '${spec}')"><i class="fa-solid fa-plus"></i> فيديو جديد</button>
+            <button class="btn-action btn-save" onclick="saveVideos('${center}', '${level}', '${spec}')"><i class="fa-solid fa-floppy-disk"></i> حفظ الفيديوهات</button>
+        </div>`;
+        area.innerHTML = vidHtml;
+
+    } else {
+        let arModName = MODULE_AR_NAMES[module] || module;
+        let linkHtml = `<h4 style="color:#1E68E8; margin-top:0; font-size:18px;">روابط: ${arModName}</h4>`;
+        [1, 2, 3].forEach(cycle => {
+            let val = targetData[cycle] || '';
+            linkHtml += `
+            <div style="margin-bottom: 20px;">
+                <label style="font-weight:bold; color:#475569; display:block; margin-bottom:8px;">رابط مجلد الدورة ${cycle}:</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="link_c${cycle}" class="crud-input" value="${val}" placeholder="https://drive.google.com/..." dir="ltr">
+                    ${val ? `<a href="${val}" target="_blank" class="btn-action" style="background:#64748b; text-decoration:none;"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ''}
+                </div>
+            </div>`;
+        });
+        linkHtml += `<button class="btn-action btn-save" onclick="saveModuleLinks('${center}', '${level}', '${spec}', '${module}')"><i class="fa-solid fa-floppy-disk"></i> حفظ الروابط</button>`;
+        area.innerHTML = linkHtml;
+    }
+}
+
+window.saveModuleLinks = async function(c, l, s, m) {
+    SITE_SETTINGS.dbLinks[c][l][s][m] = {
+        1: document.getElementById('link_c1').value.trim(),
+        2: document.getElementById('link_c2').value.trim(),
+        3: document.getElementById('link_c3').value.trim()
+    };
+    await saveSettingsToFirestore(true, 'تم حفظ روابط المقاييس بنجاح');
+}
+
+window.saveVideos = async function(c, l, s) {
+    let videos = SITE_SETTINGS.dbLinks[c][l][s]['videos'];
+    videos.forEach((vid, i) => {
+        vid.title = document.getElementById(`vid_title_${i}`).value.trim();
+        vid.url = document.getElementById(`vid_url_${i}`).value.trim();
+    });
+    await saveSettingsToFirestore(true, 'تم حفظ الفيديوهات بنجاح');
+}
+
+window.addVideo = async function(c, l, s) {
+    SITE_SETTINGS.dbLinks[c][l][s]['videos'].push({ title: "الدرس:", url: "" });
+    loadLinkInput(); 
+}
+
+window.deleteVideo = async function(c, l, s, index) {
+    SITE_SETTINGS.dbLinks[c][l][s]['videos'].splice(index, 1);
+    await saveSettingsToFirestore(false);
+    loadLinkInput();
+}
+
+// =========================================================================
+// الدالة المسؤولة عن الحفظ
+// =========================================================================
+async function saveSettingsToFirestore(showAlert = true, msg = 'تم الحفظ') {
+    try {
+        if (showAlert) Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        await db.collection("site_settings").doc("main").set(SITE_SETTINGS);
+        if (showAlert) Swal.fire({ icon: 'success', title: 'نجاح', text: msg, timer: 1500, showConfirmButton: false });
+    } catch (error) {
+        Swal.fire('خطأ', 'تأكد من اتصالك أو صلاحيات الكتابة', 'error');
+    }
+}
+
+// =========================================================================
+// تحديث الفلاتر والإحصائيات الخاصة بلوحة التحكم الرئيسية ديناميكياً
+// =========================================================================
+function populateCentersDropdownsDynamic() {
+    if(!SITE_SETTINGS) return;
+    const filterCenter = document.getElementById("filterCenter");
+    const bulkCenterSelect = document.getElementById("bulkCenterSelect");
+    
+    if(filterCenter) {
+        let currentVal = filterCenter.value;
+        filterCenter.innerHTML = '<option value="الكل">الكل</option><option value="غير محدد">غير محدد</option>';
+        for (let key in SITE_SETTINGS.UI_NAMES.centers) {
+            filterCenter.innerHTML += `<option value="${SITE_SETTINGS.UI_NAMES.centers[key]}">${SITE_SETTINGS.UI_NAMES.centers[key]}</option>`;
+        }
+        filterCenter.value = currentVal;
+    }
+    
+    if(bulkCenterSelect) {
+        let currentVal2 = bulkCenterSelect.value;
+        bulkCenterSelect.innerHTML = '<option value="">-- اختر المركز لتسجيلهم فيه --</option>';
+        for (let key in SITE_SETTINGS.UI_NAMES.centers) {
+            bulkCenterSelect.innerHTML += `<option value="${SITE_SETTINGS.UI_NAMES.centers[key]}">${SITE_SETTINGS.UI_NAMES.centers[key]}</option>`;
+        }
+        bulkCenterSelect.value = currentVal2;
+    }
+}
+
+function updateDashboardStatsDynamic() {
+    if(!SITE_SETTINGS) return;
+    const container = document.getElementById("centersStatsContainer");
+    if(!container) return;
+    
+    const centers = SITE_SETTINGS.UI_NAMES.centers;
+    let html = '';
+    for (let key in centers) {
+        html += `
+        <div class="stat-card" style="border-right-color: #9c27b0; padding: 15px; flex-direction: column; align-items: stretch; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div class="stat-info">
+                <h3 style="font-size: 13px; color: #555; font-weight: bold;">${centers[key]}</h3>
+                <p id="stat-center-${key}" style="font-size: 24px; color: #9c27b0; margin-top: 2px;">0</p>
+              </div>
+              <i class="fa-solid fa-school stat-icon" style="color: #9c27b0; font-size: 28px; opacity: 0.3;"></i>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; border-top: 1px dashed #eee; padding-top: 8px;">
+              <span style="color: #1E68E8;"><i class="fa-solid fa-person"></i> ذكور: <span id="stat-center-m-${key}">0</span></span>
+              <span style="color: #e91e63;"><i class="fa-solid fa-person-dress"></i> إناث: <span id="stat-center-f-${key}">0</span></span>
+          </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+    
+    if(typeof updateStats === 'function') updateStats();
+}
 
 // ================= إعدادات الصور والمطابقة =================
+// (الأكواد الخاصة بجلب الموظفين بقيت كما هي دون تغيير)
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
 let employeePhotosMap = {}; 
 
@@ -486,12 +1331,10 @@ function extractCoreId(val) {
     if (!val) return "";
     let str = String(val).trim().toUpperCase();
     let digitsOnly = str.replace(/\D/g, "");
-    let core = digitsOnly.replace(/^0+/, ""); // إزالة الأصفار من اليسار للمطابقة
+    let core = digitsOnly.replace(/^0+/, ""); 
     return core === "" ? digitsOnly : core;
 }
 
-
-// المتغيرات العامة
 let allData = [];
 let filteredData = [];
 let currentPage = 1;
@@ -499,14 +1342,12 @@ const rowsPerPage = 10;
 let selectedTrainees = new Set();       
 let selectedGroupsTrainees = new Set(); 
 
-
 window.onload = function() {
     if(sessionStorage.getItem("userEmpId") !== "ADMIN_ACCESS") {
         window.location.href = "index.html"; 
         return;
     }
-    initCentersStats();
-    populateCentersDropdowns();
+    populateCentersDropdowns(); 
     fetchData();
 };
 
@@ -514,6 +1355,8 @@ function logout() {
     sessionStorage.clear();
     window.location.href = "index.html";
 }
+
+
 
 // ================= دوال الفلاتر المتعددة =================
 function toggleDairaMenu() {
@@ -562,17 +1405,113 @@ function updateDairaText() {
 
 
 
+// ================= دوال التحديث التلقائي المترابطة (المركز -> الرتبة -> التخصص) =================
+
+// 1. عند تغيير المركز
+function handleCenterChange() {
+    updateDynamicRanks(); // تحديث الرتب المتاحة في هذا المركز
+    applyFilters();       // تطبيق الفلترة على الجدول
+}
+
+// 2. دوال التعامل مع الرتب
 function handleRankAll() {
     document.querySelectorAll('.rank-checkbox').forEach(cb => cb.checked = false); 
     updateRankText();
-    updateDynamicSpecs();
+    updateDynamicSpecs(); // تحديث التخصصات عند إلغاء تحديد الرتب
+    applyFilters();
 }
+
 function handleRankChange() {
     const anyChecked = Array.from(document.querySelectorAll('.rank-checkbox')).some(cb => cb.checked);
     document.getElementById('rank-all').checked = !anyChecked;
     updateRankText();
-    updateDynamicSpecs();
+    updateDynamicSpecs(); // تحديث التخصصات بناءً على الرتب المحددة
+    applyFilters();
 }
+
+// 3. بناء الرتب المتاحة في المركز المحدد فقط
+function updateDynamicRanks() {
+    const center = document.getElementById("filterCenter").value;
+    let validRanks = new Set();
+
+    allData.forEach(item => {
+        let matchCenter = true;
+        if(center !== "الكل") {
+            if(center === "غير محدد") matchCenter = (!item.center || item.center.trim() === "");
+            else matchCenter = (item.center === center);
+        }
+        // إذا كان الموظف ينتمي للمركز المحدد، أضف رتبته للقائمة
+        if (matchCenter && item.rank && item.rank.trim() !== "") {
+            validRanks.add(item.rank);
+        }
+    });
+
+    // الاحتفاظ بالتحديدات القديمة حتى لا تضيع عند التحديث
+    let currentlySelectedRanks = [];
+    if(document.getElementById('rank-all') && !document.getElementById('rank-all').checked) {
+        currentlySelectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value);
+    }
+
+    const rankOptionsDiv = document.getElementById("rankOptions");
+    rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" onchange="handleRankAll()"> الكل</label>`;
+
+    let anyChecked = false;
+    validRanks.forEach(val => {
+        let isChecked = currentlySelectedRanks.includes(val) ? "checked" : "";
+        if(isChecked) anyChecked = true;
+        rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" ${isChecked} onchange="handleRankChange()"> ${val}</label>`);
+    });
+
+    document.getElementById('rank-all').checked = !anyChecked;
+    updateRankText();
+
+    // بعد الانتهاء من الرتب، قم بتحديث التخصصات آلياً
+    updateDynamicSpecs(); 
+}
+
+// 4. بناء التخصصات المتاحة في المركز والرتب المحددة فقط
+function updateDynamicSpecs() {
+    const center = document.getElementById("filterCenter").value;
+    
+    let selectedRanks = [];
+    if(document.getElementById('rank-all') && !document.getElementById('rank-all').checked) {
+        selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value);
+    }
+
+    let validSpecs = new Set();
+    allData.forEach(item => {
+        let matchCenter = true;
+        if(center !== "الكل") {
+            if(center === "غير محدد") matchCenter = (!item.center || item.center.trim() === "");
+            else matchCenter = (item.center === center);
+        }
+        let matchRank = (selectedRanks.length === 0 || selectedRanks.includes(item.rank));
+
+        // إذا كان الموظف يتطابق مع المركز والرتبة، أضف تخصصه
+        if (matchCenter && matchRank && item.specialty && item.specialty.trim() !== "") {
+            validSpecs.add(item.specialty);
+        }
+    });
+
+    let currentlySelectedSpecs = [];
+    if(document.getElementById('spec-all') && !document.getElementById('spec-all').checked) {
+        currentlySelectedSpecs = Array.from(document.querySelectorAll('.spec-checkbox:checked')).map(cb => cb.value);
+    }
+
+    const specOptionsDiv = document.getElementById("specOptions");
+    specOptionsDiv.innerHTML = `<label><input type="checkbox" id="spec-all" value="الكل" onchange="handleSpecAll()"> الكل</label>`;
+
+    let anyChecked = false;
+    validSpecs.forEach(val => {
+        let isChecked = currentlySelectedSpecs.includes(val) ? "checked" : "";
+        if(isChecked) anyChecked = true;
+        specOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="spec-checkbox" value="${val}" ${isChecked} onchange="handleSpecChange()"> ${val}</label>`);
+    });
+
+    document.getElementById('spec-all').checked = !anyChecked;
+    updateSpecText();
+}
+
 function updateRankText() {
     if(document.getElementById('rank-all').checked) {
         document.getElementById('rank-selected-text').innerText = "الكل";
@@ -586,28 +1525,7 @@ function updateRankText() {
     }
 }
 
-function updateDynamicSpecs() {
-    let selectedRanks = [];
-    if(!document.getElementById('rank-all').checked) {
-        selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value);
-    }
-    
-    let validSpecs = new Set();
-    allData.forEach(item => {
-        if (selectedRanks.length === 0 || selectedRanks.includes(item.rank)) {
-            if (item.specialty && item.specialty.trim() !== "") validSpecs.add(item.specialty);
-        }
-    });
 
-    const specOptionsDiv = document.getElementById("specOptions");
-    specOptionsDiv.innerHTML = `<label><input type="checkbox" id="spec-all" value="الكل" checked onchange="handleSpecAll()"> الكل</label>`;
-    validSpecs.forEach(val => {
-        specOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="spec-checkbox" value="${val}" onchange="handleSpecChange()"> ${val}</label>`);
-    });
-
-    document.getElementById('spec-selected-text').innerText = "الكل";
-    applyFilters();
-}
 
 function handleSpecAll() {
     document.querySelectorAll('.spec-checkbox').forEach(cb => cb.checked = false); 
@@ -669,7 +1587,9 @@ function populateCentersDropdowns() {
 }
 
 function getCenterOptionsHtml(selectedCenter) {
-    const centers = UI_NAMES.centers;
+    // التعديل هنا: نطلب منه جلب المراكز من الإعدادات الديناميكية لفايربيز أولاً
+    const centers = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES) ? SITE_SETTINGS.UI_NAMES.centers : UI_NAMES.centers;
+    
     let html = `<option value="">-- اختر المركز --</option>`;
     for (let key in centers) {
         const centerName = centers[key];
@@ -679,37 +1599,40 @@ function getCenterOptionsHtml(selectedCenter) {
     return html;
 }
 
-// ================= جلب البيانات والصور =================
+// متغير لمعرفة ما إذا كان هذا هو التحميل الأول أم مجرد تحديث صامت
+let isFirstLoad = true;
+
+// ================= جلب البيانات والصور (بنظام التحديث اللحظي الصامت) =================
 async function fetchData() {
+    // 1. جلب الصور أولاً (مرة واحدة فقط)
     try {
-        // 1. جلب الصور أولاً من سكربت البطاقات
-        try {
-            const photoRes = await fetch(`${PHOTO_SCRIPT_URL}?type=employees`);
-            const responseText = await photoRes.text();
-            if (responseText && responseText.includes("[")) {
-                const photoData = JSON.parse(responseText);
-                employeePhotosMap = {};
-                photoData.forEach(item => {
-                    if(item.jobId && item.photoUrl) {
-                        const coreJobId = extractCoreId(item.jobId);
-                        let directUrl = item.photoUrl;
-                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                        if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
-                        employeePhotosMap[coreJobId] = directUrl;
-                    }
-                });
-            }
-        } catch (e) {
-            console.warn("تعذر جلب الصور:", e);
+        const photoRes = await fetch(`${PHOTO_SCRIPT_URL}?type=employees`);
+        const responseText = await photoRes.text();
+        if (responseText && responseText.includes("[")) {
+            const photoData = JSON.parse(responseText);
+            employeePhotosMap = {};
+            photoData.forEach(item => {
+                if(item.jobId && item.photoUrl) {
+                    const coreJobId = extractCoreId(item.jobId);
+                    let directUrl = item.photoUrl;
+                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
+                    employeePhotosMap[coreJobId] = directUrl;
+                }
+            });
         }
+    } catch (e) {
+        console.warn("تعذر جلب الصور:", e);
+    }
 
-        // 2. جلب البيانات من Firebase
-        const snapshot = await db.collection("employeescomnew").get();
-        allData = [];
-        let ranks = new Set();
-
-        snapshot.forEach(doc => {
+    // 2. الاتصال اللحظي بقاعدة البيانات (Real-time Listener)
+    db.collection("employeescomnew").onSnapshot((snapshot) => {
+        // استخدام docChanges لمعالجة ما تغير فقط (سريع جداً وخفيف)
+        snapshot.docChanges().forEach((change) => {
+            const doc = change.doc;
             const data = doc.data();
+            
+            // تهيئة بيانات السطر
             let item = {
                 docId: doc.id,
                 empId: data.id || doc.id,
@@ -724,9 +1647,11 @@ async function fetchData() {
                 phone: data.phone || data.tel || "-", 
                 pob: data.pob || "-", 
                 center: data.center || "",
-                password: data.password || "" 
+                password: data.password || "",
+                group: data.group || data.fawj || "-" 
             };
 
+            // تهيئة التاريخ
             if (item.dob && typeof item.dob.toDate === 'function') {
                 let d = item.dob.toDate();
                 let day = ("0" + d.getDate()).slice(-2);
@@ -737,44 +1662,66 @@ async function fetchData() {
                 item.dob = item.dob.replace(/\//g, '-');
             }
 
-            allData.push(item);
-            if(item.rank) ranks.add(item.rank);
-        });
-
-        const rankOptionsDiv = document.getElementById("rankOptions");
-        rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
-        ranks.forEach(val => { 
-            if(val.trim() !== "") {
-                rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); 
+            // تحديث المصفوفة المحلية بناءً على نوع التغيير (إضافة، تعديل، حذف)
+            if (change.type === "added") {
+                allData.push(item);
+            }
+            if (change.type === "modified") {
+                const index = allData.findIndex(d => d.docId === doc.id);
+                if (index !== -1) allData[index] = item;
+            }
+            if (change.type === "removed") {
+                allData = allData.filter(d => d.docId !== doc.id);
+                selectedTrainees.delete(doc.id); // مسح التحديد إذا تم حذفه
+                selectedGroupsTrainees.delete(doc.id);
             }
         });
 
+        // ================== التصحيح تم هنا ==================
+        // إذا كان هذا هو التحميل الأول للموقع
+        if (isFirstLoad) {
+            document.getElementById("loader").style.display = "none";
+            isFirstLoad = false;
+            
+            // توليد وبناء الرتب والتخصصات تلقائياً بناءً على ما تم جلبه
+            updateDynamicRanks(); 
+            
+            // استدعاء دالة الفلترة التي تقوم فعلياً برسم الجدول بالبيانات (كانت مفقودة)
+            applyFilters();
+        } else {
+            // إذا كان مجرد تحديث صامت (مثلا شخص قام بتعديل أو إضافة)
+            applyFilters(true); // إرسال true يعني "تحديث صامت"
+            
+            // تحديث نافذة الأفواج إذا كانت مفتوحة
+            if (document.getElementById('groupingModal') && document.getElementById('groupingModal').style.display === 'flex') {
+                renderGroupingTable(); 
+            }
+        }
+    }, (error) => {
+        console.error("Error in real-time updates:", error);
         document.getElementById("loader").style.display = "none";
-        updateDynamicSpecs(); 
-
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        document.getElementById("loader").style.display = "none";
-        Swal.fire('خطأ', 'تعذر جلب البيانات من قاعدة البيانات', 'error');
-    }
+        Swal.fire('خطأ', 'انقطع الاتصال بقاعدة البيانات', 'error');
+    });
 }
+
 // ================= الفلترة وعرض الجدول =================
-function applyFilters() {
-    const search = document.getElementById("searchInput").value.toLowerCase();
-    const filterCenter = document.getElementById("filterCenter").value;
+// المعامل isSilent يمنع فقدان الصفحة الحالية والتحديدات عند التحديث اللحظي
+function applyFilters(isSilent = false) {
+    const search = document.getElementById("searchInput") ? document.getElementById("searchInput").value.toLowerCase() : "";
+    const filterCenter = document.getElementById("filterCenter") ? document.getElementById("filterCenter").value : "الكل";
 
     let selectedDairas = [];
-    if(!document.getElementById('daira-all').checked) {
+    if(document.getElementById('daira-all') && !document.getElementById('daira-all').checked) {
         selectedDairas = Array.from(document.querySelectorAll('.daira-checkbox:checked')).map(cb => cb.value);
     }
 
     let selectedRanks = [];
-    if(!document.getElementById('rank-all').checked) {
+    if(document.getElementById('rank-all') && !document.getElementById('rank-all').checked) {
         selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value);
     }
 
     let selectedSpecs = [];
-    if(!document.getElementById('spec-all').checked) {
+    if(document.getElementById('spec-all') && !document.getElementById('spec-all').checked) {
         selectedSpecs = Array.from(document.querySelectorAll('.spec-checkbox:checked')).map(cb => cb.value);
     }
 
@@ -792,9 +1739,12 @@ function applyFilters() {
         return matchSearch && matchDaira && matchRank && matchSpec && matchCenter;
     });
 
-    currentPage = 1; 
-    selectedTrainees.clear(); // مسح التحديدات القديمة عند فلترة جديدة
-    document.getElementById("selectAll").checked = false;
+    // إذا لم يكن تحديثاً صامتاً (أي أن المدير هو من يغير الفلاتر)
+    if (isSilent !== true) {
+        currentPage = 1; 
+        selectedTrainees.clear(); 
+        if (document.getElementById("selectAll")) document.getElementById("selectAll").checked = false;
+    }
     
     updateStats();
     renderTable();
@@ -833,7 +1783,7 @@ function renderTable() {
     tbody.innerHTML = "";
 
     if(filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة للبحث</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة للبحث</td></tr>`;
         renderPagination(0);
         return;
     }
@@ -877,7 +1827,7 @@ function renderTable() {
             </td>
             <td style="vertical-align: middle;">${item.name || '-'}</td>
             <td style="text-align:center; white-space:nowrap; vertical-align: middle;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
-            
+            <td style="text-align:center; vertical-align: middle;">${item.pob || '-'}</td>
             <td style="font-weight:600; color:#1E68E8; vertical-align: middle;">${item.daira || '-'}</td>
             <td style="vertical-align: middle;">${item.address || '-'}</td>
             <td style="direction: ltr; text-align: right; white-space: nowrap; vertical-align: middle;">${item.phone || '-'}</td>
@@ -1103,6 +2053,123 @@ function printFilteredList() {
     printWindow.document.close();
 }
 
+
+// ================= دالة تصدير البيانات إلى ملف Excel باحترافية =================
+async function exportToExcel() {
+    // التأكد من وجود بيانات
+    if (filteredData.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لتصديرها', 'warning');
+        return;
+    }
+
+    // إظهار رسالة تحميل
+    Swal.fire({ title: 'جاري تجهيز وتنسيق الملف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        // 1. إنشاء مصنف (Workbook) جديد
+        const workbook = new ExcelJS.Workbook();
+        
+        // 2. إنشاء ورقة عمل مع تفعيل الاتجاه من اليمين لليسار (RTL)
+        const worksheet = workbook.addWorksheet('قائمة المتكونين', {
+            views: [{ rightToLeft: true }]
+        });
+
+        // 3. تعريف الأعمدة ومفاتيحها
+        worksheet.columns = [
+            { header: 'الرقم', key: 'index' },
+            { header: 'الرقم الوظيفي', key: 'empId' },
+            { header: 'الاسم واللقب', key: 'name' },
+            { header: 'الجنس', key: 'gender' },
+            { header: 'تاريخ الميلاد', key: 'dob' },
+            { header: 'مكان الميلاد', key: 'pob' },
+            { header: 'الدائرة', key: 'daira' },
+            { header: 'العنوان', key: 'address' },
+            { header: 'رقم الهاتف', key: 'phone' },
+            { header: 'الرتبة', key: 'rank' },
+            { header: 'التخصص', key: 'specialty' },
+            { header: 'مكان العمل', key: 'workplace' },
+            { header: 'المركز', key: 'center' },
+            { header: 'الفوج', key: 'group' }
+        ];
+
+        // 4. تعبئة البيانات
+        filteredData.forEach((item, index) => {
+            worksheet.addRow({
+                index: index + 1,
+                empId: item.empId || '-',
+                name: item.name || '-',
+                gender: item.gender || '-',
+                dob: item.dob || '-',
+                pob: item.pob || '-',
+                daira: item.daira || '-',
+                address: item.address || '-',
+                phone: item.phone || '-',
+                rank: item.rank || '-',
+                specialty: item.specialty || '-',
+                workplace: item.workplace || '-',
+                center: item.center || 'غير محدد',
+                group: item.group || '-'
+            });
+        });
+
+        // 5. تطبيق التنسيقات الاحترافية (الحدود، المحاذاة، الألوان، والعرض التلقائي)
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell, colNumber) => {
+                // محاذاة النص لليمين والوسط
+                cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+                
+                // إضافة حدود لكل الخلايا
+                cell.border = {
+                    top: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    left: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    bottom: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    right: {style:'thin', color: {argb:'FFB0BEC5'}}
+                };
+
+                // تنسيق خاص لصف العناوين (الصف الأول)
+                if (rowNumber === 1) {
+                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FF1E68E8' } // اللون الأزرق الخاص بالموقع
+                    };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' }; // توسيط العناوين
+                } else {
+                    cell.font = { size: 11 };
+                }
+            });
+        });
+
+        // ميزة الـ Auto-Fit (تعديل عرض العمود حسب أطول نص بداخله)
+        worksheet.columns.forEach(column => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, cell => {
+                let columnLength = cell.value ? cell.value.toString().length : 0;
+                // إعطاء مساحة إضافية للأحرف العربية لأنها تأخذ حيزاً أكبر
+                if (columnLength > maxLength) {
+                    maxLength = columnLength;
+                }
+            });
+            // تحديد عرض أدنى وأقصى للعمود
+            column.width = maxLength < 12 ? 12 : maxLength + 5;
+        });
+
+        // 6. تجميع الملف وتحميله للمستخدم
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        saveAs(blob, `قائمة_المتكونين_${dateStr}.xlsx`);
+
+        Swal.close();
+        
+    } catch (error) {
+        console.error("Excel Export Error:", error);
+        Swal.fire('خطأ', 'حدث مشكل أثناء تصدير الملف.', 'error');
+    }
+}
+
 // ================= بناء نظام الصفحات =================
 function renderPagination(totalPages) {
     const container = document.getElementById("pagination-controls");
@@ -1264,7 +2331,7 @@ function editRecord(docId) {
                             <option value="المقارين" ${item.daira === 'المقارين' ? 'selected' : ''}>المقارين</option>
                             <option value="الطيبات" ${item.daira === 'الطيبات' ? 'selected' : ''}>الطيبات</option>
                             <option value="الحجيرة" ${item.daira === 'الحجيرة' ? 'selected' : ''}>الحجيرة</option>
-                            <option value="البرمة" ${item.daira === 'البرمة' ? 'selected' : ''}>البرمة</option>
+                            
                         </select>
                     </div>
                     <div>
@@ -1383,6 +2450,7 @@ async function verifyAndCreateAdmin(empId) {
     try {
         let userData = null;
         
+        // 1. التحقق من هوية الشخص في قاعدة بيانات المستخدمين
         let docSnap = await db.collection("employeescomplus").doc(empId).get();
         if (docSnap.exists) {
             userData = docSnap.data(); userData.id = docSnap.id;
@@ -1392,21 +2460,52 @@ async function verifyAndCreateAdmin(empId) {
         }
 
         if (!userData) {
-            Swal.fire('غير موجود', 'لم يتم العثور على أي شخص بهذا الرقم الوظيفي في قاعدة بيانات المستخدمين.', 'error')
-            .then(() => promptForAdminId());
+            Swal.fire('غير موجود', 'لم يتم العثور على أي شخص بهذا الرقم الوظيفي.', 'error').then(() => promptForAdminId());
             return;
         }
 
+        // --- 🔴 الإضافة الجديدة هنا: منع تسجيل حساب لنفس المسؤول مرتين 🔴 ---
+        let existingAdminCheck = await db.collection("center_admins").doc(userData.id).get();
+        if (existingAdminCheck.exists) {
+            let adminData = existingAdminCheck.data();
+            Swal.fire({
+                icon: 'warning',
+                title: 'حساب مسجل مسبقاً',
+                html: `هذا المسؤول <b>${userData.name}</b> مسجل مسبقاً ويشرف بالفعل على مركز:<br><span style="color:#d90429; font-weight:bold; display:inline-block; margin-top:10px;">${adminData.center}</span><br><br>لا يُسمح للمسؤول بالإشراف على أكثر من مركز!`
+            }).then(() => manageCenterAdmins());
+            return; // إيقاف العملية فوراً
+        }
+        // ------------------------------------------------------------------------
+
+        // جلب الأرقام السرية والوظائف المحجوزة في المراكز لمنع التكرار
+        let usedPasswords = [];
+        let existingRoles = []; 
+        const adminsSnap = await db.collection("center_admins").get();
+        adminsSnap.forEach(d => { 
+            let dt = d.data();
+            usedPasswords.push(dt.password); 
+            existingRoles.push({ id: d.id, center: dt.center, jobTitle: dt.jobTitle, name: dt.name });
+        });
+
         const centerOptionsHtml = getCenterOptionsHtml('');
+
+        // استنتاج الوظيفة آلياً بناءً على الرتبة (وتبقى مجمدة)
+        let rankStr = userData.grade || userData.rank || '-';
+        let roleTitle = "عضو تأطير"; 
+        if (rankStr.includes("مفتش")) roleTitle = "المسؤول البيداغوجي";
+        else if (rankStr.includes("مدير")) roleTitle = "المسؤول الإداري";
 
         Swal.fire({
             title: 'تكوين حساب رئيس المركز',
             html: `
                 <div style="text-align:right; font-size:14px; line-height: 1.8;">
-                    <div style="background: #f0fdf4; padding: 10px; border: 1px solid #0FBA50; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="background: #f0fdf4; padding: 12px; border: 1px solid #0FBA50; border-radius: 8px; margin-bottom: 15px;">
                         <b>الاسم واللقب:</b> ${userData.name || '-'} <br>
-                        <b>الرتبة:</b> ${userData.grade || userData.rank || '-'} <br>
-                        <b>رقم التعريف:</b> ${userData.id}
+                        <b>الرتبة:</b> ${rankStr} <br>
+                        <b>رقم التعريف:</b> ${userData.id} <br>
+                        <div style="margin-top: 10px; padding-top: 12px; border-top: 1px dashed #0FBA50;">
+                            <b>الوظيفة بالمركز:</b> <span style="color:#d90429; font-weight:900; font-size:14px; background:#ffeaea; padding:2px 10px; border-radius:5px; border:1px solid #ffc6c6;">${roleTitle}</span>
+                        </div>
                     </div>
                     
                     <label style="font-weight:bold; color:#333;">حدد المركز الذي سيشرف عليه:</label>
@@ -1416,13 +2515,11 @@ async function verifyAndCreateAdmin(empId) {
 
                     <label style="font-weight:bold; color:#333;">الرقم السري (للدخول كمسؤول مركز):</label>
                     <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-                        <!-- الفلترة اللحظية (oninput) للسماح بالأرقام، الأحرف الفرنسية، والرموز فقط -->
                         <input type="text" id="admin-password" class="swal2-input" minlength="8" maxlength="20" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:16px;" placeholder="من 8 إلى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\-=\\[\\]{}:;<>?,./]/g, '')">
                         <button onclick="document.getElementById('admin-password').value = generateStrongPassword()" style="width: 30%; background: #1E68E8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family:'Cairo'; padding: 11px; font-weight: bold;">
                             توليد عشوائي
                         </button>
                     </div>
-                    <span style="font-size:12px; color:#d90429;">ملاحظة: يقبل النظام من 8 إلى 20 خانة تتكون من أحرف فرنسية (كبيرة وصغيرة)، أرقام، ورموز فقط.</span>
                 </div>
             `,
             showCancelButton: true, confirmButtonText: 'حفظ واعتماد الحساب', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
@@ -1432,51 +2529,185 @@ async function verifyAndCreateAdmin(empId) {
                 
                 if (!center || !password) { Swal.showValidationMessage('الرجاء اختيار المركز وإدخال الرقم السري!'); return false; }
                 
-                // شرط: يجب أن يكون الطول بين 8 و 20
-                if (password.length < 8 || password.length > 20) {
-                    Swal.showValidationMessage('الرقم السري يجب أن يكون بين 8 و 20 خانة!');
+                // منع التكرار للرقم السري
+                if (usedPasswords.includes(password)) {
+                    Swal.showValidationMessage('الرقم السري مستخدم مسبقاً! الرجاء توليد رقم سري جديد.');
                     return false;
                 }
 
-                // التأكد النهائي من التركيبة (أحرف وأرقام ورموز فقط)
-                const validRegex = /^[a-zA-Z0-9!@#$%^&*()_+~\-=\[\]{}:;<>?,./]{8,20}$/;
-                if (!validRegex.test(password)) {
-                    Swal.showValidationMessage('الرقم السري غير صالح! تأكد من استخدام أحرف فرنسية، أرقام، ورموز فقط.');
+                // منع تكرار الوظيفة المستنتجة في نفس المركز
+                const duplicateRole = existingRoles.find(r => r.center === center && r.jobTitle === roleTitle && r.id !== userData.id);
+                if (duplicateRole) {
+                    Swal.showValidationMessage(`المركز "${center}" يمتلك مسبقاً (${roleTitle}) وهو الأستاذ: ${duplicateRole.name}. لا يمكن تعيين مسؤولين اثنين بنفس الصفة!`);
                     return false;
                 }
 
-                return { center, password, name: userData.name, rank: userData.grade || userData.rank || '-' };
+                return { center, password, name: userData.name, rank: rankStr, jobTitle: roleTitle };
             }
         }).then(async (res) => {
             if (res.isConfirmed) {
-                Swal.fire({ title: 'جاري تسجيل الحساب...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 try {
+                    // 1. الحفظ في قاعدة الحسابات (للسماح له بالدخول)
                     await db.collection("center_admins").doc(userData.id).set({
-                        id: userData.id, name: res.value.name, rank: res.value.rank, center: res.value.center, password: res.value.password, role: "inspector", disabled: false
+                        id: userData.id, name: res.value.name, rank: res.value.rank, center: res.value.center, password: res.value.password, role: "inspector", jobTitle: res.value.jobTitle, disabled: false
                     });
-                    
-                    Swal.fire('تم بنجاح', 'تم تسجيل حساب رئيس المركز بنجاح.', 'success')
-                    .then(() => manageCenterAdmins()); 
-                } catch (e) {
-                    Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error');
+
+                    // 2. تجهيز وتنسيق رقم الهاتف للحفظ في جدول المؤطرين
+                    let rawPhone = (userData.phone || userData.tel || "").trim().replace(/\s+/g, '');
+                    let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+
+                    // 3. الحفظ المزدوج التلقائي في قاعدة المؤطرين بالمركز
+                    await db.collection("center_framers").doc(userData.id).set({
+                        empId: userData.id,
+                        center: res.value.center,
+                        role: res.value.jobTitle,
+                        phone: formattedPhone,
+                        ccp: userData.ccp || "",
+                        ccpKey: userData.ccpKey || "",
+                        s1: true, s2: true, s3: true, // تسجيله تلقائياً في كل الدورات
+                        shifts: [], 
+                        isProtected: true // حماية وظيفته من التعديل من طرف مستخدمين آخرين
+                    });
+
+                    Swal.fire('تم بنجاح', 'تم تسجيل الحساب وإدراجه في قائمة المؤطرين بنجاح.', 'success').then(() => manageCenterAdmins()); 
+                } catch (e) { 
+                    Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error'); 
                 }
             }
         });
 
-    } catch (error) {
-        console.error(error);
-        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
-    }
+    } catch (error) { Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error'); }
 }
 
+// ================= دالة اعتماد وإنشاء حساب من قائمة الانتظار =================
+window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle) {
+    let usedPasswords = [];
+    const adminsSnap = await db.collection("center_admins").get();
+    adminsSnap.forEach(d => usedPasswords.push(d.data().password));
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-check" style="color:#0FBA50;"></i> اعتماد حساب جديد',
+        html: `
+            <div style="text-align:right; font-size:14px; line-height: 1.8; font-family:'Cairo';">
+                <div style="background: #f0fdf4; padding: 12px; border: 1px solid #0FBA50; border-radius: 8px; margin-bottom: 15px;">
+                    <b>الاسم واللقب:</b> ${name} <br>
+                    <b>الرقم الوظيفي:</b> ${empId} <br>
+                    <b>المركز الموجه إليه:</b> <span style="color:#0FBA50; font-weight:bold;">${center}</span> <br>
+                    <div style="margin-top: 5px; padding-top: 5px; border-top: 1px dashed #0FBA50;">
+                        <b>الوظيفة بالمركز:</b> <span style="color:#d90429; font-weight:900;">${jobTitle}</span>
+                    </div>
+                </div>
+                
+                <label style="font-weight:bold; color:#333;">الرقم السري (للدخول كمسؤول مركز):</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                    <input type="text" id="approve-password" class="swal2-input" minlength="8" maxlength="20" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:16px; font-weight:bold;" placeholder="من 8 إلى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\\\-=\\[\\]{}:;<>?,./]/g, '')">
+                    <button onclick="document.getElementById('approve-password').value = generateStrongPassword()" style="width: 30%; background: #1E68E8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family:'Cairo'; padding: 11px; font-weight: bold;">
+                        توليد عشوائي
+                    </button>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ واعتماد الحساب', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        preConfirm: () => {
+            const password = document.getElementById('approve-password').value;
+            if (!password) { Swal.showValidationMessage('الرجاء إدخال الرقم السري!'); return false; }
+            if (usedPasswords.includes(password)) { Swal.showValidationMessage('الرقم السري مستخدم مسبقاً! قم بتوليد رقم جديد.'); return false; }
+            return password;
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // حفظ البيانات كحساب رسمي في مجموعة center_admins
+                await db.collection("center_admins").doc(empId).set({
+                    id: empId, 
+                    name: name, 
+                    rank: rank, 
+                    center: center, 
+                    password: res.value, 
+                    role: "inspector", 
+                    jobTitle: jobTitle, 
+                    disabled: false
+                });
+                
+                Swal.fire('تم بنجاح', 'تم اعتماد وإنشاء حساب المسؤول بنجاح.', 'success').then(() => {
+                    loadAdminsList(); // إعادة تحميل القائمة لاختفاء اللون البرتقالي وتحوله لحساب رسمي
+                }); 
+            } catch (e) { 
+                Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error'); 
+            }
+        }
+    });
+};
+
+// ================= دالة جلب الحسابات (مع ميزة اكتشاف الحسابات المعلقة من المفتش) =================
 async function loadAdminsList() {
     const container = document.getElementById('admins-list-container');
+    container.innerHTML = '<div style="text-align: center; color: #777; padding: 20px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>جاري جلب ومطابقة الحسابات...</div>';
+    
     try {
+        let adminsArray = [];
+        let officialIds = new Set();
+
+        // 1. جلب الحسابات الرسمية المعتمدة
         const snap = await db.collection("center_admins").get();
-        if(snap.empty) {
-            container.innerHTML = '<p style="color: #777; text-align: center; font-weight: bold;">لا توجد حسابات مدراء/مفتشين مسجلة حالياً.</p>';
+        snap.forEach(doc => { 
+            let data = doc.data();
+            data.id = doc.id;
+            data.isPending = false; // علامة تميز الحساب المعتمد
+            adminsArray.push(data);
+            officialIds.add(doc.id);
+        });
+
+        // 2. البحث عن الحسابات المعلقة (أضافها المفتش كمؤطرين ولم تُعتمد كحسابات)
+        const framersSnap = await db.collection("center_framers").where("role", "in", ["المسؤول الإداري", "المسؤول البيداغوجي"]).get();
+        let pendingFramers = [];
+        framersSnap.forEach(doc => pendingFramers.push(doc.data()));
+
+        for (let fData of pendingFramers) {
+            if (fData.empId && !officialIds.has(fData.empId)) {
+                // جلب اسم ورتبة المؤطر من القاعدة الأساسية
+                let empName = "غير معروف";
+                let empRank = "-";
+                try {
+                    let eSnap = await db.collection("employeescomnew").doc(fData.empId).get();
+                    if (!eSnap.exists) eSnap = await db.collection("employeescomplus").doc(fData.empId).get();
+                    if (eSnap.exists) {
+                        empName = eSnap.data().name || empName;
+                        empRank = eSnap.data().grade || eSnap.data().rank || empRank;
+                    }
+                } catch(e) {}
+
+                adminsArray.push({
+                    id: fData.empId,
+                    name: empName,
+                    rank: empRank,
+                    center: fData.center,
+                    password: "بانتظار الاعتماد",
+                    jobTitle: fData.role,
+                    disabled: false,
+                    isPending: true // علامة الحساب المعلق
+                });
+                officialIds.add(fData.empId); // لتفادي التكرار
+            }
+        }
+
+        if(adminsArray.length === 0) {
+            container.innerHTML = '<p style="color: #777; text-align: center; font-weight: bold; padding: 20px;">لا توجد حسابات مدراء/مفتشين مسجلة أو في الانتظار حالياً.</p>';
             return;
         }
+        
+        // 3. الترتيب: حسب المركز أولاً، ثم حسب الوظيفة
+        adminsArray.sort((a, b) => {
+            let centerA = a.center || "";
+            let centerB = b.center || "";
+            if (centerA !== centerB) return centerA.localeCompare(centerB, 'ar'); 
+            let jobA = a.jobTitle || "";
+            let jobB = b.jobTitle || "";
+            return jobB.localeCompare(jobA, 'ar'); 
+        });
+
         let html = `
         <div style="max-height: 65vh; overflow-y: auto; padding-left: 5px;">
         <table class="admin-table" style="font-size: 15px;">
@@ -1492,44 +2723,65 @@ async function loadAdminsList() {
             </thead>
             <tbody>
         `;
-        snap.forEach(doc => {
-            const data = doc.data();
-            let statusBadge = data.disabled ? '<span style="color:#dc3545; font-size:12px;"><i class="fa-solid fa-circle-xmark"></i> معطل</span>' : '<span style="color:#28a745; font-size:12px;"><i class="fa-solid fa-circle-check"></i> مفعل</span>';
-            let toggleIcon = data.disabled ? 'fa-toggle-off' : 'fa-toggle-on';
-            let toggleColor = data.disabled ? '#6c757d' : '#28a745';
-            let toggleTitle = data.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب مؤقتاً';
-            let toggleText = data.disabled ? 'تفعيل' : 'تعطيل';
-
-            // 🌟 جلب صورة المشرف من الذاكرة 🌟
-            const coreAdminId = extractCoreId(doc.id);
-            const photoUrl = employeePhotosMap[coreAdminId];
+        
+        // 4. بناء الجدول
+        adminsArray.forEach(data => {
+            let docId = data.id;
             
+            // التمييز البصري للحساب المعلق
+            let bgStyle = data.isPending ? 'background:#fff3cd;' : (data.disabled ? 'background:#f8d7da; opacity:0.8;' : '');
+            
+            // عمود الرقم السري أو حالة الانتظار
+            let passHtml = data.isPending 
+                ? `<span style="color:#d35400; font-weight:bold; font-size:13px;"><i class="fa-solid fa-clock"></i> بانتظار الاعتماد</span><br><span style="font-size:10px; color:#777;">(أُضيف من طرف المركز)</span>` 
+                : `<span style="direction: ltr; display:inline-block; font-family: monospace; font-size: 16px;">${data.password}</span>`;
+            
+            // عمود حالة الحساب
+            let statusBadge = data.isPending 
+                ? '<span style="color:#ff9800; font-size:12px;"><i class="fa-solid fa-hourglass-half"></i> قيد المراجعة</span>'
+                : (data.disabled ? '<span style="color:#dc3545; font-size:12px;"><i class="fa-solid fa-circle-xmark"></i> معطل</span>' : '<span style="color:#28a745; font-size:12px;"><i class="fa-solid fa-circle-check"></i> مفعل</span>');
+
+            const coreAdminId = extractCoreId(docId);
+            const photoUrl = employeePhotosMap[coreAdminId];
             const photoHtml = `
               <div class="profile-pic-container" style="width: 42px; height: 42px; margin: 0 auto; cursor: default;">
-                  ${photoUrl 
-                      ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' style=\\'font-size: 18px;\\'></i>'">` 
-                      : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
+                  ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' style=\\'font-size: 18px;\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
               </div>
             `;
 
+            // أزرار الإجراءات (زر إنشاء الحساب إذا كان معلقاً، أو الأزرار المعتادة إذا كان مفعلاً)
+            let actionButtons = "";
+            if (data.isPending) {
+                actionButtons = `
+                    <button onclick="approvePendingAdmin('${docId}', '${data.center}', '${data.name}', '${data.rank}', '${data.jobTitle}')" style="background: #0FBA50; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px;" title="إنشاء وتفعيل الحساب">
+                        <i class="fa-solid fa-user-check"></i> اعتماد وإنشاء الحساب
+                    </button>
+                `;
+            } else {
+                let toggleIcon = data.disabled ? 'fa-toggle-off' : 'fa-toggle-on';
+                let toggleColor = data.disabled ? '#6c757d' : '#28a745';
+                actionButtons = `
+                    <button onclick="toggleAdminStatus('${docId}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid ${toggleIcon}"></i></button>
+                    <button onclick="editAdminAccount('${docId}')" style="background: #ffc107; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid fa-pen-to-square"></i></button>
+                    <button onclick="deleteAdminAccount('${docId}')" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid fa-trash"></i></button>
+                `;
+            }
+
             html += `
-                <tr style="${data.disabled ? 'background:#f8d7da; opacity:0.8;' : ''}">
+                <tr style="${bgStyle} transition:0.3s;">
                     <td style="text-align:center; vertical-align: middle;">${photoHtml}</td>
-                    <td style="font-weight: bold; text-align:center; vertical-align: middle;">${doc.id} <br> ${statusBadge}</td>
-                    <td style="font-weight: bold; color: #1E68E8; vertical-align: middle;">${data.name}</td>
+                    <td style="font-weight: bold; text-align:center; vertical-align: middle;">${docId} <br> ${statusBadge}</td>
+                    <td style="font-weight: bold; color: #1E68E8; vertical-align: middle;">
+                        ${data.name} <br>
+                        <div style="font-size: 11px; color: #d90429; font-weight: 900; background: #ffeaea; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 5px; border: 1px solid #ffc6c6;">
+                            ${data.jobTitle || 'عضو تأطير'}
+                        </div>
+                    </td>
                     <td style="color: #0FBA50; font-weight: bold; vertical-align: middle;">${data.center}</td>
-                    <td style="direction: ltr; text-align: center; font-family: monospace; font-size: 16px; vertical-align: middle;">${data.password}</td>
+                    <td style="text-align: center; vertical-align: middle;">${passHtml}</td>
                     <td style="text-align: center; vertical-align: middle;">
                         <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
-                            <button onclick="toggleAdminStatus('${doc.id}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="${toggleTitle}">
-                                <i class="fa-solid ${toggleIcon}"></i> ${toggleText}
-                            </button>
-                            <button onclick="editAdminAccount('${doc.id}')" style="background: #ffc107; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="التعديل الشامل">
-                                <i class="fa-solid fa-pen-to-square"></i> تعديل
-                            </button>
-                            <button onclick="deleteAdminAccount('${doc.id}')" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; display: flex; align-items: center; gap: 5px;" title="حذف الحساب نهائياً">
-                                <i class="fa-solid fa-trash"></i> حذف
-                            </button>
+                            ${actionButtons}
                         </div>
                     </td>
                 </tr>
@@ -1538,6 +2790,7 @@ async function loadAdminsList() {
         html += '</tbody></table></div>';
         container.innerHTML = html;
     } catch(e) {
+        console.error(e);
         container.innerHTML = '<p style="color: red; text-align: center;">خطأ في الاتصال بقاعدة البيانات لجلب الحسابات.</p>';
     }
 }
@@ -1564,67 +2817,52 @@ async function editAdminAccount(docId) {
             Swal.fire('خطأ', 'بيانات الحساب غير موجودة!', 'error').then(() => manageCenterAdmins());
             return;
         }
-        
         let data = docSnap.data();
-        const centerOptionsHtml = getCenterOptionsHtml(data.center || '');
 
-        // 🌟 جلب صورة المشرف بجودة عالية 🌟
+        // جلب الأرقام السرية والوظائف لباقي الحسابات فقط لمنع التكرار
+        let usedPasswords = [];
+        let existingRoles = [];
+        const adminsSnap = await db.collection("center_admins").get();
+        adminsSnap.forEach(d => { 
+            if (d.id !== docId) {
+                let dt = d.data();
+                usedPasswords.push(dt.password); 
+                existingRoles.push({ id: d.id, center: dt.center, jobTitle: dt.jobTitle, name: dt.name });
+            }
+        });
+
+        const centerOptionsHtml = getCenterOptionsHtml(data.center || '');
         const coreAdminId = extractCoreId(docId);
         let photoUrl = employeePhotosMap[coreAdminId];
-        if (photoUrl && photoUrl.includes('sz=w200')) {
-            photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
-        }
-        const imgHtml = photoUrl
-            ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\' style=\\'font-size:40px; color:#94a3b8;\\'></i>'">`
-            : `<i class="fa-solid fa-user" style="font-size:40px; color:#94a3b8;"></i>`;
+        if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
+        const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\' style=\\'font-size:40px; color:#94a3b8;\\'></i>'">` : `<i class="fa-solid fa-user" style="font-size:40px; color:#94a3b8;"></i>`;
 
         Swal.fire({
             title: '<div style="color:#1E68E8; font-family:Cairo; font-weight:bold; border-bottom: 2px dashed #1E68E8; padding-bottom: 10px;"><i class="fa-solid fa-user-pen"></i> التعديل الشامل لحساب المشرف</div>',
             html: `
                 <div style="text-align:right; font-size:14px; padding: 10px; font-family:'Cairo';">
-                    
-                    <!-- معلومات ثابتة للمشرف مع الصورة -->
                     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px;">
-                        
-                        <!-- إطار الصورة -->
                         <div style="flex-shrink: 0; width: 85px; height: 85px; border-radius: 50%; border: 3px solid #1E68E8; padding: 4px; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #f1f5f9;">
-                                ${imgHtml}
-                            </div>
+                            <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #f1f5f9;">${imgHtml}</div>
                         </div>
-
-                        <!-- تفاصيل المشرف -->
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; flex-grow: 1;">
-                            <div><b style="color:#6c757d; font-size:12px; display:block;">الاسم واللقب</b><span style="font-weight:bold; font-size:15px; color:#333;">${data.name || '-'}</span></div>
+                            <div><b style="color:#6c757d; font-size:12px; display:block;">الاسم واللقب</b><span style="font-weight:bold; font-size:15px; color:#333;">${data.name || '-'}</span><br><span style="font-size: 11px; color: #d90429; font-weight: 900; background: #ffeaea; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 3px; border: 1px solid #ffc6c6;">${data.jobTitle || 'عضو تأطير'}</span></div>
                             <div><b style="color:#6c757d; font-size:12px; display:block;">الرقم الوظيفي</b><span style="font-weight:bold; font-size:15px; color:#1E68E8; font-family:monospace;">${docId}</span></div>
                             <div><b style="color:#6c757d; font-size:12px; display:block;">الرتبة</b><span style="font-weight:bold; font-size:14px; color:#333;">${data.rank || '-'}</span></div>
-                            <div><b style="color:#6c757d; font-size:12px; display:block;">حالة الحساب</b><span style="font-weight:bold; font-size:14px; color:${data.disabled ? '#dc3545' : '#28a745'};">${data.disabled ? 'معطل' : 'مفعل نشط'}</span></div>
                         </div>
                     </div>
-
-                    <!-- الحقول القابلة للتعديل -->
                     <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
-                        
-                        <!-- المركز -->
                         <div style="background: #e8fbf0; padding: 15px; border-radius: 10px; border: 1px dashed #0FBA50;">
                             <label style="font-weight:bold; color:#0FBA50; font-size:14px; display:block; margin-bottom:8px;"><i class="fa-solid fa-school"></i> تعيين أو تغيير المركز:</label>
-                            <select id="edit-admin-center" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #0FBA50; font-family: 'Cairo'; font-weight: bold; outline: none; background: white; color: #333;">
-                                ${centerOptionsHtml}
-                            </select>
+                            <select id="edit-admin-center" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #0FBA50; font-family: 'Cairo'; font-weight: bold; outline: none; background: white; color: #333;">${centerOptionsHtml}</select>
                         </div>
-
-                        <!-- الرقم السري -->
                         <div style="background: #fff8f8; padding: 15px; border-radius: 10px; border: 1px dashed #dc3545;">
                             <label style="font-weight:bold; color:#dc3545; font-size:14px; display:block; margin-bottom:8px;"><i class="fa-solid fa-lock"></i> الرقم السري (للدخول كمسؤول مركز):</label>
                             <div style="display: flex; gap: 10px;">
                                 <input type="text" id="edit-admin-password" value="${data.password || ''}" class="swal2-input" minlength="8" maxlength="20" style="margin: 0; width: 75%; text-align: center; font-family: monospace; font-size: 16px; font-weight:bold; color:#dc3545;" placeholder="أدخل من 8 إلى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\\\-=\\[\\]{}:;<>?,./]/g, '')">
-                                <button type="button" onclick="document.getElementById('edit-admin-password').value = generateStrongPassword()" style="width: 25%; background: #1E68E8; color: white; border: none; border-radius: 6px; cursor: pointer; font-family:'Cairo'; font-weight: bold; font-size: 13px; transition: 0.3s;">
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i> توليد عشوائي
-                                </button>
+                                <button type="button" onclick="document.getElementById('edit-admin-password').value = generateStrongPassword()" style="width: 25%; background: #1E68E8; color: white; border: none; border-radius: 6px; cursor: pointer; font-family:'Cairo'; font-weight: bold; font-size: 13px; transition: 0.3s;">توليد عشوائي</button>
                             </div>
-                            <span style="font-size:11px; color:#777; display:block; margin-top:5px;">* يتكون من أحرف فرنسية (كبيرة وصغيرة)، أرقام، ورموز (8 إلى 20 خانة).</span>
                         </div>
-
                     </div>
                 </div>
             `,
@@ -1635,44 +2873,32 @@ async function editAdminAccount(docId) {
                 const password = document.getElementById('edit-admin-password').value;
 
                 if (!center || !password) { Swal.showValidationMessage('الرجاء اختيار المركز وإدخال الرقم السري!'); return false; }
-                
-                if (password.length < 8 || password.length > 20) {
-                    Swal.showValidationMessage('الرقم السري يجب أن يكون بين 8 و 20 خانة!');
-                    return false;
-                }
-                const validRegex = /^[a-zA-Z0-9!@#$%^&*()_+~\-=\[\]{}:;<>?,./]{8,20}$/;
-                if (!validRegex.test(password)) {
-                    Swal.showValidationMessage('الرقم السري غير صالح! استخدم أحرف فرنسية، أرقام، ورموز فقط.');
+                if (usedPasswords.includes(password)) { Swal.showValidationMessage('الرقم السري مستخدم مسبقاً! الرجاء توليد رقم سري جديد.'); return false; }
+
+                // منع تكرار الوظيفة في التعديل (في حالة نقله لمركز آخر)
+                const duplicateRole = existingRoles.find(r => r.center === center && r.jobTitle === data.jobTitle);
+                if (duplicateRole) {
+                    Swal.showValidationMessage(`المركز "${center}" يمتلك مسبقاً (${data.jobTitle}) وهو الأستاذ: ${duplicateRole.name}.`);
                     return false;
                 }
 
-                return { center, password };
+                return { center, password, jobTitle: data.jobTitle };
             }
         }).then(async (res) => {
             if (res.isConfirmed) {
                 Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 try {
-                    await db.collection("center_admins").doc(docId).update({
-                        center: res.value.center,
-                        password: res.value.password
-                    });
-                    
+                    await db.collection("center_admins").doc(docId).update({ center: res.value.center, password: res.value.password, jobTitle: res.value.jobTitle });
+                    await db.collection("center_framers").doc(docId).update({ center: res.value.center, role: res.value.jobTitle }).catch(() => console.log("المؤطر غير موجود مسبقاً"));
                     await db.collection("employeescomplus").doc(docId).update({ center: res.value.center, password: res.value.password }).catch(()=>console.log("Not in plus"));
                     await db.collection("employeescomnew").doc(docId).update({ center: res.value.center, password: res.value.password }).catch(()=>console.log("Not in new"));
 
-                    Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات رئيس المركز بنجاح!', confirmButtonColor: '#1E68E8', timer: 2000 })
-                    .then(() => manageCenterAdmins()); 
-                } catch(e) {
-                    Swal.fire('خطأ', 'تعذر حفظ التعديلات.', 'error').then(() => manageCenterAdmins());
-                }
-            } else {
-                manageCenterAdmins();
-            }
+                    Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات رئيس المركز بنجاح!', confirmButtonColor: '#1E68E8', timer: 2000 }).then(() => manageCenterAdmins()); 
+                } catch(e) { Swal.fire('خطأ', 'تعذر حفظ التعديلات.', 'error').then(() => manageCenterAdmins()); }
+            } else { manageCenterAdmins(); }
         });
 
-    } catch (err) {
-        Swal.fire('خطأ', 'فشل جلب البيانات.', 'error').then(() => manageCenterAdmins());
-    }
+    } catch (err) { Swal.fire('خطأ', 'فشل جلب البيانات.', 'error').then(() => manageCenterAdmins()); }
 }
 
 function promptForAdminId() {
@@ -1691,16 +2917,42 @@ function promptForAdminId() {
 
 
 
+// ================= دالة الحذف المزدوج لحساب رئيس المركز =================
 function deleteAdminAccount(docId) {
     Swal.fire({
-        title: 'تأكيد الحذف', text: 'هل أنت متأكد من سحب الصلاحيات وحذف حساب هذا المشرف؟ (لن يتم حذف بياناته الأصلية كموظف)', icon: 'warning',
-        showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'نعم، قم بالحذف', cancelButtonText: 'إلغاء'
+        title: 'تأكيد الحذف الشامل', 
+        text: 'هل أنت متأكد من سحب الصلاحيات وحذف هذا المسؤول؟ (سيتم حذفه من قاعدة الحسابات ومن قائمة مؤطري المركز أيضاً، لكن ستبقى بياناته الأصلية كموظف محفوظة)', 
+        icon: 'warning',
+        showCancelButton: true, 
+        confirmButtonColor: '#dc3545', 
+        confirmButtonText: 'نعم، قم بالحذف النهائي', 
+        cancelButtonText: 'إلغاء'
     }).then(async (result) => {
         if (result.isConfirmed) {
+            // إظهار شاشة تحميل أثناء الحذف من عدة قواعد بيانات
+            Swal.fire({ title: 'جاري الحذف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
             try {
+                // 1. الحذف من قاعدة حسابات رؤساء المراكز (المديرية)
                 await db.collection("center_admins").doc(docId).delete();
-                loadAdminsList(); 
-            } catch(e) { Swal.fire('خطأ', 'تعذر عملية الحذف', 'error'); }
+                
+                // 2. الحذف من قاعدة المؤطرين في المركز (لسحب صفته كمسؤول من هناك)
+                await db.collection("center_framers").doc(docId).delete();
+
+                Swal.fire({
+                    icon: 'success', 
+                    title: 'تم الحذف', 
+                    text: 'تم حذف الحساب وإزالته من قائمة المؤطرين بنجاح.', 
+                    timer: 2000, 
+                    showConfirmButton: false
+                }).then(() => {
+                    loadAdminsList(); // تحديث الجدول لإخفاء السطر المحذوف
+                });
+
+            } catch(e) { 
+                console.error("Delete Error: ", e);
+                Swal.fire('خطأ', 'حدث مشكل في الاتصال، تعذر إكمال عملية الحذف', 'error'); 
+            }
         }
     });
 }
@@ -2174,6 +3426,1314 @@ function printGroupsList() {
     html += `<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
     printWindow.document.write(html); printWindow.document.close();
 }
+
+// ================= دالة الإحصائيات الدقيقة والهرمية (رتبة -> تخصص) =================
+window.showDetailedStats = function() {
+    if(filteredData.length === 0){ 
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لعرض إحصائياتها.', 'warning'); 
+        return; 
+    }
+
+    let nestedStats = {};
+    let totalMales = 0;
+    let totalFemales = 0;
+
+    // 1. تجميع البيانات هرمياً
+    filteredData.forEach(item => {
+        let isMale = (item.gender || '').includes('ذكر') || (item.gender || '').toUpperCase() === 'M';
+        let r = item.rank || 'رتبة غير محددة';
+        let s = item.specialty || 'تخصص غير محدد';
+
+        if(isMale) totalMales++; else totalFemales++;
+
+        // إنشاء الرتبة إذا لم تكن موجودة
+        if(!nestedStats[r]) {
+            nestedStats[r] = { t: 0, m: 0, f: 0, specs: {} };
+        }
+        nestedStats[r].t++;
+        if(isMale) nestedStats[r].m++; else nestedStats[r].f++;
+
+        // إضافة التخصص داخل الرتبة
+        if(!nestedStats[r].specs[s]) {
+            nestedStats[r].specs[s] = { t: 0, m: 0, f: 0 };
+        }
+        nestedStats[r].specs[s].t++;
+        if(isMale) nestedStats[r].specs[s].m++; else nestedStats[r].specs[s].f++;
+    });
+
+    // حفظ المتغيرات في نافذة عامة لاستخدامها في الطباعة
+    window.currentNestedStats = nestedStats;
+    window.currentTotalStats = { t: filteredData.length, m: totalMales, f: totalFemales };
+
+    // 2. بناء واجهة النافذة التفاعلية (HTML)
+    let htmlContent = `<div style="text-align: right; font-family: 'Cairo'; max-height: 60vh; overflow-y: auto; overflow-x: hidden; padding: 10px;">`;
+
+    // الشريط الإحصائي العام
+    htmlContent += `
+        <div style="background: linear-gradient(135deg, #0FBA50, #0a8a3a); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+            <div><div style="font-size: 14px; color:#e8fbf0;">إجمالي المتكونين</div><div style="font-size: 30px; font-weight: 900;">${filteredData.length}</div></div>
+            <div><div style="font-size: 14px; color:#dbeafe;">الذكور</div><div style="font-size: 26px; font-weight: bold;">${totalMales}</div></div>
+            <div><div style="font-size: 14px; color:#fce7f3;">الإناث</div><div style="font-size: 26px; font-weight: bold;">${totalFemales}</div></div>
+        </div>
+    `;
+
+    // نظام الفرز الذكي (الابتدائي ثم المتوسط ثم الثانوي)
+    const getRankWeight = (rank) => {
+        if (rank.includes("ابتدائي")) return 1;
+        if (rank.includes("متوسط")) return 2;
+        if (rank.includes("ثانوي")) return 3;
+        return 4; // باقي الرتب
+    };
+
+    const sortedRanks = Object.keys(nestedStats).sort((a, b) => {
+        let diff = getRankWeight(a) - getRankWeight(b);
+        return diff !== 0 ? diff : a.localeCompare(b); // إذا تساوت الأوزان، رتب أبجدياً
+    });
+
+    // بناء البطاقات حسب الترتيب الجديد
+    for (const rank of sortedRanks) {
+        const data = nestedStats[rank];
+        
+        htmlContent += `
+            <div style="margin-bottom: 25px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                <div style="background: #e8fbf0; border-bottom: 2px solid #0FBA50; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <h4 style="margin: 0; color: #0FBA50; font-size: 17px;"><i class="fa-solid fa-layer-group"></i> ${rank}</h4>
+                    <div style="font-weight: bold; font-size: 14px; color: #333; background: #fff; padding: 5px 15px; border-radius: 20px; border: 1px solid #cbd5e1;">
+                        إجمالي: ${data.t} | ذكور: ${data.m} | إناث: ${data.f}
+                    </div>
+                </div>
+                <div style="padding: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; background: #f8fafc;">
+        `;
+
+        for (const [spec, sData] of Object.entries(data.specs)) {
+            htmlContent += `
+                <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; position: relative; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                    <h5 style="margin: 0 0 12px 0; color: #1E68E8; font-size: 15px; text-align: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px;">${spec}</h5>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+                        <span style="color: #1E68E8;"><i class="fa-solid fa-person"></i> ذكور: ${sData.m}</span>
+                        <span style="color: #e91e63;"><i class="fa-solid fa-person-dress"></i> إناث: ${sData.f}</span>
+                    </div>
+                    <div style="text-align: center; background: #f1f5f9; padding: 6px; border-radius: 6px; color: #333; font-weight: 900; font-size: 14px;">
+                        المجموع: ${sData.t}
+                    </div>
+                </div>
+            `;
+        }
+        htmlContent += `</div></div>`;
+    }
+
+    htmlContent += `</div>`;
+    
+    htmlContent += `
+        <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 2px dashed #eee;">
+            <button onclick="printDetailedStatsPoster()" style="background: #0FBA50; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; font-weight: bold; font-family: 'Cairo'; cursor: pointer; box-shadow: 0 4px 10px rgba(15, 186, 80, 0.3); transition: 0.3s; width: 100%;">
+                <i class="fa-solid fa-print"></i> طباعة البطاقة الإحصائية
+            </button>
+        </div>
+    `;
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-chart-pie" style="color: #0FBA50;"></i> الإحصاء الشامل للمديرية',
+        width: '900px',
+        html: htmlContent,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق النافذة',
+        confirmButtonColor: '#333',
+        customClass: { popup: 'swal-modal-custom' }
+    });
+}
+
+// ================= دالة طباعة الملصق الإحصائي (Poster) =================
+window.printDetailedStatsPoster = function() {
+    if (!window.currentNestedStats) return;
+    
+    let stats = window.currentNestedStats;
+    let totals = window.currentTotalStats;
+    let centerFilterValue = document.getElementById("filterCenter") ? document.getElementById("filterCenter").value : "الكل";
+    let centerText = (centerFilterValue === "الكل") ? "جميع المراكز المعتمدة بالولاية" : centerFilterValue;
+
+    let printWindow = window.open('', '', 'width=1000,height=800');
+    
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>الملصق الإحصائي</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #111; background: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .main-title { text-align: center; font-size: 26px; font-weight: 900; margin: 20px 0; text-transform: uppercase; letter-spacing: 1px; color: #0FBA50; border: 2px dashed #0FBA50; display: inline-block; padding: 10px 30px; border-radius: 10px;}
+            
+            /* مربعات الإحصاء العام */
+            .summary-container { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 30px; }
+            .sum-box { flex: 1; border: 2px solid #0FBA50; border-radius: 12px; text-align: center; padding: 15px; background: #f8fafc; }
+            .sum-box.total { background: #0FBA50; color: white; }
+            .sum-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+            .sum-val { font-size: 32px; font-weight: 900; }
+            
+            /* جداول الرتب (تم التعديل هنا لحل مشكلة الفراغ في الصفحة الأولى) */
+            .rank-section { margin-bottom: 25px; border: 2px solid #1E68E8; border-radius: 12px; overflow: hidden; page-break-inside: auto; }
+            .rank-header { background: #1E68E8; color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 17px; }
+            .rank-stats { background: #eff6ff; color: #1E68E8; padding: 4px 10px; border-radius: 8px; font-size: 14px; }
+            
+            table { width: 100%; border-collapse: collapse; background: white; page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; } /* لمنع انقسام السطر الواحد */
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: center; font-size: 15px; }
+            th { background: #f1f5f9; font-weight: 900; color: #334e68; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            td.spec-name { font-weight: bold; text-align: right; color: #0FBA50; width: 40%;}
+            td.total-col { font-weight: 900; background: #eff6ff; }
+        </style>
+    </head>
+    <body>
+        <div style="text-align: center; font-weight: 900; font-size: 14px; line-height: 1.5; margin-bottom: 10px;">
+            الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية
+        </div>
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align: left;">النطاق الإحصائي:<br><span style="font-size:16px;">${centerText}</span></div>
+        </div>
+        
+        <div style="text-align: center;">
+            <div class="main-title">البطاقة الإحصائية المفصلة</div>
+        </div>
+        
+        <div class="summary-container">
+            <div class="sum-box">
+                <div class="sum-title">إجمالي الإناث</div>
+                <div class="sum-val" style="color: #e91e63;">${totals.f}</div>
+            </div>
+            <div class="sum-box">
+                <div class="sum-title">إجمالي الذكور</div>
+                <div class="sum-val" style="color: #1E68E8;">${totals.m}</div>
+            </div>
+            <div class="sum-box total">
+                <div class="sum-title">المجموع العام</div>
+                <div class="sum-val">${totals.t}</div>
+            </div>
+        </div>
+    `;
+
+    // نظام الفرز الذكي لترتيب الجداول
+    const getRankWeight = (rank) => {
+        if (rank.includes("ابتدائي")) return 1;
+        if (rank.includes("متوسط")) return 2;
+        if (rank.includes("ثانوي")) return 3;
+        return 4;
+    };
+
+    const sortedRanks = Object.keys(stats).sort((a, b) => {
+        let diff = getRankWeight(a) - getRankWeight(b);
+        return diff !== 0 ? diff : a.localeCompare(b);
+    });
+
+    for (const rank of sortedRanks) {
+        const data = stats[rank];
+        html += `
+        <div class="rank-section">
+            <div class="rank-header">
+                <span>${rank}</span>
+                <span class="rank-stats">( المجموع: ${data.t} | ذكور: ${data.m} | إناث: ${data.f} )</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>مادة التخصص</th>
+                        <th>الذكور</th>
+                        <th>الإناث</th>
+                        <th>المجموع</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        for (const [spec, sData] of Object.entries(data.specs)) {
+            html += `
+                    <tr>
+                        <td class="spec-name">${spec}</td>
+                        <td style="color: #1E68E8; font-weight: bold;">${sData.m}</td>
+                        <td style="color: #e91e63; font-weight: bold;">${sData.f}</td>
+                        <td class="total-col">${sData.t}</td>
+                    </tr>
+            `;
+        }
+        
+        html += `
+                </tbody>
+            </table>
+        </div>
+        `;
+    }
+
+    html += `
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; padding: 0 40px;">
+            <div>إمضاء مسؤول التكوين</div>
+            <div>توقيع مدير التربية</div>
+        </div>
+    </body>
+    <script>
+        window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }
+    <\/script>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+// =====================================================================
+// نظام تسيير المؤطرين الشامل (خاص بالمديرية)
+// =====================================================================
+let adminFramersData = [];
+let currentAdminFramerCenter = "الكل";
+let currentAdminFramerSession = "all"; 
+
+function openAdminFramersModal() {
+    document.getElementById('adminFramersModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadAllFramersForAdmin(); 
+}
+
+function closeAdminFramersModal() {
+    document.getElementById('adminFramersModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// 1. جلب بيانات جميع المؤطرين في الولاية
+async function loadAllFramersForAdmin() {
+    const tbody = document.getElementById('adminFramersTableBody');
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; font-weight:bold; color:#777;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>جاري جلب بيانات جميع المؤطرين...</td></tr>';
+    
+    try {
+        const snap = await db.collection("center_framers").get();
+        const fetchPromises = snap.docs.map(async (doc) => {
+            let data = doc.data();
+            if (!data.empId || doc.id.startsWith("settings_")) return null; 
+            
+            // جلب البيانات الأساسية من allData (الموجودة مسبقاً في اللوحة)
+            let baseDataLoc = allData.find(d => d.empId === data.empId);
+            if (!baseDataLoc) {
+                try {
+                    let s = await db.collection("employeescomnew").doc(data.empId).get();
+                    if(!s.exists) s = await db.collection("employeescomplus").doc(data.empId).get();
+                    if(s.exists) baseDataLoc = s.data();
+                } catch(e){}
+            }
+            
+            return { ...data, docId: doc.id, baseInfo: baseDataLoc || {} };
+        });
+
+        const results = await Promise.all(fetchPromises);
+        adminFramersData = results.filter(item => item !== null);
+        
+        renderAdminFramersUI();
+    } catch (e) {
+        console.error("Error loading framers:", e);
+        Swal.fire('خطأ', 'تعذر جلب بيانات المؤطرين.', 'error');
+    }
+}
+
+// 2. بناء التبويبات (ديناميكياً حسب المراكز والدورات)
+function renderAdminFramersUI() {
+    // بناء تبويبات المراكز
+    let centersHtml = `<button class="tab-btn ${currentAdminFramerCenter === 'الكل' ? 'active' : ''}" onclick="switchAdminFramerCenter('الكل')" style="border-radius:8px 8px 0 0; margin-left:5px;">كل المراكز بالولاية</button>`;
+    if(SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
+        for(let key in SITE_SETTINGS.UI_NAMES.centers) {
+            let cName = SITE_SETTINGS.UI_NAMES.centers[key];
+            centersHtml += `<button class="tab-btn ${currentAdminFramerCenter === cName ? 'active' : ''}" onclick="switchAdminFramerCenter('${cName}')" style="border-radius:8px 8px 0 0; margin-left:5px;">${cName}</button>`;
+        }
+    }
+    document.getElementById('adminFramerCentersTabs').innerHTML = centersHtml;
+
+    // بناء تبويبات الدورات
+    let sTabs = [
+        { id: 'all', name: '<i class="fa-solid fa-users"></i> كل الدورات' },
+        { id: 's1', name: '<i class="fa-solid fa-calendar-day"></i> الدورة الأولى' },
+        { id: 's2', name: '<i class="fa-solid fa-calendar-day"></i> الدورة الثانية' },
+        { id: 's3', name: '<i class="fa-solid fa-calendar-day"></i> الدورة الثالثة' }
+    ];
+    let sessionsHtml = sTabs.map(t => `<button class="tab-btn ${currentAdminFramerSession === t.id ? 'active' : ''}" onclick="switchAdminFramerSession('${t.id}')" style="border-radius:8px 8px 0 0; margin-left:5px;">${t.name}</button>`).join('');
+    document.getElementById('adminFramerSessionsTabs').innerHTML = sessionsHtml;
+
+    renderAdminFramersTableData();
+}
+
+window.switchAdminFramerCenter = function(cName) { currentAdminFramerCenter = cName; renderAdminFramersUI(); };
+window.switchAdminFramerSession = function(sId) { currentAdminFramerSession = sId; renderAdminFramersUI(); };
+
+// 3. فلترة وعرض الجدول
+function renderAdminFramersTableData() {
+    const search = document.getElementById('adminFramerSearch').value.toLowerCase();
+    
+    let filtered = adminFramersData.filter(f => {
+        let matchCenter = currentAdminFramerCenter === 'الكل' || f.center === currentAdminFramerCenter;
+        
+        let matchSession = true;
+        if(currentAdminFramerSession === 's1') matchSession = f.s1 === true;
+        if(currentAdminFramerSession === 's2') matchSession = f.s2 === true;
+        if(currentAdminFramerSession === 's3') matchSession = f.s3 === true;
+        
+        let bName = (f.baseInfo.name || "").toLowerCase();
+        let matchSearch = bName.includes(search) || f.empId.includes(search);
+
+        return matchCenter && matchSession && matchSearch;
+    });
+
+    const tbody = document.getElementById('adminFramersTableBody');
+    tbody.innerHTML = '';
+    
+    if(filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; font-weight:bold;">لا توجد بيانات مطابقة للتبويبات المحددة.</td></tr>';
+        return;
+    }
+
+    let html = '';
+    filtered.forEach((f, idx) => {
+        let b = f.baseInfo;
+        const s1Badge = f.s1 ? '<i class="fa-solid fa-check" style="color:#0FBA50; font-size:18px;"></i>' : '-';
+        const s2Badge = f.s2 ? '<i class="fa-solid fa-check" style="color:#0FBA50; font-size:18px;"></i>' : '-';
+        const s3Badge = f.s3 ? '<i class="fa-solid fa-check" style="color:#0FBA50; font-size:18px;"></i>' : '-';
+
+        // 🌟 تنظيف المفتاح (docId) لمنع كسر أزرار HTML 🌟
+        let safeDocId = f.docId.replace(/'/g, "\\'"); 
+
+        let deleteBtn = f.isProtected ? '' : `<button onclick="adminDeleteFramer('${safeDocId}')" class="btn-action" style="background:#dc3545;" title="حذف من التأطير"><i class="fa-solid fa-trash"></i></button>`;
+
+        html += `
+            <tr style="border-bottom: 1px solid #e2e8f0; background: #fff;">
+                <td style="text-align:center; padding:12px;">${idx + 1}</td>
+                <td style="text-align:center; font-weight:bold;">${f.empId}</td>
+                <td style="font-weight:bold; color:#102a43;">${b.name || 'غير متوفر'}</td>
+                <td style="text-align:center;"><span style="background:#e8fbf0; color:#0FBA50; padding:4px 8px; border-radius:6px; font-weight:bold; border:1px solid #0FBA50;">${f.center}</span></td>
+                <td style="text-align:center; font-weight:bold; color:#e67e22;">${f.role}</td>
+                <td style="text-align:center; background:#f8fafc;">${s1Badge}</td>
+                <td style="text-align:center; background:#f8fafc;">${s2Badge}</td>
+                <td style="text-align:center; background:#f8fafc;">${s3Badge}</td>
+                <td style="text-align:center;">
+                    <div style="display:flex; justify-content:center; gap:5px;">
+                        <button onclick="adminEditFramer('${safeDocId}')" class="btn-action" style="background:#1E68E8;" title="تعديل أو تغيير المركز"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>
+                        ${deleteBtn}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+// 4. حذف مؤطر
+window.adminDeleteFramer = function(docId) {
+    const f = adminFramersData.find(x => x.docId === docId);
+    if (!f) return;
+    
+    let name = f.baseInfo.name || 'هذا الأستاذ';
+
+    Swal.fire({
+        title: 'تأكيد الحذف', text: `سيتم إزالة المؤطر "${name}" من سجلات هذا المركز نهائياً.`, icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحذف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("center_framers").doc(docId).delete();
+                adminFramersData = adminFramersData.filter(x => x.docId !== docId);
+                renderAdminFramersTableData();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم الحذف', showConfirmButton: false, timer: 1500 });
+            } catch (e) { Swal.fire('خطأ', 'فشل الحذف.', 'error'); }
+        }
+    });
+};
+
+// 5. تعديل المؤطر (ونقله من مركز لآخر وتغيير وظيفته عبر قائمة منسدلة مع حماية الوظائف القيادية)
+window.adminEditFramer = function(docId) {
+    const f = adminFramersData.find(x => x.docId === docId);
+    if (!f) return;
+
+    // جلب المراكز لاختيار نقل المركز
+    let centerOptions = '';
+    for(let key in SITE_SETTINGS.UI_NAMES.centers) {
+        let cName = SITE_SETTINGS.UI_NAMES.centers[key];
+        centerOptions += `<option value="${cName}" ${f.center === cName ? 'selected' : ''}>${cName}</option>`;
+    }
+
+    // إضافة كل الوظائف الممكنة وضمان عدم اختفاء الوظيفة الحالية
+    let allRoles = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "أستاذ(ة) مكون(ة)", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
+    if (!allRoles.includes(f.role)) allRoles.push(f.role); 
+
+    let rolesHtml = '';
+    if (f.isProtected) {
+        rolesHtml = `<option value="${f.role}" selected>${f.role}</option>`;
+    } else {
+        allRoles.forEach(r => rolesHtml += `<option value="${r}" ${f.role === r ? 'selected' : ''}>${r}</option>`);
+    }
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-pen" style="color:#1E68E8;"></i> تعديل بيانات المؤطر',
+        html: `
+            <div style="text-align:right; font-family:'Cairo';">
+                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 15px;">
+                    <b style="font-size:16px;">${f.baseInfo.name || ''}</b><br>
+                    <span style="color:#64748b; font-size:13px;">الرقم الوظيفي: ${f.empId}</span>
+                </div>
+                
+                <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">مركز التأطير الحالي:</label>
+                <select id="adm-fr-center" class="crud-input" style="margin-bottom:5px; border-color:#0FBA50; border-width:2px; font-weight:bold; ${f.isProtected?'background:#eee;':''}" ${f.isProtected ? 'disabled' : ''}>
+                    ${centerOptions}
+                </select>
+                ${f.isProtected ? '<span style="font-size:11px; color:#d90429; font-weight:bold; margin-bottom:15px; display:block;">تغيير المركز للمسؤولين يتم من قسم حسابات رؤساء المراكز</span>' : '<div style="margin-bottom:15px;"></div>'}
+                
+                <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">الوظيفة بالمركز:</label>
+                <select id="adm-fr-role" class="crud-input" ${f.isProtected ? 'disabled' : ''} style="margin-bottom:5px; border-color:#0FBA50; border-width:2px; font-weight:bold; ${f.isProtected?'background:#eee;':''}">
+                    ${rolesHtml}
+                </select>
+                ${f.isProtected ? '<span style="font-size:11px; color:#d90429; font-weight:bold; margin-bottom:15px; display:block;">غير قابل للتعديل (وظيفة محمية)</span>' : '<div style="margin-bottom:15px;"></div>'}
+                
+                <div style="background:#e8fbf0; padding:10px; border-radius:8px; border:1px dashed #0FBA50; display:flex; justify-content:space-around;">
+                    <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="adm-s1" ${f.s1?'checked':''} style="accent-color:#0FBA50;"> الدورة 1</label>
+                    <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="adm-s2" ${f.s2?'checked':''} style="accent-color:#0FBA50;"> الدورة 2</label>
+                    <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="adm-s3" ${f.s3?'checked':''} style="accent-color:#0FBA50;"> الدورة 3</label>
+                </div>
+            </div>
+        `,
+        width: '500px', showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: async () => {
+            const newCenter = f.isProtected ? f.center : document.getElementById('adm-fr-center').value;
+            const newRole = f.isProtected ? f.role : document.getElementById('adm-fr-role').value;
+
+            // 🌟 الحماية الذكية والتأكد من عدم التكرار للمناصب القيادية أثناء التعديل 🌟
+            const UNIQUE_ROLES_CHECK = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
+            
+            if (!f.isProtected && UNIQUE_ROLES_CHECK.includes(newRole)) {
+                // 1. التأكد أن المنصب الجديد غير محجوز لشخص *آخر* في المركز الجديد أو الحالي
+                const centerRoleCheck = await db.collection("center_framers").where("center", "==", newCenter).where("role", "==", newRole).get();
+                let isTakenByOther = false;
+                centerRoleCheck.forEach(d => {
+                    // استثناء سجل المؤطر الحالي من الفحص
+                    if (d.id !== docId) isTakenByOther = true;
+                });
+                
+                if (isTakenByOther) {
+                    Swal.showValidationMessage(`عذراً، منصب "${newRole}" محجوز لشخص آخر في مركز ${newCenter}!`); 
+                    return false;
+                }
+
+                // 2. التأكد أن هذا الشخص ليس مسؤولاً أو نائباً في مركز *آخر*
+                const globalCheck = await db.collection("center_framers").where("empId", "==", f.empId).get();
+                let isManagerElsewhere = false;
+                globalCheck.forEach(d => {
+                    if (d.id !== docId && UNIQUE_ROLES_CHECK.includes(d.data().role)) {
+                        isManagerElsewhere = true;
+                    }
+                });
+                
+                if (isManagerElsewhere) {
+                    Swal.showValidationMessage(`يُمنع تسجيل الموظف في منصب قيادي في أكثر من مركز!`); 
+                    return false;
+                }
+            }
+
+            return {
+                newCenter: newCenter,
+                newRole: newRole,
+                s1: document.getElementById('adm-s1').checked,
+                s2: document.getElementById('adm-s2').checked,
+                s3: document.getElementById('adm-s3').checked
+            };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let updates = result.value;
+            try {
+                if (updates.newCenter !== f.center) {
+                    let newDocId = f.empId + "_" + updates.newCenter;
+                    let newObj = { ...f };
+                    delete newObj.docId; delete newObj.baseInfo; 
+                    newObj.center = updates.newCenter; newObj.role = updates.newRole;
+                    newObj.s1 = updates.s1; newObj.s2 = updates.s2; newObj.s3 = updates.s3;
+                    
+                    await db.collection("center_framers").doc(newDocId).set(newObj);
+                    await db.collection("center_framers").doc(docId).delete(); 
+                } else {
+                    await db.collection("center_framers").doc(docId).update({
+                        role: updates.newRole, s1: updates.s1, s2: updates.s2, s3: updates.s3
+                    });
+                }
+                
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم الحفظ', showConfirmButton: false, timer: 1500 });
+                loadAllFramersForAdmin(); 
+            } catch (e) { Swal.fire('خطأ', 'تعذر الحفظ.', 'error'); }
+        }
+    });
+};
+
+// 6. إضافة مؤطر جديد (بصلاحيات المديرية واختيار المركز مع حماية المناصب القيادية الشاملة)
+window.adminPromptAddFramer = function() {
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-plus" style="color:#0FBA50;"></i> إضافة مؤطر جديد للمراكز',
+        text: 'أدخل الرقم الوظيفي للموظف المراد إدراجه للتأطير:',
+        input: 'text', 
+        inputPlaceholder: 'الرقم الوظيفي...',
+        showCancelButton: true, 
+        confirmButtonText: 'تحقق وبحث', 
+        cancelButtonText: 'إلغاء', 
+        confirmButtonColor: '#0FBA50',
+        preConfirm: (id) => {
+            if (!id) { Swal.showValidationMessage('الرجاء إدخال الرقم للبحث!'); return false; }
+            return id.trim();
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            const empId = res.value;
+            Swal.fire({ title: 'جاري البحث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
+            // 1. جلب بيانات الموظف من القاعدة الرئيسية
+            let baseData = null;
+            try {
+                let s = await db.collection("employeescomnew").doc(empId).get();
+                if(!s.exists) s = await db.collection("employeescomplus").doc(empId).get();
+                if(s.exists) baseData = s.data();
+            } catch(e) {}
+
+            if (!baseData) {
+                return Swal.fire('غير موجود', 'لم يتم العثور على الموظف في قاعدة البيانات الرئيسية.', 'error').then(()=>window.adminPromptAddFramer());
+            }
+
+            // 2. تجهيز قائمة المراكز
+            let centerOptions = '<option value="" disabled selected>-- اختر المركز الموجه إليه --</option>';
+            for(let key in SITE_SETTINGS.UI_NAMES.centers) {
+                let cName = SITE_SETTINGS.UI_NAMES.centers[key];
+                centerOptions += `<option value="${cName}">${cName}</option>`;
+            }
+
+            // 3. تجهيز قائمة الوظائف
+            let allRoles = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "أستاذ(ة) مكون(ة)", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
+            let rolesHtml = '<option value="" disabled selected>-- اختر الوظيفة --</option>';
+            allRoles.forEach(r => rolesHtml += `<option value="${r}">${r}</option>`);
+
+            // 4. جلب الصورة
+            const coreEmpId = extractCoreId(empId);
+            let photoUrl = employeePhotosMap[coreEmpId];
+            if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
+            const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : `<i class="fa-solid fa-user" style="font-size:40px; color:#94a3b8;"></i>`;
+
+            // 5. عرض نافذة التعبئة
+            Swal.fire({
+                title: 'تكوين بيانات التأطير',
+                html: `
+                    <div style="text-align:right; font-family:'Cairo';">
+                        <div style="background: #f8fafc; border: 1px solid #e9ecef; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px;">
+                            <div style="flex-shrink: 0; width: 65px; height: 65px; border-radius: 50%; border: 3px solid #0FBA50; padding: 4px; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #f1f5f9;">${imgHtml}</div>
+                            </div>
+                            <div style="flex-grow: 1;">
+                                <div><b style="color:#6c757d; font-size:12px; display:block;">الاسم واللقب</b><span style="font-weight:bold; font-size:15px; color:#333;">${baseData.name || '-'}</span></div>
+                                <div><span style="font-weight:bold; font-size:13px; color:#1E68E8; font-family:monospace;">${empId}</span></div>
+                            </div>
+                        </div>
+                        
+                        <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">توجيه لمركز التأطير <span style="color:red">*</span></label>
+                        <select id="add-fr-center" class="crud-input" style="margin-bottom:15px; border-color:#0FBA50; border-width:2px; font-weight:bold;">
+                            ${centerOptions}
+                        </select>
+                        
+                        <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">الوظيفة بالمركز <span style="color:red">*</span></label>
+                        <select id="add-fr-role" class="crud-input" style="margin-bottom:15px; border-color:#0FBA50; border-width:2px; font-weight:bold;">
+                            ${rolesHtml}
+                        </select>
+
+                        <div style="display:flex; gap:15px;">
+                            <div style="flex:1;">
+                                <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">رقم الهاتف</label>
+                                <input type="text" id="add-fr-phone" class="crud-input" value="${baseData.phone || baseData.tel || ''}" style="direction:ltr; text-align:right;" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">الحساب الجاري (CCP)</label>
+                                <input type="text" id="add-fr-ccp" class="crud-input" value="${baseData.ccp || ''}" style="direction:ltr; text-align:right;" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                            <div style="flex:0.5;">
+                                <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">المفتاح</label>
+                                <input type="text" id="add-fr-cle" class="crud-input" value="${baseData.ccpKey || ''}" style="direction:ltr; text-align:center;" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                        </div>
+                        
+                        <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px; margin-top:15px;">الدورات المشارك فيها:</label>
+                        <div style="background:#e8fbf0; padding:10px; border-radius:8px; border:1px dashed #0FBA50; display:flex; justify-content:space-around;">
+                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s1" checked style="accent-color:#0FBA50;"> الدورة 1</label>
+                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s2" checked style="accent-color:#0FBA50;"> الدورة 2</label>
+                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s3" checked style="accent-color:#0FBA50;"> الدورة 3</label>
+                        </div>
+                        
+                        <div id="add-teacher-note" style="display:none; background:#fff3cd; color:#856404; padding:10px; border-radius:6px; margin-top:15px; font-size:12px; font-weight:bold;">
+                            <i class="fa-solid fa-circle-info"></i> تنويه: تفاصيل المقاييس والأفواج الخاصة بالأستاذ المؤطر (إن وجدت) يمكن لمدير المركز إدراجها لاحقاً من لوحته الخاصة.
+                        </div>
+                    </div>
+                `,
+                width: '600px', 
+                showCancelButton: true, confirmButtonText: 'حفظ وإضافة للمركز', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+                didOpen: () => {
+                    document.getElementById('add-fr-role').addEventListener('change', (e) => {
+                        document.getElementById('add-teacher-note').style.display = e.target.value === 'أستاذ مؤطر' ? 'block' : 'none';
+                    });
+                },
+                preConfirm: async () => {
+                    const center = document.getElementById('add-fr-center').value;
+                    const role = document.getElementById('add-fr-role').value;
+                    
+                    let rawPhone = document.getElementById('add-fr-phone').value.trim().replace(/\s+/g, '');
+                    let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+                    
+                    const ccp = document.getElementById('add-fr-ccp').value;
+                    const cle = document.getElementById('add-fr-cle').value;
+
+                    const s1 = document.getElementById('add-s1').checked;
+                    const s2 = document.getElementById('add-s2').checked;
+                    const s3 = document.getElementById('add-s3').checked;
+
+                    if (!center) { Swal.showValidationMessage('الرجاء اختيار المركز!'); return false; }
+                    if (!role) { Swal.showValidationMessage('الرجاء اختيار الوظيفة!'); return false; }
+                    if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
+
+                    const UNIQUE_ROLES_CHECK = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
+                    
+                    // 🌟 الحماية 1: التحقق إذا كان الموظف يمتلك بالفعل وظيفة قيادية في أي مركز 🌟
+                    const globalCheck = await db.collection("center_framers").where("empId", "==", empId).get();
+                    let existingManagerRole = null;
+                    let existingCenter = null;
+                    
+                    globalCheck.forEach(d => {
+                        if (UNIQUE_ROLES_CHECK.includes(d.data().role)) {
+                            existingManagerRole = d.data().role;
+                            existingCenter = d.data().center;
+                        }
+                    });
+
+                    // إذا كان قيادياً، نمنع تسجيله مرة أخرى في أي مركز (حتى لو كان كأستاذ مؤطر)
+                    if (existingManagerRole) {
+                        Swal.showValidationMessage(`هذا الموظف يشغل منصب (${existingManagerRole}) في مركز "${existingCenter}"! يُمنع إضافته كمؤطر مرة أخرى.`); 
+                        return false;
+                    }
+
+                    // 🌟 الحماية 2: التحقق إذا كان المركز نفسه يحتوي بالفعل على هذا الشخص 🌟
+                    const docIdToCheck = empId + "_" + center;
+                    const checkSnap = await db.collection("center_framers").doc(docIdToCheck).get();
+                    if (checkSnap.exists) {
+                        Swal.showValidationMessage(`هذا الموظف مسجل بالفعل في مركز "${center}"!`); return false;
+                    }
+
+                    // 🌟 الحماية 3: إذا كانت الوظيفة المُختارة قيادية، يجب ألا تكون محجوزة في ذلك المركز 🌟
+                    if (UNIQUE_ROLES_CHECK.includes(role)) {
+                        const centerRoleCheck = await db.collection("center_framers").where("center", "==", center).where("role", "==", role).get();
+                        if (!centerRoleCheck.empty) {
+                            Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في مركز ${center}!`); return false;
+                        }
+                    }
+
+                    let newFramer = {
+                        empId: empId,
+                        center: center,
+                        role: role,
+                        phone: formattedPhone,
+                        ccp: ccp,
+                        ccpKey: cle,
+                        s1: s1, s2: s2, s3: s3,
+                        shifts: [],
+                        isProtected: false
+                    };
+
+                    if (role === 'أستاذ مؤطر') {
+                        newFramer.framingSpecs = [];
+                        newFramer.framingModules = [];
+                        newFramer.framingGroups = [];
+                    }
+
+                    return { newDocId: docIdToCheck, data: newFramer };
+                }
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    try {
+                        await db.collection("center_framers").doc(result.value.newDocId).set(result.value.data);
+                        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تمت الإضافة بنجاح', showConfirmButton: false, timer: 1500 });
+                        loadAllFramersForAdmin(); // تحديث الجدول فوراً
+                    } catch (e) {
+                        Swal.fire('خطأ', 'تعذر الحفظ في قاعدة البيانات.', 'error');
+                    }
+                }
+            });
+        }
+    });
+};
+
+// 7. طباعة قائمة المؤطرين المفلترة (حسب المركز والدورة)
+window.adminPrintFramers = function() {
+    let filtered = adminFramersData.filter(f => {
+        let matchCenter = currentAdminFramerCenter === 'الكل' || f.center === currentAdminFramerCenter;
+        let matchSession = true;
+        if(currentAdminFramerSession === 's1') matchSession = f.s1;
+        if(currentAdminFramerSession === 's2') matchSession = f.s2;
+        if(currentAdminFramerSession === 's3') matchSession = f.s3;
+        return matchCenter && matchSession;
+    });
+
+    if(filtered.length === 0) return Swal.fire('تنبيه', 'لا توجد بيانات لطباعتها في التبويب الحالي.', 'warning');
+
+    let sessionName = currentAdminFramerSession === 'all' ? 'جميع الدورات' : (currentAdminFramerSession === 's1' ? 'الدورة الأولى' : (currentAdminFramerSession === 's2' ? 'الدورة الثانية' : 'الدورة الثالثة'));
+    let titleStr = `قائمة المؤطرين (${currentAdminFramerCenter}) - ${sessionName}`;
+
+    let printWindow = window.open('', '', 'width=1000,height=800');
+    let rowsHtml = '';
+    
+    // ترتيب القائمة حسب المراكز ثم الأسماء
+    filtered.sort((a,b) => a.center.localeCompare(b.center) || (a.baseInfo.name||'').localeCompare(b.baseInfo.name||''));
+
+    filtered.forEach((f, idx) => {
+        let b = f.baseInfo;
+        rowsHtml += `
+            <tr>
+                <td style="text-align:center;">${idx + 1}</td>
+                <td style="font-family:monospace; font-weight:bold;">${f.empId}</td>
+                <td><b>${b.name || '-'}</b></td>
+                <td>${b.grade || b.rank || '-'}</td>
+                <td style="font-weight:bold; color:#1E68E8;">${f.center}</td>
+                <td>${f.role}</td>
+                <td dir="ltr" style="text-align:right;">${f.phone || '-'}</td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titleStr}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .main-title { text-align: center; font-size: 22px; font-weight: 900; margin: 20px 0; text-transform: uppercase; text-decoration: underline;}
+            table { width: 100%; border-collapse: collapse; margin-top:20px;}
+            th, td { border: 1px solid #000; padding: 10px; text-align: right; font-size: 14px; }
+            th { background: #f1f5f9; font-weight: 900; color: #1e293b; text-align:center;}
+        </style>
+    </head>
+    <body>
+        <div style="text-align: center; font-weight: 900; font-size: 14px; line-height: 1.5; margin-bottom: 10px;">
+            الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية
+        </div>
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+        </div>
+        
+        <div class="main-title">${titleStr}</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:5%;">الرقم</th>
+                    <th style="width:15%;">الرقم الوظيفي</th>
+                    <th style="width:25%;">الاسم واللقب</th>
+                    <th style="width:15%;">الرتبة</th>
+                    <th style="width:15%;">المركز</th>
+                    <th style="width:15%;">الوظيفة</th>
+                    <th style="width:10%;">الهاتف</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+    </body>
+    <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// =========================================================================
+// نظام الحماية السري: إظهار إعدادات الموقع بـ 10 نقرات
+// =========================================================================
+let shieldClickCount = 0;
+let shieldClickTimer = null;
+
+window.handleShieldClick = function() {
+    shieldClickCount++;
+    
+    // تفريغ المؤقت إذا نقر مرة أخرى بسرعة
+    clearTimeout(shieldClickTimer);
+    
+    if (shieldClickCount >= 10) {
+        shieldClickCount = 0; // تصفير العداد
+        promptForSettingsPassword(); // استدعاء نافذة الرقم السري
+    } else {
+        // إذا توقف عن النقر لمدة ثانيتين، يتم تصفير العداد (لمنع التراكم العشوائي)
+        shieldClickTimer = setTimeout(() => {
+            shieldClickCount = 0;
+        }, 2000);
+    }
+};
+
+window.promptForSettingsPassword = function() {
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-shield" style="color: #0FBA50;"></i> تأكيد الصلاحية',
+        text: 'الرجاء إدخال الرقم السري لمدير النظام:',
+        input: 'password',
+        inputPlaceholder: 'أدخل الرقم السري هنا...',
+        allowOutsideClick: false, // يمنع إغلاق النافذة عند النقر خارجها
+        showCancelButton: true,
+        confirmButtonText: 'تحقق',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#0FBA50',
+        cancelButtonColor: '#dc3545',
+        preConfirm: async (enteredPassword) => {
+            if (!enteredPassword) {
+                Swal.showValidationMessage('الرجاء إدخال الرقم السري!');
+                return false;
+            }
+            
+            try {
+                // الاتصال بـ Firebase للتحقق (config -> pass -> admin_takwin)
+                const passDoc = await db.collection("config").doc("pass").get();
+                
+                if (passDoc.exists && passDoc.data().admin_takwin === enteredPassword) {
+                    return true; // الرقم السري صحيح
+                } else {
+                    Swal.showValidationMessage('الرقم السري غير صحيح، تم رفض الوصول!');
+                    return false;
+                }
+            } catch (error) {
+                Swal.showValidationMessage('حدث خطأ أثناء الاتصال بقاعدة البيانات!');
+                console.error(error);
+                return false;
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // إظهار زر إعدادات الموقع
+            document.getElementById('btnSettings').style.display = 'inline-block';
+            Swal.fire({
+                icon: 'success',
+                title: 'صلاحية مقبولة',
+                text: 'تم تفعيل زر إعدادات الموقع بنجاح.',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    });
+};
+
+
+
+// =========================================================================
+// نظام نافذة الحجم الساعي المستقلة (Modal)
+// =========================================================================
+
+// 1. دوال فتح وإغلاق النافذة
+function openHourlyVolumeModal() {
+    if (!SITE_SETTINGS || !SITE_SETTINGS.HOURLY_VOLUME) {
+        Swal.fire('انتظار', 'جاري جلب الإعدادات من قاعدة البيانات...', 'info');
+        return;
+    }
+    document.getElementById('hourlyVolumeModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    renderHourlyVolumeUI(); // بناء الواجهة عند الفتح
+}
+
+function closeHourlyVolumeModal() {
+    document.getElementById('hourlyVolumeModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// 2. دوال العرض والعمليات الحسابية
+let currentHourlySession = '1'; // تخزين الدورة المختارة حالياً (1, 2, 3)
+
+window.renderHourlyVolumeUI = function() {
+    const body = document.getElementById('hourlyVolumeBody');
+    const hv = SITE_SETTINGS.HOURLY_VOLUME;
+    const locked = hv.isLocked ? 'disabled' : '';
+    const lockedStyle = hv.isLocked ? 'background-color:#e2e8f0; cursor:not-allowed;' : '';
+
+    // التحقق والتأكد من وجود بيانات الدورة الحالية
+    if (!hv[`s${currentHourlySession}`]) {
+        hv[`s${currentHourlySession}`] = {
+            presidents: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            bursars: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            admins: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            teachers: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            guards: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            globalTotal: 0
+        };
+    }
+    // ترقيع البيانات القديمة لتشمل الحارس إذا لم يكن موجوداً
+    if (!hv[`s${currentHourlySession}`].guards) {
+        hv[`s${currentHourlySession}`].guards = { count: 0, days: 0, hoursPerDay: 0, total: 0 };
+    }
+    
+    const sData = hv[`s${currentHourlySession}`];
+
+    let html = `
+    <div class="setting-card" style="margin: 0; box-shadow: none; border: none; padding: 0;">
+        
+        <!-- الحاوية العلوية الجديدة: القائمة يميناً والأزرار يساراً -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #f8fafc; padding: 12px 20px; border-radius: 8px; border: 1px solid #cbd5e1; flex-wrap: wrap; gap: 15px;">
+            
+            <!-- الجزء الأيمن: حقل الدورة المصغر -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="font-weight: bold; color: #1e293b; margin: 0; white-space: nowrap;">اختر الدورة:</label>
+                <select class="crud-input" style="width: 220px; margin: 0; font-weight: bold; color: #1E68E8; cursor: pointer; padding: 8px 15px;" onchange="switchHourlySession(this.value)">
+                    <option value="1" ${currentHourlySession === '1' ? 'selected' : ''}>الدورة التكوينية الأولى</option>
+                    <option value="2" ${currentHourlySession === '2' ? 'selected' : ''}>الدورة التكوينية الثانية</option>
+                    <option value="3" ${currentHourlySession === '3' ? 'selected' : ''}>الدورة التكوينية الثالثة</option>
+                </select>
+            </div>
+
+            <!-- الجزء الأيسر: أزرار الطباعة، الحفظ، والتعديل -->
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-action" onclick="promptPrintHourlyVolume()" style="background:#17a2b8; color:white; padding: 10px 20px; font-size: 15px; margin: 0;">
+                    <i class="fa-solid fa-print"></i> طباعة الحجم الساعي
+                </button>
+                <button class="btn-action btn-save" onclick="saveHourlyVolume()" style="${hv.isLocked ? 'display:none;' : ''} padding: 10px 20px; font-size: 15px; margin: 0;">
+                    <i class="fa-solid fa-lock"></i> حفظ وتجميد
+                </button>
+                <button class="btn-action" onclick="editHourlyVolume()" style="background:#ff9800; color:white; ${hv.isLocked ? '' : 'display:none;'} padding: 10px 20px; font-size: 15px; margin: 0;">
+                    <i class="fa-solid fa-lock-open"></i> فتح للتعديل
+                </button>
+            </div>
+            
+        </div>
+
+        <!-- جدول الحجم الساعي -->
+        <div style="border: 2px solid #0FBA50; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+            <div style="background: #0FBA50; color: white; padding: 12px 20px; font-weight: bold; font-size: 18px; display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-calendar-day"></i> جدول الحجم الساعي - الدورة رقم (${currentHourlySession})
+            </div>
+            <div style="padding: 20px; background: white; overflow-x: auto;">
+                <table class="crud-table" style="text-align: center; font-size:15px; margin-bottom: 0; width: 100%; border-collapse: collapse; min-width: 800px;">
+                    <thead>
+                        <tr style="background:#f1f5f9;">
+                            <th style="text-align:right; padding: 15px; border: 1px solid #cbd5e1;">الفئة المستهدفة</th>
+                            <th style="text-align:center; padding: 15px; border: 1px solid #cbd5e1; width: 15%;">العدد</th>
+                            <th style="text-align:center; padding: 15px; border: 1px solid #cbd5e1; width: 15%;">عدد الأيام</th>
+                            <th style="text-align:center; padding: 15px; border: 1px solid #cbd5e1; width: 15%;">الساعات باليوم</th>
+                            <th style="text-align:center; padding: 15px; border: 1px solid #cbd5e1; width: 20%;">المجموع الساعي</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- رؤساء المراكز -->
+                        <tr>
+                            <td style="text-align:right; font-weight:bold; color:#1e293b; padding: 12px; border: 1px solid #cbd5e1;"><i class="fa-solid fa-user-tie" style="color:#1E68E8; margin-left: 8px;"></i>رؤساء المراكز</td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_pres_count" class="crud-input" value="${sData.presidents.count}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_pres_days" class="crud-input" value="${sData.presidents.days}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_pres_hours" class="crud-input" value="${sData.presidents.hoursPerDay}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_pres_total" class="crud-input" value="${sData.presidents.total}" readonly style="text-align:center; background:#e8fbf0; color:#0FBA50; font-weight:bold; border-color:#0FBA50;"></td>
+                        </tr>
+                        
+                        <!-- المقتصد -->
+                        <tr>
+                            <td style="text-align:right; font-weight:bold; color:#1e293b; padding: 12px; border: 1px solid #cbd5e1;"><i class="fa-solid fa-calculator" style="color:#e67e22; margin-left: 8px;"></i>المقتصد(ة)</td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_bursar_count" class="crud-input" value="${sData.bursars.count}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_bursar_days" class="crud-input" value="${sData.bursars.days}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_bursar_hours" class="crud-input" value="${sData.bursars.hoursPerDay}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_bursar_total" class="crud-input" value="${sData.bursars.total}" readonly style="text-align:center; background:#e8fbf0; color:#0FBA50; font-weight:bold; border-color:#0FBA50;"></td>
+                        </tr>
+
+                        <!-- الإداريين -->
+                        <tr>
+                            <td style="text-align:right; font-weight:bold; color:#1e293b; padding: 12px; border: 1px solid #cbd5e1;"><i class="fa-solid fa-users-gear" style="color:#8e44ad; margin-left: 8px;"></i>الإداريين</td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_admin_count" class="crud-input" value="${sData.admins.count}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_admin_days" class="crud-input" value="${sData.admins.days}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_admin_hours" class="crud-input" value="${sData.admins.hoursPerDay}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_admin_total" class="crud-input" value="${sData.admins.total}" readonly style="text-align:center; background:#e8fbf0; color:#0FBA50; font-weight:bold; border-color:#0FBA50;"></td>
+                        </tr>
+
+                        <!-- الحارس -->
+                        <tr>
+                            <td style="text-align:right; font-weight:bold; color:#1e293b; padding: 12px; border: 1px solid #cbd5e1;"><i class="fa-solid fa-shield-halved" style="color:#27ae60; margin-left: 8px;"></i>الحارس</td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_guard_count" class="crud-input" value="${sData.guards.count}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_guard_days" class="crud-input" value="${sData.guards.days}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_guard_hours" class="crud-input" value="${sData.guards.hoursPerDay}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_guard_total" class="crud-input" value="${sData.guards.total}" readonly style="text-align:center; background:#e8fbf0; color:#0FBA50; font-weight:bold; border-color:#0FBA50;"></td>
+                        </tr>
+
+                        <!-- الأساتذة المؤطرين (بدون عدد) -->
+                        <tr>
+                            <td style="text-align:right; font-weight:bold; color:#1e293b; padding: 12px; border: 1px solid #cbd5e1;"><i class="fa-solid fa-chalkboard-user" style="color:#e91e63; margin-left: 8px;"></i>الأساتذة المؤطرين</td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1; background: #f8fafc;">
+                                <input type="text" class="crud-input" value="-" disabled style="text-align:center; background:#e2e8f0; color:#94a3b8; font-weight:bold; cursor:not-allowed; border:none;">
+                            </td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_teach_days" class="crud-input" value="${sData.teachers.days}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_teach_hours" class="crud-input" value="${sData.teachers.hoursPerDay}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_teach_total" class="crud-input" value="${sData.teachers.total}" readonly style="text-align:center; background:#e8fbf0; color:#0FBA50; font-weight:bold; border-color:#0FBA50;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style="background: #f0fdf4; padding: 15px 25px; border-radius: 8px; border: 2px dashed #0FBA50; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <strong style="font-size: 18px; color: #102a43;"><i class="fa-solid fa-calculator" style="color:#0FBA50; margin-left: 5px;"></i> الإجمالي العام لساعات الدورة (${currentHourlySession}):</strong>
+                    <span id="hv_global_total" style="font-size: 28px; font-weight: 900; color: #0FBA50; background:white; padding:5px 25px; border-radius:10px; border:1px solid #0FBA50;">${sData.globalTotal}</span>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    
+    body.innerHTML = html;
+};
+
+// التبديل بين الدورات 
+window.switchHourlySession = function(sessionVal) {
+    if (!SITE_SETTINGS.HOURLY_VOLUME.isLocked) {
+        updateSessionDataInMemory(currentHourlySession);
+    }
+    currentHourlySession = sessionVal;
+    renderHourlyVolumeUI();
+};
+
+// حفظ البيانات في الذاكرة المؤقتة (يتم استدعاؤها مع كل كتابة أو انتقال)
+window.updateSessionDataInMemory = function(s) {
+    let p_c = parseFloat(document.getElementById('hv_pres_count').value) || 0;
+    let p_d = parseFloat(document.getElementById('hv_pres_days').value) || 0;
+    let p_h = parseFloat(document.getElementById('hv_pres_hours').value) || 0;
+    let p_t = p_c * p_d * p_h;
+
+    let b_c = parseFloat(document.getElementById('hv_bursar_count').value) || 0;
+    let b_d = parseFloat(document.getElementById('hv_bursar_days').value) || 0;
+    let b_h = parseFloat(document.getElementById('hv_bursar_hours').value) || 0;
+    let b_t = b_c * b_d * b_h;
+
+    let a_c = parseFloat(document.getElementById('hv_admin_count').value) || 0;
+    let a_d = parseFloat(document.getElementById('hv_admin_days').value) || 0;
+    let a_h = parseFloat(document.getElementById('hv_admin_hours').value) || 0;
+    let a_t = a_c * a_d * a_h;
+
+    let g_c = parseFloat(document.getElementById('hv_guard_count').value) || 0;
+    let g_d = parseFloat(document.getElementById('hv_guard_days').value) || 0;
+    let g_h = parseFloat(document.getElementById('hv_guard_hours').value) || 0;
+    let g_t = g_c * g_d * g_h;
+
+    let t_d = parseFloat(document.getElementById('hv_teach_days').value) || 0;
+    let t_h = parseFloat(document.getElementById('hv_teach_hours').value) || 0;
+    let t_t = t_d * t_h;
+
+    let g_total = p_t + b_t + a_t + g_t + t_t;
+
+    SITE_SETTINGS.HOURLY_VOLUME[`s${s}`] = {
+        presidents: { count: p_c, days: p_d, hoursPerDay: p_h, total: p_t },
+        bursars: { count: b_c, days: b_d, hoursPerDay: b_h, total: b_t },
+        admins: { count: a_c, days: a_d, hoursPerDay: a_h, total: a_t },
+        guards: { count: g_c, days: g_d, hoursPerDay: g_h, total: g_t },
+        teachers: { count: 0, days: t_d, hoursPerDay: t_h, total: t_t },
+        globalTotal: g_total
+    };
+};
+
+// الحساب اللحظي أثناء الكتابة
+window.calcHourlyVolume = function() {
+    let p_c = parseFloat(document.getElementById('hv_pres_count').value) || 0;
+    let p_d = parseFloat(document.getElementById('hv_pres_days').value) || 0;
+    let p_h = parseFloat(document.getElementById('hv_pres_hours').value) || 0;
+    let p_t = p_c * p_d * p_h;
+    document.getElementById('hv_pres_total').value = p_t;
+
+    let b_c = parseFloat(document.getElementById('hv_bursar_count').value) || 0;
+    let b_d = parseFloat(document.getElementById('hv_bursar_days').value) || 0;
+    let b_h = parseFloat(document.getElementById('hv_bursar_hours').value) || 0;
+    let b_t = b_c * b_d * b_h;
+    document.getElementById('hv_bursar_total').value = b_t;
+
+    let a_c = parseFloat(document.getElementById('hv_admin_count').value) || 0;
+    let a_d = parseFloat(document.getElementById('hv_admin_days').value) || 0;
+    let a_h = parseFloat(document.getElementById('hv_admin_hours').value) || 0;
+    let a_t = a_c * a_d * a_h;
+    document.getElementById('hv_admin_total').value = a_t;
+
+    let g_c = parseFloat(document.getElementById('hv_guard_count').value) || 0;
+    let g_d = parseFloat(document.getElementById('hv_guard_days').value) || 0;
+    let g_h = parseFloat(document.getElementById('hv_guard_hours').value) || 0;
+    let g_t = g_c * g_d * g_h;
+    document.getElementById('hv_guard_total').value = g_t;
+
+    let t_d = parseFloat(document.getElementById('hv_teach_days').value) || 0;
+    let t_h = parseFloat(document.getElementById('hv_teach_hours').value) || 0;
+    let t_t = t_d * t_h; 
+    document.getElementById('hv_teach_total').value = t_t;
+
+    let globalTotal = p_t + b_t + a_t + g_t + t_t;
+    document.getElementById('hv_global_total').innerText = globalTotal;
+
+    updateSessionDataInMemory(currentHourlySession);
+};
+
+// حفظ واعتماد الحجم الساعي لجميع الدورات في Firebase
+window.saveHourlyVolume = async function() {
+    calcHourlyVolume();
+    SITE_SETTINGS.HOURLY_VOLUME.isLocked = true;
+    await saveSettingsToFirestore(true, 'تم حفظ وتجميد الحجم الساعي للدورات بنجاح');
+    renderHourlyVolumeUI();
+};
+
+// فتح الحقول للتعديل مجدداً
+window.editHourlyVolume = async function() {
+    if (!SITE_SETTINGS.HOURLY_VOLUME) return;
+    SITE_SETTINGS.HOURLY_VOLUME.isLocked = false;
+    renderHourlyVolumeUI();
+};
+
+// =========================================================================
+// دوال طباعة الحجم الساعي
+// =========================================================================
+
+// نافذة اختيار نوع الطباعة
+window.promptPrintHourlyVolume = function() {
+    Swal.fire({
+        title: '<i class="fa-solid fa-print" style="color:#17a2b8;"></i> خيارات الطباعة',
+        text: 'كيف تود طباعة الحجم الساعي؟',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: `الدورة المحددة (${currentHourlySession}) فقط`,
+        denyButtonText: `الدورات الثلاث معاً`,
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#0FBA50',
+        denyButtonColor: '#1E68E8'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            printHourlyVolume('current');
+        } else if (result.isDenied) {
+            printHourlyVolume('all');
+        }
+    });
+};
+
+// دالة الطباعة الفعلية
+window.printHourlyVolume = function(mode) {
+    // تحديث الحسابات لضمان طباعة آخر الأرقام
+    calcHourlyVolume();
+
+    const hv = SITE_SETTINGS.HOURLY_VOLUME;
+    let sessionsToPrint = [];
+    
+    if (mode === 'current') {
+        sessionsToPrint.push({ id: currentHourlySession, data: hv[`s${currentHourlySession}`] });
+    } else {
+        [1, 2, 3].forEach(s => {
+            if (hv[`s${s}`]) sessionsToPrint.push({ id: s, data: hv[`s${s}`] });
+        });
+    }
+
+    let printWindow = window.open('', '', 'width=1000,height=800');
+    
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة الحجم الساعي</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; background: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-header { text-align: center; font-weight: bold; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .main-title { text-align: center; font-size: 22px; font-weight: 900; margin: 20px 0 30px 0; text-decoration: underline; color: #102a43; }
+            
+            .session-block { margin-bottom: 40px; page-break-inside: avoid; }
+            .session-title { font-size: 18px; font-weight: bold; background: #f1f5f9; padding: 8px 15px; border: 1px solid #000; border-bottom: none; display: inline-block;}
+            
+            table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 10px; text-align: center; font-size: 14px; }
+            th { background: #f8fafc; font-weight: 900; }
+            .cat-name { text-align: right; font-weight: bold; }
+            
+            .total-row { font-weight: 900; font-size: 16px; background: #e8fbf0; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 50px; font-weight: bold; font-size: 16px; padding: 0 50px; }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+        </div>
+        
+        <div class="main-title">جدول الحجم الساعي ${mode === 'current' ? `للدورة التكوينية (${currentHourlySession})` : 'للدورات التكوينية الثلاث'}</div>
+    `;
+
+    sessionsToPrint.forEach(session => {
+        let d = session.data;
+        html += `
+        <div class="session-block">
+            <div class="session-title">الدورة التكوينية رقم (${session.id})</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">الفئة المستهدفة</th>
+                        <th style="width: 15%;">العدد</th>
+                        <th style="width: 15%;">عدد الأيام</th>
+                        <th style="width: 20%;">الساعات باليوم</th>
+                        <th style="width: 25%;">المجموع الساعي للفئة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="cat-name">رؤساء المراكز</td>
+                        <td>${d.presidents.count}</td>
+                        <td>${d.presidents.days}</td>
+                        <td>${d.presidents.hoursPerDay}</td>
+                        <td>${d.presidents.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-name">المقتصد(ة)</td>
+                        <td>${d.bursars.count}</td>
+                        <td>${d.bursars.days}</td>
+                        <td>${d.bursars.hoursPerDay}</td>
+                        <td>${d.bursars.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-name">الإداريين</td>
+                        <td>${d.admins.count}</td>
+                        <td>${d.admins.days}</td>
+                        <td>${d.admins.hoursPerDay}</td>
+                        <td>${d.admins.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-name">الحارس</td>
+                        <td>${d.guards.count}</td>
+                        <td>${d.guards.days}</td>
+                        <td>${d.guards.hoursPerDay}</td>
+                        <td>${d.guards.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="cat-name">الأساتذة المؤطرين</td>
+                        <td style="background:#eee;">-</td>
+                        <td>${d.teachers.days}</td>
+                        <td>${d.teachers.hoursPerDay}</td>
+                        <td>${d.teachers.total}</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td colspan="4" style="text-align: left; padding-left: 20px;">الإجمالي العام لساعات الدورة (${session.id}):</td>
+                        <td>${d.globalTotal}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        `;
+    });
+
+    html += `
+        <div class="signatures">
+            <div>رئيس مصلحة التكوين والتفتيش</div>
+            <div>مدير التربية</div>
+        </div>
+    </body>
+    <script>
+        window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }
+    <\/script>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
 </script>
 </body>
 </html>

@@ -7,7 +7,11 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- مكتبات تصدير الإكسل -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
@@ -220,23 +224,29 @@
   </div>
 
   <!-- الشريط العلوي -->
-  <div class="top-nav">
-    <h2><i class="fa-solid fa-user-tie"></i> فضاء التكوين <span id="headerCenterName">المركز...</span></h2>
-    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;">
-      <span id="welcomeName" style="font-weight:bold; font-size:14px; margin-left:15px; color:#62b0e8;"></span>
-      
-      <!-- زر إدارة الملفات الخاص بالمفتش -->
-      <button class="logout-btn" style="background: #1E68E8;" onclick="openFileManagerSelection()">
+  <div class="top-nav" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+    
+    <!-- الجزء الأيمن: عنوان المركز -->
+    <div style="flex: 1; min-width: max-content;">
+      <h2><i class="fa-solid fa-user-tie"></i> فضاء التكوين <span id="headerCenterName">المركز...</span></h2>
+    </div>
+
+    <!-- الجزء الأوسط: عرض أسماء المسؤولين (مُتمركز في النصف) -->
+    <div id="welcomeName" style="flex: 1; display: flex; justify-content: center; min-width: 280px;"></div>
+    
+    <!-- الجزء الأيسر: أزرار التحكم -->
+    <div style="flex: 1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: max-content;">
+      <button class="logout-btn" style="background: #1E68E8;" onclick="checkAndOpenFileManager()">
         <i class="fa-solid fa-folder-open"></i> إدارة ملفات المقاييس
       </button>
 
-
-     <!-- زر مؤطرو المركز الجديد -->
-      <button class="logout-btn" style="background: #e67e22;" onclick="window.location.href='framers_management.html'">
+      <button class="logout-btn" style="background: #e67e22;" onclick="checkAndOpenFramers()">
         <i class="fa-solid fa-user-tie"></i> تسيير التأطير
       </button>
 
-      <button class="logout-btn" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
+      <button class="logout-btn" onclick="logout()">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج
+      </button>
     </div>
   </div>
 
@@ -270,13 +280,20 @@
     <!-- الفلاتر -->
     <div class="filters-section">
       <div class="filters-header">
-         <h3 style="margin: 0; color: #102a43; font-size: 16px;"><i class="fa-solid fa-filter" style="color: #102a43;"></i> أدوات التصفية والطباعة</h3>
-         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+         
+         
+         <!-- التعديل هنا: إضافة flex: 1 للحاوية -->
+         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: 1;">
+             
              <button class="btn-detailed-stats" onclick="showDetailedStats()">
-                <i class="fa-solid fa-chart-pie"></i> إحصائيات دقيقة
+                <i class="fa-solid fa-chart-pie"></i> احصائيات
              </button>
              
-             <!-- أزرار القوائم الثلاثة -->
+             <!-- زر تحميل إكسل -->
+             <button class="btn-print" style="background: #107c41;" onclick="exportToExcel()">
+               <i class="fa-solid fa-file-excel"></i> تحميل إكسل
+             </button>
+
              <button class="btn-print" onclick="printFilteredList()">
                <i class="fa-solid fa-print"></i> القائمة 1
              </button>
@@ -287,7 +304,6 @@
                <i class="fa-solid fa-list-check"></i> القائمة 3
              </button>
 
-             <!-- زر طباعة البطاقات -->
              <button class="btn-print" style="background: #0FBA50;" onclick="printIDCards()">
                <i class="fa-solid fa-id-badge"></i> طباعة البطاقات
              </button>
@@ -301,12 +317,11 @@
              </button>
 
              <button class="btn-print" style="background: #e67e22;" onclick="openPermissionModal()">
-               <i class="fa-solid fa-file-signature"></i> نظام الرخص والاستفسارات
+               <i class="fa-solid fa-file-signature"></i> التراخيص
              </button>
 
-             
-             
-             <span style="background: #e2e8f0; color: #334e68; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; border: 1px solid #cbd5e1;">
+             <!-- التعديل هنا: إضافة margin-right: auto; لدفع المربع لأقصى اليسار -->
+             <span style="margin-right: auto; background: #e2e8f0; color: #334e68; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; border: 1px solid #cbd5e1;">
                نتيجة الفلترة: <span id="stat-filtered" style="color:#d90429;">0</span>
              </span>
          </div>
@@ -358,7 +373,8 @@
             <th>الرقم الوظيفي</th>
             <th>الاسم واللقب</th>
             <th>تاريخ الميلاد</th>
-            <th>الدائرة</th>
+			<th>مكان الميلاد</th>
+            <th>دائرة الإقامة</th>
             <th>العنوان</th>
             <th>رقم الهاتف</th>
             <th>الرتبة / مكان العمل</th>
@@ -492,79 +508,89 @@
   </div>
 
 <!-- ================= نافذة إدارة وتشكيل الأفواج ================= -->
-  <div class="modal-overlay" id="groupingModal">
-    <div class="modal-content" style="width: 98%; height: 98%;">
-      <div class="modal-header" style="background: #8e44ad;">
-        <h2><i class="fa-solid fa-users-viewfinder"></i> نظام تشكيل وإدارة الأفواج</h2>
-        <button class="close-modal" onclick="closeGroupingModal()"><i class="fa-solid fa-xmark"></i></button>
+<div class="modal-overlay" id="groupingModal">
+  <div class="modal-content" style="width: 98%; height: 98%;">
+    <div class="modal-header" style="background: #8e44ad;">
+      <h2><i class="fa-solid fa-users-viewfinder"></i> نظام تشكيل وإدارة الأفواج</h2>
+      <button class="close-modal" onclick="closeGroupingModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="att-controls" style="background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; border-bottom: 2px solid #d9e2ec; justify-content: space-between;">
+      <div style="display: flex; gap: 15px; align-items: center; background: #f8fbff; padding: 10px 15px; border-radius: 8px; border: 1px solid #cce5ff;">
+          <label style="font-weight: bold; color: #102a43;">العدد المعتمد في الفوج:</label>
+          <input type="number" id="maxGroupSize" value="25" min="5" max="100" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-weight: bold; text-align: center;">
+          <button class="btn-print" style="background: #ff9800; color: white;" onclick="autoGroupTrainees()">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> التفويج الآلي
+          </button>
       </div>
 
-   <div class="att-controls" style="background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; border-bottom: 2px solid #d9e2ec; justify-content: space-between;">
-        
-        <div style="display: flex; gap: 15px; align-items: center; background: #f8fbff; padding: 10px 15px; border-radius: 8px; border: 1px solid #cce5ff;">
-            <label style="font-weight: bold; color: #102a43;">العدد المعتمد في الفوج:</label>
-            <input type="number" id="maxGroupSize" value="25" min="5" max="100" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-weight: bold; text-align: center;">
-            <button class="btn-print" style="background: #ff9800; color: white;" onclick="autoGroupTrainees()">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> التفويج الآلي
-            </button>
-            <span style="font-weight:bold; color:#d90429; font-size: 14px; background: #ffeaea; padding: 6px 12px; border-radius: 6px; border: 1px solid #ffc6c6; margin-right: 10px;">
-                عدد الفلترة: <span id="grpFilterCount">0</span>
-            </span>
-        </div>
-
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn-print" style="background: #34495e;" onclick="openGroupNamesManager()">
-                <i class="fa-solid fa-gears"></i> إعداد أسماء الأفواج
-            </button>
-            <!-- الزر الجديد للبطاقة الإحصائية -->
-            <button class="btn-print" style="background: #27ae60;" onclick="showGroupStatistics()">
-                <i class="fa-solid fa-chart-pie"></i> إحصائيات الأفواج
-            </button>
-            <button class="btn-print" style="background: #17a2b8;" onclick="printGroupsList()">
-                <i class="fa-solid fa-print"></i> طباعة القوائم حسب الفوج
-            </button>
-            <button class="btn-print" style="background: #d90429;" onclick="clearGroupings()">
-                <i class="fa-solid fa-eraser"></i> تفريغ الأفواج
-            </button>
-        </div>
-
-      </div>
-
-      <div class="att-filters">
-        <!-- ربط الفلاتر بالدالة الديناميكية -->
-        <input type="text" id="grpSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="updateDynamicGroupsAndRender()">
-        <select id="grpRankFilter" onchange="updateDynamicGroupsAndRender()">
-            <option value="الكل">كل الرتب</option>
-        </select>
-        <select id="grpSpecFilter" onchange="updateDynamicGroupsAndRender()">
-            <option value="الكل">كل التخصصات</option>
-        </select>
-        <!-- قائمة الأفواج تعتمد على الفلترة السابقة -->
-        <select id="grpNameFilter" onchange="renderGroupingTable()">
-            <option value="الكل">كل الأفواج (المشكلة حالياً)</option>
-        </select>
-      </div>
-      <div class="att-table-container">
-        <table class="att-table" id="grpTable">
-          <thead>
-            <tr>
-              <th style="width: 40px;">#</th>
-              <th>الرقم الوظيفي</th>
-              <th>الاسم واللقب</th>
-              <th style="width: 60px;">الجنس</th>
-              <th>الرتبة</th>
-              <th>التخصص</th>
-              <th>مكان العمل</th>
-              <th style="width: 150px; text-align: center;">الفوج (قابل للتعديل)</th>
-            </tr>
-          </thead>
-          <tbody id="grpTableBody">
-            <!-- سيتم توليد البيانات هنا -->
-          </tbody>
-        </table>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn-print" style="background: #34495e;" onclick="openGroupNamesManager()">
+              <i class="fa-solid fa-gears"></i> إعداد أسماء الأفواج
+          </button>
+          <button class="btn-print" style="background: #27ae60;" onclick="showGroupStatistics()">
+              <i class="fa-solid fa-chart-pie"></i> إحصائيات الأفواج
+          </button>
+          <button class="btn-print" style="background: #17a2b8;" onclick="printGroupsList()">
+              <i class="fa-solid fa-print"></i> طباعة القوائم
+          </button>
+          <button class="btn-print" style="background: #d90429;" onclick="clearGroupings()">
+              <i class="fa-solid fa-eraser"></i> تفريغ الأفواج
+          </button>
       </div>
     </div>
+
+    <div class="att-filters">
+      <input type="text" id="grpSearch" placeholder="بحث بالاسم أو الرقم الوظيفي..." oninput="updateDynamicGroupsAndRender()">
+      <select id="grpRankFilter" onchange="updateDynamicGroupsAndRender()">
+          <option value="الكل">كل الرتب</option>
+      </select>
+      <select id="grpSpecFilter" onchange="updateDynamicGroupsAndRender()">
+          <option value="الكل">كل التخصصات</option>
+      </select>
+      <select id="grpNameFilter" onchange="resetGroupPageAndRender()">
+          <option value="الكل">كل الأفواج (المشكلة حالياً)</option>
+      </select>
+    </div>
+
+    <!-- شريط الإدراج الجماعي (تم إضافته) -->
+    <div class="bulk-action-bar" style="margin: 0 15px 15px 15px; padding: 10px; background: #fff; border: 1px solid #ccc; justify-content: flex-start; display: flex; align-items: center; gap: 10px; border-radius: 8px;">
+        <span style="font-weight:bold; color:#102a43;"><i class="fa-solid fa-layer-group"></i> إدراج جماعي:</span>
+        <select id="bulkGroupSelect" style="padding: 6px; border-radius: 6px; border: 1px solid #8e44ad; outline: none; min-width: 150px;">
+            <option value="">-- اختر الفوج --</option>
+        </select>
+        <button class="btn-print" style="background: #8e44ad; color: white; border-radius: 6px;" onclick="bulkAssignGroups()">
+            <i class="fa-solid fa-check-double"></i> تطبيق على المحددين
+        </button>
+        <span style="margin-right:auto; font-weight:bold; color:#d90429; font-size: 14px; background: #ffeaea; padding: 6px 12px; border-radius: 6px; border: 1px solid #ffc6c6;">
+            عدد الفلترة: <span id="grpFilterCount">0</span>
+        </span>
+    </div>
+
+    <div class="att-table-container">
+      <table class="att-table" id="grpTable">
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllGroups" onchange="toggleSelectAllGroups()"></th>
+            <th>الرقم الوظيفي</th>
+            <th>الاسم واللقب</th>
+            <th style="width: 60px;">الجنس</th>
+            <th>الرتبة</th>
+            <th>التخصص</th>
+            <th>مكان العمل</th>
+            <th style="width: 150px; text-align: center;">الفوج (قابل للتعديل)</th>
+          </tr>
+        </thead>
+        <tbody id="grpTableBody">
+          <!-- سيتم توليد البيانات هنا -->
+        </tbody>
+      </table>
+      
+      <!-- حاوية نظام الصفحات (تم إضافتها) -->
+      <div id="group-pagination-controls" class="pagination-container" style="display: none; margin-top:10px; background:#f8fbff; border: 1px solid #eee;"></div>
+    </div>
   </div>
+</div>
 
 <!-- ================= نافذة نظام الرخص والاستفسارات ================= -->
   <div class="modal-overlay" id="permissionModal">
@@ -634,6 +660,14 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+let currentUserRole = "";
+let currentGroupPage = 1;         
+const groupsPerPage = 10;         
+let currentFilteredGroupData = []; 
+let selectedGroupsTrainees = new Set();
+
+
+
 // ================= إعدادات الصور والمطابقة =================
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
 let employeePhotosMap = {}; 
@@ -652,7 +686,6 @@ let INSPECTOR_CENTER = "";
 window.onload = function() {
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
-    const adminName = sessionStorage.getItem("userName");
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
         window.location.href = "index.html";
@@ -660,10 +693,109 @@ window.onload = function() {
     }
 
     document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
-    document.getElementById("welcomeName").innerText = `مرحباً بك: ${adminName}`;
-
+    
+    // استدعاء دالة جلب أسماء مسؤولي المركز
+    loadCenterAdmins();
     fetchData();
 };
+
+// ================= دالة جلب وعرض مسؤولي المركز وتحديد الصلاحية =================
+// ================= دالة جلب وعرض مسؤولي المركز وتحديد الصلاحية (بالميزة الذكية) =================
+async function loadCenterAdmins() {
+    try {
+        const userEmpId = sessionStorage.getItem("userEmpId");
+        
+        let pedName = "غير معين";
+        let admName = "غير معين";
+        let loggedInRole = ""; 
+
+        // 1. البحث أولاً في قاعدة البيانات الخاصة بتعيينات المديرية (center_admins)
+        const adminsSnap = await db.collection("center_admins").where("center", "==", INSPECTOR_CENTER).get();
+        adminsSnap.forEach(doc => {
+            let data = doc.data();
+            let isCurrentUser = (doc.id === userEmpId);
+            let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
+
+            if (data.jobTitle === "المسؤول البيداغوجي") { pedName = data.name + " " + youTag; }
+            if (data.jobTitle === "المسؤول الإداري") { admName = data.name + " " + youTag; }
+
+            if (isCurrentUser) { currentUserRole = data.jobTitle; loggedInRole = data.jobTitle; }
+        });
+
+        // 2. 🌟 الميزة الذكية (الاحتياطية): إذا لم تقم المديرية بتعيين المسؤول، نبحث عنه في جدول المؤطرين الداخلي 🌟
+        if (pedName === "غير معين" || admName === "غير معين") {
+            const framersSnap = await db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).get();
+            
+            for (let doc of framersSnap.docs) {
+                let fData = doc.data();
+                
+                // التحقق من المسؤول الإداري
+                if (admName === "غير معين" && fData.role === "المسؤول الإداري") {
+                    let name = await getFramerNameFromBase(fData.empId);
+                    let isCurrentUser = (fData.empId === userEmpId);
+                    let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
+                    admName = name + " " + youTag;
+                    if (isCurrentUser) { currentUserRole = fData.role; loggedInRole = fData.role; }
+                }
+                
+                // التحقق من المسؤول البيداغوجي (في حال تم إضافته كمؤطر ولم تعينه المديرية)
+                if (pedName === "غير معين" && fData.role === "المسؤول البيداغوجي") {
+                    let name = await getFramerNameFromBase(fData.empId);
+                    let isCurrentUser = (fData.empId === userEmpId);
+                    let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
+                    pedName = name + " " + youTag;
+                    if (isCurrentUser) { currentUserRole = fData.role; loggedInRole = fData.role; }
+                }
+            }
+        }
+
+        // إبراز السطر الخاص بصاحب الحساب بلون أبيض ناصع، وجعل الآخر باهتاً قليلاً
+        let pedStyle = loggedInRole === "المسؤول البيداغوجي" ? "color:#fff;" : "color:#cbd5e1;";
+        let admStyle = loggedInRole === "المسؤول الإداري" ? "color:#fff;" : "color:#cbd5e1;";
+
+        // تجهيز أسطر HTML لكل مسؤول (مع منع التفاف النص ليتمدد المربع)
+        let pedRowHtml = `
+            <div style="font-size:13px; font-family:'Cairo'; ${pedStyle} white-space: nowrap;">
+                <i class="fa-solid fa-chalkboard-user" style="color:#0FBA50; width:20px;"></i> المسؤول البيداغوجي: <b style="${loggedInRole === 'المسؤول البيداغوجي' ? 'font-size:15px;' : 'font-size:14px;'}">${pedName}</b>
+            </div>
+        `;
+        
+        let admRowHtml = `
+            <div style="font-size:13px; font-family:'Cairo'; ${admStyle} white-space: nowrap;">
+                <i class="fa-solid fa-user-tie" style="color:#ff9800; width:20px;"></i> المسؤول الإداري: <b style="${loggedInRole === 'المسؤول الإداري' ? 'font-size:15px;' : 'font-size:14px;'}">${admName}</b>
+            </div>
+        `;
+
+        // ترتيب الأسطر: صاحب الحساب يظهر في الأعلى دائماً
+        let finalRows = "";
+        if (loggedInRole === "المسؤول الإداري") {
+            finalRows = admRowHtml + pedRowHtml; // الإداري فوق
+        } else {
+            finalRows = pedRowHtml + admRowHtml; // البيداغوجي فوق (الافتراضي)
+        }
+
+        // عرض الأسماء في الشريط العلوي مع تمدد تلقائي (width: max-content)
+        document.getElementById("welcomeName").innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:6px; background: rgba(0,0,0,0.25); padding: 8px 25px; border-radius: 12px; border: 1px dashed #62b0e8; text-align: right; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); width: max-content;">
+                ${finalRows}
+            </div>
+        `;
+    } catch (e) {
+        console.error("Error loading admins:", e);
+    }
+}
+
+// ================= دالة مساعدة لجلب اسم المؤطر من قاعدة البيانات الرئيسية =================
+async function getFramerNameFromBase(empId) {
+    if (!empId) return "غير معروف";
+    try {
+        let snap = await db.collection("employeescomnew").doc(String(empId)).get();
+        if (!snap.exists) snap = await db.collection("employeescomplus").doc(String(empId)).get();
+        if (snap.exists && snap.data().name) return snap.data().name;
+    } catch (e) { }
+    return "غير معروف";
+}
+
 
 let centerData = []; 
 let filteredData = [];
@@ -675,9 +807,23 @@ function logout() {
     window.location.href = "index.html";
 }
 
-// ================= دالة فتح نافذة اختيار إدارة الملفات =================
-function openFileManagerSelection() {
+// ================= دوال التحقق من الصلاحيات والمنع =================
+function checkAndOpenFileManager() {
+    if (currentUserRole === "المسؤول الإداري") {
+        Swal.fire({
+            icon: 'error',
+            title: 'صلاحيات مقيدة',
+            text: 'عذراً، إدارة ملفات المقاييس من الصلاحيات الحصرية للمسؤول البيداغوجي.',
+            confirmButtonColor: '#102a43'
+        });
+        return;
+    }
     window.location.href = "dashboard_finale_upload.html";
+}
+
+function checkAndOpenFramers() {
+    
+    window.location.href = "framers_management.html";
 }
 
 // ================= دوال الفلاتر المتعددة =================
@@ -827,7 +973,7 @@ function renderTable() {
     tbody.innerHTML = "";
 
     if(filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة</td></tr>`;
         renderPagination(0);
         return;
     }
@@ -869,6 +1015,7 @@ function renderTable() {
             </td>
             <td>${item.name || '-'}</td>
             <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
+            <td style="text-align:center;">${item.pob || '-'}</td>
             <td style="font-weight:600; color:#1E68E8;">${item.daira || '-'}</td>
             <td>${item.address || '-'}</td>
             <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
@@ -962,40 +1109,232 @@ window.viewInfo = function(docId) {
     });
 }
 
-function showDetailedStats() {
-    if(filteredData.length === 0){ Swal.fire('تنبيه', 'لا توجد بيانات حالياً لعرض إحصائياتها.', 'warning'); return; }
+// ================= دالة الإحصائيات الدقيقة والهرمية (رتبة -> تخصص) =================
+window.showDetailedStats = function() {
+    if(filteredData.length === 0){ 
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لعرض إحصائياتها.', 'warning'); 
+        return; 
+    }
 
-    let rankStats = {}; let specStats = {};
+    let nestedStats = {};
+    let totalMales = 0;
+    let totalFemales = 0;
+
+    // 1. تجميع البيانات هرمياً
     filteredData.forEach(item => {
         let isMale = (item.gender || '').includes('ذكر') || (item.gender || '').toUpperCase() === 'M';
-        let r = item.rank || 'غير محدد';
-        if(!rankStats[r]) rankStats[r] = { m: 0, f: 0, t: 0 };
-        rankStats[r].t++; if(isMale) rankStats[r].m++; else rankStats[r].f++;
-        let s = item.specialty || 'غير محدد';
-        if(!specStats[s]) specStats[s] = { m: 0, f: 0, t: 0 };
-        specStats[s].t++; if(isMale) specStats[s].m++; else specStats[s].f++;
+        let r = item.rank || 'رتبة غير محددة';
+        let s = item.specialty || 'تخصص غير محدد';
+
+        if(isMale) totalMales++; else totalFemales++;
+
+        // إنشاء الرتبة إذا لم تكن موجودة
+        if(!nestedStats[r]) {
+            nestedStats[r] = { t: 0, m: 0, f: 0, specs: {} };
+        }
+        nestedStats[r].t++;
+        if(isMale) nestedStats[r].m++; else nestedStats[r].f++;
+
+        // إضافة التخصص داخل الرتبة
+        if(!nestedStats[r].specs[s]) {
+            nestedStats[r].specs[s] = { t: 0, m: 0, f: 0 };
+        }
+        nestedStats[r].specs[s].t++;
+        if(isMale) nestedStats[r].specs[s].m++; else nestedStats[r].specs[s].f++;
     });
 
-    let rankHtml = '';
-    for (const [rName, data] of Object.entries(rankStats)) {
-        rankHtml += `<div class="s-card"><div class="s-card-title">${rName}</div><div class="s-card-data c-male"><span>الذكور:</span> <span>${data.m}</span></div><div class="s-card-data c-female"><span>الإناث:</span> <span>${data.f}</span></div><div class="s-card-data total"><span>الإجمالي:</span> <span>${data.t}</span></div></div>`;
+    // حفظ المتغيرات في نافذة عامة لاستخدامها في الطباعة
+    window.currentNestedStats = nestedStats;
+    window.currentTotalStats = { t: filteredData.length, m: totalMales, f: totalFemales };
+
+    // 2. بناء واجهة النافذة التفاعلية (HTML)
+    let htmlContent = `<div style="text-align: right; font-family: 'Cairo'; max-height: 60vh; overflow-y: auto; overflow-x: hidden; padding: 10px;">`;
+
+    // الشريط الإحصائي العام
+    htmlContent += `
+        <div style="background: linear-gradient(135deg, #102a43, #243b53); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+            <div><div style="font-size: 14px; color:#cbd5e1;">إجمالي المتكونين</div><div style="font-size: 30px; font-weight: 900;">${filteredData.length}</div></div>
+            <div><div style="font-size: 14px; color:#93c5fd;">الذكور</div><div style="font-size: 26px; font-weight: bold;">${totalMales}</div></div>
+            <div><div style="font-size: 14px; color:#f9a8d4;">الإناث</div><div style="font-size: 26px; font-weight: bold;">${totalFemales}</div></div>
+        </div>
+    `;
+
+    // بناء البطاقات حسب كل رتبة
+    for (const [rank, data] of Object.entries(nestedStats)) {
+        htmlContent += `
+            <div style="margin-bottom: 25px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                <div style="background: #e8fbf0; border-bottom: 2px solid #0FBA50; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <h4 style="margin: 0; color: #0FBA50; font-size: 17px;"><i class="fa-solid fa-layer-group"></i> ${rank}</h4>
+                    <div style="font-weight: bold; font-size: 14px; color: #102a43; background: #fff; padding: 5px 15px; border-radius: 20px; border: 1px solid #cbd5e1;">
+                        إجمالي: ${data.t} | ذكور: ${data.m} | إناث: ${data.f}
+                    </div>
+                </div>
+                <div style="padding: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; background: #f8fafc;">
+        `;
+
+        // إدراج التخصصات التابعة لهذه الرتبة فقط
+        for (const [spec, sData] of Object.entries(data.specs)) {
+            htmlContent += `
+                <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; position: relative; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                    <h5 style="margin: 0 0 12px 0; color: #1E68E8; font-size: 15px; text-align: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px;">${spec}</h5>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+                        <span style="color: #1E68E8;"><i class="fa-solid fa-person"></i> ذكور: ${sData.m}</span>
+                        <span style="color: #e91e63;"><i class="fa-solid fa-person-dress"></i> إناث: ${sData.f}</span>
+                    </div>
+                    <div style="text-align: center; background: #f1f5f9; padding: 6px; border-radius: 6px; color: #102a43; font-weight: 900; font-size: 14px;">
+                        المجموع: ${sData.t}
+                    </div>
+                </div>
+            `;
+        }
+        htmlContent += `</div></div>`; // إغلاق الجريد والرتبة
     }
 
-    let specHtml = '';
-    for (const [sName, data] of Object.entries(specStats)) {
-        specHtml += `<div class="s-card"><div class="s-card-title">${sName}</div><div class="s-card-data c-male"><span>الذكور:</span> <span>${data.m}</span></div><div class="s-card-data c-female"><span>الإناث:</span> <span>${data.f}</span></div><div class="s-card-data total"><span>الإجمالي:</span> <span>${data.t}</span></div></div>`;
-    }
+    htmlContent += `</div>`;
+    
+    // زر طباعة الملصق (Poster)
+    htmlContent += `
+        <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 2px dashed #eee;">
+            <button onclick="printDetailedStatsPoster()" style="background: #8e44ad; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; font-weight: bold; font-family: 'Cairo'; cursor: pointer; box-shadow: 0 4px 10px rgba(142, 68, 173, 0.3); transition: 0.3s; width: 100%;">
+                <i class="fa-solid fa-print"></i> طباعة البطاقة الإحصائية
+            </button>
+        </div>
+    `;
 
     Swal.fire({
-        title: 'الإحصاء الدقيق للمركز 📊', width: '800px',
-        html: `
-            <div class="adv-stats-container">
-                <div style="background:#e8fbf0; color:#0FBA50; padding:10px; border-radius:8px; text-align:center; font-weight:bold; margin-bottom:20px; border:1px solid #0FBA50;">إجمالي المسجلين (حسب الفلتر الحالي): ${filteredData.length}</div>
-                <div class="adv-stats-section"><div class="adv-stats-title"><i class="fa-solid fa-layer-group"></i> الإحصاء حسب الرتبة / الطور</div><div class="stats-cards-grid">${rankHtml}</div></div>
-                <div class="adv-stats-section"><div class="adv-stats-title"><i class="fa-solid fa-book-open"></i> الإحصاء حسب مادة التخصص</div><div class="stats-cards-grid">${specHtml}</div></div>
-            </div>
-        `, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+        title: '<i class="fa-solid fa-chart-pie" style="color: #ff9800;"></i> الإحصاء الشامل والمفصل للمركز',
+        width: '900px',
+        html: htmlContent,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق النافذة',
+        confirmButtonColor: '#102a43',
+        customClass: { popup: 'swal-modal-custom' }
     });
+}
+
+// ================= دالة طباعة الملصق الإحصائي (Poster) =================
+window.printDetailedStatsPoster = function() {
+    if (!window.currentNestedStats) return;
+    
+    let stats = window.currentNestedStats;
+    let totals = window.currentTotalStats;
+    
+    let printWindow = window.open('', '', 'width=1000,height=800');
+    
+    // تصميم الملصق الإحصائي للطباعة
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>الملصق الإحصائي للمركز</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #111; background: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .main-title { text-align: center; font-size: 26px; font-weight: 900; margin: 20px 0; text-transform: uppercase; letter-spacing: 1px; color: #102a43; border: 2px dashed #102a43; display: inline-block; padding: 10px 30px; border-radius: 10px;}
+            
+            /* مربعات الإحصاء العام */
+            .summary-container { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 30px; }
+            .sum-box { flex: 1; border: 2px solid #102a43; border-radius: 12px; text-align: center; padding: 15px; background: #f8fafc; }
+            .sum-box.total { background: #102a43; color: white; }
+            .sum-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+            .sum-val { font-size: 32px; font-weight: 900; }
+            
+            /* جداول الرتب */
+            .rank-section { margin-bottom: 25px; page-break-inside: avoid; border: 2px solid #0FBA50; border-radius: 12px; overflow: hidden;}
+            .rank-header { background: #0FBA50; color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 17px; }
+            .rank-stats { background: #e8fbf0; color: #0FBA50; padding: 4px 10px; border-radius: 8px; font-size: 14px; }
+            
+            table { width: 100%; border-collapse: collapse; background: white; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: center; font-size: 15px; }
+            th { background: #f1f5f9; font-weight: 900; color: #334e68; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            td.spec-name { font-weight: bold; text-align: right; color: #1E68E8; width: 40%;}
+            td.total-col { font-weight: 900; background: #eff6ff; }
+        </style>
+    </head>
+    <body>
+        <div style="text-align: center; font-weight: 900; font-size: 14px; line-height: 1.5; margin-bottom: 10px;">
+            الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية
+        </div>
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align: left;">مركز التكوين البيداغوجي:<br><span style="font-size:16px;">${INSPECTOR_CENTER}</span></div>
+        </div>
+        
+        <div style="text-align: center;">
+            <div class="main-title">البطاقة الإحصائية المفصلة للمركز</div>
+        </div>
+        
+        <div class="summary-container">
+            <div class="sum-box">
+                <div class="sum-title">إجمالي الإناث</div>
+                <div class="sum-val" style="color: #e91e63;">${totals.f}</div>
+            </div>
+            <div class="sum-box">
+                <div class="sum-title">إجمالي الذكور</div>
+                <div class="sum-val" style="color: #1E68E8;">${totals.m}</div>
+            </div>
+            <div class="sum-box total">
+                <div class="sum-title">المجموع العام</div>
+                <div class="sum-val">${totals.t}</div>
+            </div>
+        </div>
+    `;
+
+    for (const [rank, data] of Object.entries(stats)) {
+        html += `
+        <div class="rank-section">
+            <div class="rank-header">
+                <span>${rank}</span>
+                <span class="rank-stats">( المجموع: ${data.t} | ذكور: ${data.m} | إناث: ${data.f} )</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>مادة التخصص</th>
+                        <th>الذكور</th>
+                        <th>الإناث</th>
+                        <th>المجموع</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        for (const [spec, sData] of Object.entries(data.specs)) {
+            html += `
+                    <tr>
+                        <td class="spec-name">${spec}</td>
+                        <td style="color: #1E68E8; font-weight: bold;">${sData.m}</td>
+                        <td style="color: #e91e63; font-weight: bold;">${sData.f}</td>
+                        <td class="total-col">${sData.t}</td>
+                    </tr>
+            `;
+        }
+        
+        html += `
+                </tbody>
+            </table>
+        </div>
+        `;
+    }
+
+    // إمضاءات أسفل الورقة
+    html += `
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; padding: 0 40px;">
+            <div>توقيع رئيس المركز</div>
+            <div>توقيع مدير التربية</div>
+        </div>
+    </body>
+    <script>
+        window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }
+    <\/script>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
 }
 
 // ================= دالة طباعة القوائم المحدثة (تعديل الترويسة ومنع التفاف النص) =================
@@ -2028,7 +2367,6 @@ function openGroupingModal() {
     document.getElementById('groupingModal').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     
-    // سحب أسماء الأفواج من البيانات إن وجدت
     centerData.forEach(item => {
         if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
             availableGroups.push(item.group);
@@ -2036,7 +2374,8 @@ function openGroupingModal() {
     });
 
     populateGroupingFilters();
-    renderGroupingTable();
+    updateBulkGroupSelect(); // تحديث شريط الإدراج الجماعي
+    resetGroupPageAndRender(); // بناء الجدول من الصفحة الأولى
 }
 
 function closeGroupingModal() {
@@ -2099,6 +2438,22 @@ function updateSwalGroupList() {
     `).join('');
     const listDiv = document.getElementById('swalGroupList');
     if(listDiv) listDiv.innerHTML = listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>';
+    updateBulkGroupSelect(); // تحديث القائمة المنسدلة عند إضافة/حذف فوج
+}
+
+
+// دالة جديدة لتحديث قائمة الإدراج الجماعي للأفواج
+function updateBulkGroupSelect() {
+    const bulkGrpSel = document.getElementById('bulkGroupSelect');
+    if (bulkGrpSel) {
+        // إعادة تهيئة القائمة بالخيارات الأساسية
+        bulkGrpSel.innerHTML = '<option value="">-- اختر الفوج للإدراج --</option><option value="-">-- تفريغ الفوج (حذف) --</option>';
+        
+        // جلب الأفواج المتاحة وإضافتها كخيارات
+        availableGroups.forEach(v => {
+            bulkGrpSel.innerHTML += `<option value="${v}">${v}</option>`;
+        });
+    }
 }
 
 // ================= الفلاتر والجدول =================
@@ -2157,8 +2512,7 @@ function updateDynamicGroupsAndRender() {
         grpSel.value = "الكل";
     }
 
-    renderGroupingTable();
-}
+resetGroupPageAndRender();}
 
 // === الدالة الجديدة: عرض البطاقة الإحصائية الشاملة للأفواج ===
 function showGroupStatistics() {
@@ -2223,63 +2577,181 @@ function showGroupStatistics() {
     });
 }
 
+function resetGroupPageAndRender() {
+    currentGroupPage = 1; 
+    selectedGroupsTrainees.clear(); 
+    if(document.getElementById("selectAllGroups")) document.getElementById("selectAllGroups").checked = false;
+    renderGroupingTable();
+}
+
 function renderGroupingTable() {
     const search = document.getElementById('grpSearch').value.toLowerCase();
     const rankF = document.getElementById('grpRankFilter').value;
     const specF = document.getElementById('grpSpecFilter').value;
     const grpF = document.getElementById('grpNameFilter').value;
-    const tbody = document.getElementById('grpTableBody');
-    tbody.innerHTML = '';
-
-    let counter = 1;
-    let matchCount = 0; // متغير جديد لحساب العدد
     
-    centerData.forEach(item => {
+    // 1. فلترة البيانات
+    currentFilteredGroupData = centerData.filter(item => {
         let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
         let matchR = rankF === "الكل" || item.rank === rankF;
         let matchSp = specF === "الكل" || item.specialty === specF;
         let matchG = grpF === "الكل" || item.group === grpF;
-
-        if (matchS && matchR && matchSp && matchG) {
-            matchCount++; // زيادة العداد مع كل نتيجة مطابقة
-            
-            let genderIcon = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') 
-                             ? '<i class="fa-solid fa-person-dress" style="color:#e91e63; font-size:18px;"></i>' 
-                             : '<i class="fa-solid fa-person" style="color:#1E68E8; font-size:18px;"></i>';
-
-            let optionsHtml = `<option value="-">-- بدون فوج --</option>`;
-            availableGroups.forEach(g => {
-                let selected = (item.group === g) ? 'selected' : '';
-                optionsHtml += `<option value="${g}" ${selected}>${g}</option>`;
-            });
-
-            if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
-                optionsHtml += `<option value="${item.group}" selected>${item.group} (غير معتمد)</option>`;
-            }
-
-            let tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="text-align:center;">${counter++}</td>
-                <td><strong>${item.empId}</strong></td>
-                <td><b>${item.name}</b></td>
-                <td style="text-align:center;">${genderIcon}</td>
-                <td>${item.rank || '-'}</td>
-                <td>${item.specialty || '-'}</td>
-                <td>${item.workplace || '-'}</td>
-                <td>
-                    <select onchange="updateGroupInstantly('${item.docId}', this.value)" 
-                            style="width:100%; padding:8px; border-radius:6px; border:1px solid #1E68E8; text-align:center; font-weight:bold; font-family:'Cairo'; outline:none; background:#f8fbff; cursor:pointer;">
-                        ${optionsHtml}
-                    </select>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        }
+        return matchS && matchR && matchSp && matchG;
     });
 
-    // تحديث رقم الفلترة في المربع الذي أضفناه
     const countDisplay = document.getElementById('grpFilterCount');
-    if (countDisplay) { countDisplay.innerText = matchCount; }
+    if (countDisplay) countDisplay.innerText = currentFilteredGroupData.length;
+
+    const tbody = document.getElementById('grpTableBody');
+    tbody.innerHTML = '';
+
+    if (currentFilteredGroupData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; font-weight:bold;">لا توجد بيانات مطابقة للفلتر</td></tr>`;
+        renderGroupPagination(0);
+        return;
+    }
+
+    // 2. حساب الصفحات
+    const totalPages = Math.ceil(currentFilteredGroupData.length / groupsPerPage);
+    if (currentGroupPage > totalPages) currentGroupPage = totalPages;
+
+    const start = (currentGroupPage - 1) * groupsPerPage;
+    const end = start + groupsPerPage;
+    const paginatedData = currentFilteredGroupData.slice(start, end);
+
+    // 3. بناء الأسطر
+    paginatedData.forEach(item => {
+        let genderIcon = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') 
+                         ? '<i class="fa-solid fa-person-dress" style="color:#e91e63; font-size:18px;"></i>' 
+                         : '<i class="fa-solid fa-person" style="color:#1E68E8; font-size:18px;"></i>';
+
+        let optionsHtml = `<option value="-">-- بدون فوج --</option>`;
+        availableGroups.forEach(g => {
+            let selected = (item.group === g) ? 'selected' : '';
+            optionsHtml += `<option value="${g}" ${selected}>${g}</option>`;
+        });
+
+        if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+            optionsHtml += `<option value="${item.group}" selected>${item.group} (غير معتمد)</option>`;
+        }
+
+        const isChecked = selectedGroupsTrainees.has(item.docId) ? 'checked' : '';
+
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="text-align:center;"><input type="checkbox" class="grp-row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleGroupSelect(this, '${item.docId}')"></td>
+            <td><strong>${item.empId}</strong></td>
+            <td><b>${item.name}</b></td>
+            <td style="text-align:center;">${genderIcon}</td>
+            <td>${item.rank || '-'}</td>
+            <td>${item.specialty || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+            <td>
+                <select onchange="updateGroupInstantly('${item.docId}', this.value)" 
+                        style="width:100%; padding:8px; border-radius:6px; border:1px solid #1E68E8; text-align:center; font-weight:bold; font-family:'Cairo'; outline:none; background:#f8fbff; cursor:pointer;">
+                    ${optionsHtml}
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    const selectAllChk = document.getElementById("selectAllGroups");
+    if (selectAllChk) selectAllChk.checked = (currentFilteredGroupData.length > 0 && selectedGroupsTrainees.size === currentFilteredGroupData.length);
+    
+    renderGroupPagination(totalPages);
+}
+
+// === نظام الصفحات (الترقيم) ===
+function renderGroupPagination(totalPages) {
+    const container = document.getElementById("group-pagination-controls");
+    if (totalPages <= 1) { container.innerHTML = ""; container.style.display = "none"; return; }
+    
+    container.style.display = "flex";
+    let startItem = (currentGroupPage - 1) * groupsPerPage + 1;
+    let endItem = Math.min(currentGroupPage * groupsPerPage, currentFilteredGroupData.length);
+    
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${currentFilteredGroupData.length} سجل</div>`;
+    html += `<div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${currentGroupPage === 1 ? 'disabled' : ''} onclick="changeGroupPage(${currentGroupPage - 1})">السابق</button>`;
+
+    let startPage = Math.max(1, currentGroupPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+    if (startPage > 1) { html += `<button class="page-btn" onclick="changeGroupPage(1)">1</button><span style="align-self:center;">...</span>`; }
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="page-btn ${i === currentGroupPage ? 'active' : ''}" onclick="changeGroupPage(${i})">${i}</button>`;
+    }
+    if (endPage < totalPages) { html += `<span style="align-self:center;">...</span><button class="page-btn" onclick="changeGroupPage(${totalPages})">${totalPages}</button>`; }
+
+    html += `<button class="page-btn" ${currentGroupPage === totalPages ? 'disabled' : ''} onclick="changeGroupPage(${currentGroupPage + 1})">التالي</button></div>`;
+    container.innerHTML = html;
+}
+
+function changeGroupPage(page) {
+    currentGroupPage = page;
+    renderGroupingTable();
+}
+
+// === أزرار التحديد والإدراج الجماعي للأفواج ===
+function toggleSelectAllGroups() {
+    const isChecked = document.getElementById("selectAllGroups").checked;
+    if (isChecked) {
+        currentFilteredGroupData.forEach(item => selectedGroupsTrainees.add(item.docId));
+    } else {
+        selectedGroupsTrainees.clear();
+    }
+    document.querySelectorAll(".grp-row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleGroupSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedGroupsTrainees.add(docId);
+    } else {
+        selectedGroupsTrainees.delete(docId);
+        document.getElementById("selectAllGroups").checked = false;
+    }
+}
+
+async function bulkAssignGroups() {
+    const selectedGroup = document.getElementById("bulkGroupSelect").value;
+    if(!selectedGroup) { Swal.fire('تنبيه', 'الرجاء اختيار الفوج المراد إدراجه!', 'warning'); return; }
+
+    if(selectedGroupsTrainees.size === 0) { Swal.fire('تنبيه', 'الرجاء تحديد أستاذ واحد على الأقل', 'warning'); return; }
+
+    const docIds = Array.from(selectedGroupsTrainees);
+    let actionText = selectedGroup === '-' ? 'تفريغ الفوج (حذف)' : `الإدراج في: ${selectedGroup}`;
+
+    Swal.fire({
+        title: 'تأكيد الإجراء الجماعي', 
+        text: `سيتم تطبيق "${actionText}" على عدد (${docIds.length}) متكون/ة محدد.`,
+        icon: 'question', showCancelButton: true, confirmButtonColor: '#8e44ad', confirmButtonText: 'نعم، طبق الإجراء', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ في القاعدة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const batch = db.batch();
+                docIds.forEach(id => {
+                    const docRef = db.collection("employeescomnew").doc(id);
+                    batch.update(docRef, { group: selectedGroup, fawj: selectedGroup });
+                    
+                    // تحديث مصفوفة لوحة المفتش المحلية
+                    const localData = centerData.find(d => d.docId === id);
+                    if(localData) localData.group = selectedGroup;
+                });
+                
+                await batch.commit();
+                selectedGroupsTrainees.clear();
+                if(document.getElementById("selectAllGroups")) document.getElementById("selectAllGroups").checked = false;
+                
+                updateDynamicGroupsAndRender(); // تحديث الفلاتر وإعادة بناء الجدول
+                Swal.fire('تم بنجاح', 'تم تحديث الأفواج للأشخاص المحددين.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
 }
 
 // ================= الحفظ اللحظي (عند تغيير الفوج لأي أستاذ) =================
@@ -3352,6 +3824,104 @@ window.printSingleIDCard = function(docId) {
     printWindow.document.close();
 };
 
+// ================= دالة تصدير البيانات إلى ملف Excel باحترافية =================
+async function exportToExcel() {
+    if (filteredData.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لتصديرها', 'warning');
+        return;
+    }
+
+    Swal.fire({ title: 'جاري تجهيز وتنسيق الملف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('قائمة المتكونين', {
+            views: [{ rightToLeft: true }]
+        });
+
+        // تعريف الأعمدة
+        worksheet.columns = [
+            { header: 'الرقم', key: 'index' },
+            { header: 'الرقم الوظيفي', key: 'empId' },
+            { header: 'الاسم واللقب', key: 'name' },
+            { header: 'الجنس', key: 'gender' },
+            { header: 'تاريخ الميلاد', key: 'dob' },
+            { header: 'مكان الميلاد', key: 'pob' },
+            { header: 'الدائرة', key: 'daira' },
+            { header: 'العنوان', key: 'address' },
+            { header: 'رقم الهاتف', key: 'phone' },
+            { header: 'الرتبة', key: 'rank' },
+            { header: 'التخصص', key: 'specialty' },
+            { header: 'الفوج', key: 'group' },
+            { header: 'مكان العمل', key: 'workplace' },
+            { header: 'المركز', key: 'center' }
+        ];
+
+        // تعبئة البيانات
+        filteredData.forEach((item, index) => {
+            worksheet.addRow({
+                index: index + 1,
+                empId: item.empId || '-',
+                name: item.name || '-',
+                gender: item.gender || '-',
+                dob: item.dob || '-',
+                pob: item.pob || '-',
+                daira: item.daira || '-',
+                address: item.address || '-',
+                phone: item.phone || '-',
+                rank: item.rank || '-',
+                specialty: item.specialty || '-',
+                group: item.group || '-',
+                workplace: item.workplace || '-',
+                center: INSPECTOR_CENTER || '-'
+            });
+        });
+
+        // تطبيق التنسيقات الاحترافية
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell, colNumber) => {
+                cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+                cell.border = {
+                    top: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    left: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    bottom: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    right: {style:'thin', color: {argb:'FFB0BEC5'}}
+                };
+
+                if (rowNumber === 1) { // الصف الأول (العناوين)
+                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF102A43' } }; // لون لوحة المفتش
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                } else {
+                    cell.font = { size: 11 };
+                }
+            });
+        });
+
+        // الـ Auto-Fit (عرض الأعمدة التلقائي)
+        worksheet.columns.forEach(column => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, cell => {
+                let columnLength = cell.value ? cell.value.toString().length : 0;
+                if (columnLength > maxLength) maxLength = columnLength;
+            });
+            column.width = maxLength < 12 ? 12 : maxLength + 5;
+        });
+
+        // تجميع وتحميل الملف
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        saveAs(blob, `متكوني_${INSPECTOR_CENTER.replace(/\s+/g, '_')}_${dateStr}.xlsx`);
+
+        Swal.close();
+        
+    } catch (error) {
+        console.error("Excel Export Error:", error);
+        Swal.fire('خطأ', 'حدث مشكل أثناء تصدير الملف.', 'error');
+    }
+}
 
 </script>
 </body>

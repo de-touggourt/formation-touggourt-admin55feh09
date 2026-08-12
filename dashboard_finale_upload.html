@@ -7,9 +7,11 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<!-- ربط قاعدة البيانات (إن لزم الأمر في الصفحة الموالية) -->
-<script src="database.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- ربط Firebase بدلاً من ملف قاعدة البيانات القديم -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
 <style>
 /* ============================================================
@@ -38,89 +40,115 @@ header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 
 
 /* الخدمات (المراكز) */
 .services { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:25px; padding:40px 20px; max-width:1000px; margin:auto; justify-content: center; flex: 1; width: 100%; }
-.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; }
+.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; border: 2px solid transparent;}
 .service:hover { transform:translateY(-8px) scale(1.05); box-shadow:0 8px 20px rgba(30,104,232,.2); border: 2px solid #1E68E8; }
 .service:active { transform:scale(0.98); }
 .service i { font-size:55px; color:#1E68E8; margin-bottom:15px; transition: 0.3s;}
 .service:hover i { transform: scale(1.1); }
 .service h3 { color:#1557c0; font-size: 1.1rem; margin: 0; line-height: 1.6; }
 
-/* الأيقونات المنبثقة (Grid System) */
-.icon-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; padding: 10px; }
-.icon-btn { width: 100%; height: 140px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; border: 2px solid #1E68E8; background: #f0f7ff; color: #000; cursor: pointer; transition: .3s; text-align: center; padding: 10px; font-size: 0.95rem; }
-.icon-btn i { font-size: 30px; margin-bottom: 10px; color: #1E68E8; }
-.icon-btn:hover, .icon-btn:active { background: #1E68E8; color: #fff; transform: scale(1.05); }
+/* الأيقونات المنبثقة (نظام مرن للتوسيط الجمالي) */
+.icon-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; width: 100%; padding: 15px 10px; }
+.icon-btn { flex: 0 1 160px; min-width: 140px; height: 140px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; border: 2px solid #1E68E8; background: #f0f7ff; color: #000; cursor: pointer; transition: .3s; text-align: center; padding: 10px; font-size: 0.95rem; }
+.icon-btn i { font-size: 35px; margin-bottom: 12px; color: #1E68E8; transition: 0.3s; }
+.icon-btn:hover, .icon-btn:active { background: #1E68E8; color: #fff; transform: scale(1.05); box-shadow: 0 8px 15px rgba(30,104,232,0.3); }
 .icon-btn:hover i, .icon-btn:active i { color: #fff; }
 
 /* تنسيقات SweetAlert */
-.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; }
+.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; z-index: 999999 !important;}
 .swal2-title { font-size: 1.3rem !important; padding: 15px 10px !important; line-height: 1.5 !important; }
 .swal2-html-container { padding: 10px !important; }
-.swal2-confirm { background:#102a43 !important; color:#fff !important; border-radius:20px !important; padding:10px 30px !important; font-family:'Cairo',sans-serif; font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,.15); margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; }
+.swal2-confirm { background:#102a43 !important; color:#fff !important; border-radius:20px !important; padding:10px 30px !important; font-family:'Cairo',sans-serif; font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,.15); margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; border:none !important; }
 .swal2-confirm:hover { background: #243b53 !important; }
-.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 20px !important; padding: 10px 30px !important; font-family: 'Cairo', sans-serif; margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; }
+.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 20px !important; padding: 10px 30px !important; font-family: 'Cairo', sans-serif; margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; border:none !important; }
 .swal2-deny:hover { background: #1557c0 !important; }
 .swal2-actions { flex-wrap: wrap !important; gap: 10px !important; padding: 10px !important; }
 
 footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25px; border-top-right-radius:25px; width: 100%; margin-top: auto; position: relative; font-size: 0.9rem; }
 
+/* شاشة التحميل الدائرية */
+.loader-spinner { border: 5px solid #f3f3f3; border-top: 5px solid #1E68E8; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: auto; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
 /* ============================================================
    📱 تحسينات التجاوب (Media Queries)
    ============================================================ */
+
+/* الشاشات الصغيرة جداً (الهواتف عمودياً) */
 @media (max-width: 400px) {
     .news-ticker-container { min-height: 60px; padding: 8px 10px; }
     .typewriter-text { font-size: 12px; line-height: 1.3; }
+    
     .logo-container { width: 110px; height: 110px; margin-bottom: 5px; }
     .logo-container img { width: 85px; height: 85px; }
     .logo-ring { width: 100px; height: 100px; border-width: 2px; }
+    
     header { padding: 20px 10px; }
     header h1 { font-size: 1.1rem; line-height: 1.4; padding: 0 5px; }
     .btn-back { top: 15px; right: 15px; padding: 6px 12px; font-size: 13px; }
+    
     .services { padding: 15px 10px; gap: 12px; grid-template-columns: 1fr; }
     .service { flex-direction: row; text-align: right; padding: 15px; gap: 12px; align-items: center; justify-content: flex-start; min-height: 80px; }
     .service i { font-size: 32px; margin-bottom: 0; min-width: 40px; text-align: center; }
     .service h3 { font-size: 0.9rem; text-align: right; line-height: 1.4; }
-    .icon-container { gap: 10px; padding: 5px; }
-    .icon-btn { width: 100%; height: 70px; flex-direction: row; gap: 12px; justify-content: flex-start; padding: 10px 15px; font-size: 0.9rem; }
+    
+    /* النوافذ المنبثقة للهواتف الصغيرة */
+    .icon-container { flex-direction: column; align-items: stretch; gap: 10px; padding: 5px; }
+    .icon-btn { flex: auto; width: 100%; height: 70px; flex-direction: row; gap: 12px; justify-content: flex-start; padding: 10px 15px; font-size: 0.9rem; }
     .icon-btn i { font-size: 24px; margin-bottom: 0; min-width: 35px; }
+    
     .swal2-popup { padding: 15px !important; }
     .swal2-title { font-size: 1.1rem !important; }
     .swal2-confirm, .swal2-deny { padding: 8px 20px !important; font-size: 0.85rem !important; }
+    
     footer { font-size: 0.75rem; padding: 10px; }
 }
+
+/* الشاشات المتوسطة (الهواتف الكبيرة والتابلت عمودياً) */
 @media (min-width: 401px) and (max-width: 768px) {
     .news-ticker-container { min-height: 55px; }
     .typewriter-text { font-size: 14px; }
+    
     .logo-container { width: 130px; height: 130px; margin-bottom: 5px; }
     .logo-container img { width: 100px; height: 100px; }
     .logo-ring { width: 120px; height: 120px; }
+    
     header h1 { font-size: 1.4rem; line-height: 1.4; }
+    
     .services { padding: 25px 15px; gap: 15px; grid-template-columns: 1fr; }
     .service { flex-direction: row; text-align: right; padding: 20px; gap: 15px; align-items: center; justify-content: flex-start; min-height: 100px; }
     .service i { font-size: 40px; margin-bottom: 0; min-width: 50px; text-align: center; }
     .service h3 { font-size: 1rem; text-align: right; }
-    .icon-container { gap: 15px; grid-template-columns: repeat(2, 1fr); }
-    .icon-btn { height: 120px; font-size: 0.9rem; }
-    .icon-btn i { font-size: 28px; }
+    
+    /* النوافذ المنبثقة للتابلت */
+    .icon-container { gap: 15px; justify-content: center; }
+    .icon-btn { flex: 0 1 140px; height: 120px; font-size: 0.9rem; }
+    .icon-btn i { font-size: 28px; margin-bottom: 10px; }
+    
     .swal2-title { font-size: 1.2rem !important; }
     footer { font-size: 0.85rem; padding: 12px; }
 }
+
+/* شاشات اللابتوب الصغيرة */
 @media (min-width: 800px) and (max-width: 1200px) {
     .services { grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 30px 20px; }
-    .icon-btn { width: 100%; }
 }
+
+/* الهواتف في الوضع الأفقي (Landscape) */
 @media (max-height: 500px) and (orientation: landscape) {
     header { padding: 15px 10px; }
     .logo-container { width: 100px; height: 100px; }
     .logo-container img { width: 75px; height: 75px; }
     .logo-ring { width: 90px; height: 90px; }
     header h1 { font-size: 1.2rem; }
+    
     .services { padding: 20px 15px; grid-template-columns: repeat(2, 1fr); }
     .service { padding: 15px; min-height: 80px; }
+    
+    .icon-btn { height: 100px; font-size: 0.85rem; }
+    .icon-btn i { font-size: 24px; margin-bottom: 5px; }
 }
-@media (min-width: 769px) {
-  .swal2-popup .icon-container { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
-}
+
 </style>
 </head>
 
@@ -144,31 +172,12 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
   <p style="margin:0; font-size:14px; color:#bbdefb; font-weight:600;">الرجاء اختيار المركز لإدارة ملفاته</p>
 </header>
 
-<section class="services">
-  <div class="service" onclick="openCenter(1)">
-    <i class="fa-solid fa-school"></i>
-    <h3>مركز التكوين<br>ثانوية عبد الرحمان الكواكبي</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(2)">
-    <i class="fa-solid fa-school"></i>
-     <h3>مركز التكوين<br>متوسطة دقعة الطاهر بن الزاوي</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(3)">
-    <i class="fa-solid fa-school"></i>
-     <h3>مركز التكوين<br>ثانوية البشير الإبراهيمي</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(4)">
-    <i class="fa-solid fa-school"></i>
-    <h3>مركز التكوين<br>متوسطة أحمد زبانة</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(5)">
-    <i class="fa-solid fa-school"></i>
-    <h3>مركز التكوين<br>ثانوية لحسيني محمد</h3>
-  </div>
+<!-- قسم عرض المراكز ديناميكياً -->
+<section id="centers-container" class="services">
+    <div style="grid-column: 1/-1; padding: 50px;">
+        <div class="loader-spinner"></div>
+        <p style="color:#1E68E8; font-weight:bold; margin-top:15px;">جاري جلب المراكز المعتمدة...</p>
+    </div>
 </section>
 
 <footer>© 2025 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
@@ -178,64 +187,143 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 const userEmpId = sessionStorage.getItem("userEmpId");
 const inspectorCenter = sessionStorage.getItem("inspectorCenter");
 
-if (!userEmpId) {
-    window.location.href = "index_2.html";
-}
+if (!userEmpId) { window.location.href = "index_2.html"; }
 
-// دالة الرجوع للوحة
 function goBack() {
-    if (userEmpId === "ADMIN_ACCESS") {
-         window.location.href = "admin_dashboard.html";
-    } else {
-         window.location.href = "inspector_dashboard.html";
-    }
+    if (userEmpId === "ADMIN_ACCESS") window.location.href = "admin_dashboard.html";
+    else window.location.href = "inspector_dashboard.html";
 }
 
-// خريطة أسماء المراكز لمقارنتها مع مركز المفتش للحماية
-const centerNamesMap = {
-    1: "ثانوية عبد الرحمان الكواكبي",
-    2: "متوسطة دقعة الطاهر بن الزاوي",
-    3: "ثانوية البشير الإبراهيمي",
-    4: "متوسطة أحمد زبانة",
-    5: "ثانوية لحسيني محمد"
+// ==================== فحص صلاحيات المسؤول الإداري ====================
+async function checkUserPermissions() {
+    if (userEmpId !== "ADMIN_ACCESS") {
+        try {
+            const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
+            if (adminDoc.exists) {
+                const data = adminDoc.data();
+                if (data.jobTitle === "المسؤول الإداري") {
+                    document.body.innerHTML = ""; // إخفاء محتوى الصفحة فوراً للحماية
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'صلاحيات مقيدة',
+                        text: 'عذراً أستاذي الكريم، إدارة المراكز وملفات المقاييس هي صلاحية حصرية للمسؤول البيداغوجي.',
+                        allowOutsideClick: false,
+                        confirmButtonText: 'العودة للوحة التحكم',
+                        confirmButtonColor: '#102a43'
+                    }).then(() => {
+                        window.location.href = "inspector_dashboard.html";
+                    });
+                    return false;
+                }
+            }
+        } catch(e) {
+            console.warn("خطأ في التحقق من الصلاحيات:", e);
+        }
+    }
+    return true;
+}
+
+// ==================== 2. إعدادات Firebase والبيانات المركزية ====================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
 };
 
-// ==================== 2. تأثير الكتابة السلسة ====================
-const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
-const typeWriterElement = document.getElementById('typewriter-text');
-let charIndex = 0;
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const db = firebase.firestore();
 
-function typeWriter() {
-    if (charIndex < textToType.length) {
-        typeWriterElement.innerHTML += textToType.charAt(charIndex);
-        charIndex++;
-        setTimeout(typeWriter, 45); 
-    } else {
-        setTimeout(startFadeOut, 3000); 
+let SITE_SETTINGS = null;
+
+// تعريف الأيقونات الثابتة للأطوار والتخصصات
+const ICONS = {
+    levels: {
+        'primary': { name: 'الطور الابتدائي', icon: 'fa-child-reaching' },
+        'middle_secondary': { name: 'الطور المتوسط والثانوي', icon: 'fa-user-graduate' }
+    },
+    specs: {
+        'arabic': { name: 'اللغة العربية', icon: 'fa-book-open' },
+        'french': { name: 'اللغة الفرنسية', icon: 'fa-language' },
+        'english': { name: 'اللغة الإنجليزية', icon: 'fa-font' },
+        'sport': { name: 'التربية البدنية والرياضة', icon: 'fa-person-running' },
+        'others': { name: 'باقي التخصصات', icon: 'fa-layer-group' }
+    }
+};
+
+// جلب الإعدادات وبناء الأزرار
+function initSiteSettings() {
+    const docRef = db.collection("site_settings").doc("main");
+    
+    // أضفنا كلمة async لتمكين الفحص المباشر في قاعدة البيانات
+    docRef.onSnapshot(async (doc) => { 
+        if (doc.exists) {
+            SITE_SETTINGS = doc.data();
+            
+            // 🌟 الجدار الأمني: فحص وظيفة المستخدم فوراً 🌟
+            if (userEmpId !== "ADMIN_ACCESS") {
+                try {
+                    const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
+                    if (adminDoc.exists && adminDoc.data().jobTitle === "المسؤول الإداري") {
+                        document.body.innerHTML = ""; // تفريغ وإخفاء الشاشة فوراً
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'صلاحيات مقيدة',
+                            text: 'عذراً أستاذي الكريم، إدارة ملفات المقاييس هي صلاحية حصرية للمسؤول البيداغوجي.',
+                            confirmButtonColor: '#1E68E8',
+                            allowOutsideClick: false
+                        }).then(() => {
+                            window.location.href = "inspector_dashboard.html"; // إعادته للوحة الرئيسية
+                        });
+                        return; // إيقاف بناء عرض المراكز
+                    }
+                } catch (e) {
+                    console.error("خطأ في فحص الصلاحيات:", e);
+                }
+            }
+
+            renderCenters(); // بناء المراكز آلياً (للمسؤول البيداغوجي أو الأدمن فقط)
+        } else {
+            Swal.fire('خطأ', 'لم يتم العثور على إعدادات الموقع المركزية.', 'error');
+        }
+    });
+}
+
+// ==================== 3. الرسم الديناميكي للواجهة ====================
+
+// دالة رسم أزرار المراكز
+function renderCenters() {
+    const container = document.getElementById("centers-container");
+    container.innerHTML = "";
+    
+    const centers = SITE_SETTINGS.UI_NAMES.centers || {};
+    let hasCenters = false;
+
+    for (let cId in centers) {
+        hasCenters = true;
+        const cName = centers[cId];
+        container.innerHTML += `
+            <div class="service" onclick="openCenter('${cId}')">
+                <i class="fa-solid fa-school"></i>
+                <h3>مركز التكوين<br>${cName}</h3>
+            </div>
+        `;
+    }
+
+    if (!hasCenters) {
+        container.innerHTML = '<div style="grid-column: 1/-1; color: #dc2626; font-weight: bold; font-size: 18px;">لا توجد مراكز تكوين مبرمجة حالياً.</div>';
     }
 }
 
-function startFadeOut() {
-    typeWriterElement.classList.add('fade-out');
-    setTimeout(() => {
-        typeWriterElement.innerHTML = "";
-        charIndex = 0;
-        typeWriterElement.classList.remove('fade-out'); 
-        setTimeout(typeWriter, 500); 
-    }, 1000);
-}
-
-window.onload = function() { typeWriter(); };
-
-
-// ==================== 3. دوال الفتح والحماية ====================
+// دالة النقر على المركز (الحماية + التوجيه الذكي)
 function openCenter(centerId) {
+  const selectedCenterName = SITE_SETTINGS.UI_NAMES.centers[centerId];
   
-  // -- الجدار الأمني: فحص صلاحيات المفتش فور النقر --
-  const selectedCenterName = centerNamesMap[centerId];
+  // -- الجدار الأمني --
   if (userEmpId !== "ADMIN_ACCESS" && selectedCenterName !== inspectorCenter) {
-      // إظهار التنبيه الاحترافي المنسق
-      Swal.fire({
+     Swal.fire({
           icon: 'warning',
           title: '<h3 style="color:#d32f2f; margin:0; font-weight:700; font-family:\'Cairo\';"><i class="fa-solid fa-shield-halved"></i> صلاحيات مقيدة</h3>',
           html: `
@@ -262,146 +350,145 @@ function openCenter(centerId) {
           confirmButtonText: '<i class="fa-solid fa-check"></i> حسناً، فهمت',
           confirmButtonColor: '#102a43'
       });
-      return; // يتم إيقاف التنفيذ ولا تظهر نوافذ التخصصات
+      return;
   }
 
-  // -- إذا كانت الصلاحية سليمة، تظهر النوافذ المنبثقة بشكل طبيعي --
-  let html = '<div class="icon-container">';
-  let popupTitle = '';
+  // -- الفحص الذكي للهيكلة --
+  const centerLinks = SITE_SETTINGS.dbLinks[centerId] || {};
+  const availableLevels = Object.keys(centerLinks);
 
-  if (centerId === 1) {
-    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
-    html += `
-      <div class="icon-btn" onclick="openLink(1, 'arabic')">
-        <i class="fa-solid fa-book-open"></i> تخصص اللغة العربية
-      </div>
-      <div class="icon-btn" onclick="openLink(1, 'french')">
-       <i class="fa-solid fa-language"></i> تخصص اللغة الفرنسية
-      </div>`;
-  } 
-  else if (centerId === 2) {
-    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
-    html += `
-      <div class="icon-btn" onclick="openLink(2, 'english')">
-        <i class="fa-solid fa-font"></i> تخصص اللغة الإنجليزية
-      </div>
-      <div class="icon-btn" onclick="openLink(2, 'sport')">
-        <i class="fa-solid fa-person-running"></i> تخصص التربية البدنية والرياضة
-      </div>`;
-  } 
-  else if (centerId === 3) {
-      popupTitle = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
-      html += `
-        <div class="icon-btn" onclick="openLink(3, 'french')">
-            <i class="fa-solid fa-language"></i> اللغة الفرنسية
-        </div>
-        <div class="icon-btn" onclick="openLink(3, 'english')">
-            <i class="fa-solid fa-font"></i> اللغة الإنجليزية
-        </div>
-        <div class="icon-btn" onclick="openLink(3, 'sport')">
-            <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
-        </div>
-        <div class="icon-btn" onclick="openLink(3, 'others')">
-            <i class="fa-solid fa-layer-group"></i> باقي التخصصات
-        </div>`;
-  } 
-  else if (centerId === 4 || centerId === 5) {
-      popupTitle = 'اختر الطور:';
-      html += `
-        <div class="icon-btn" onclick="openSubMenu('primary', ${centerId})">
-          <i class="fa-solid fa-child-reaching"></i>
-          الطور الابتدائي
-        </div>
-        <div class="icon-btn" onclick="openSubMenu('middle_secondary', ${centerId})">
-          <i class="fa-solid fa-user-graduate"></i>
-          الطور المتوسط والثانوي
-        </div>`;
+  if (availableLevels.length === 0) {
+      Swal.fire('تنبيه', 'لا توجد أطوار مبرمجة في هذا المركز حالياً. يرجى إضافتها من إعدادات المديرية.', 'info');
+      return;
   }
 
-  html += '</div>';
-
-  Swal.fire({
-    title: popupTitle,
-    html: html,
-    showConfirmButton: true,
-    confirmButtonText: 'إغلاق',
-    confirmButtonColor: '#939393',
-    showCloseButton: false,
-    scrollbarPadding: false
-  });
+  // إذا كان هناك طور واحد فقط، تجنب سؤال المستخدم وافتح التخصصات مباشرة
+  if (availableLevels.length === 1) {
+      showSpecsModal(centerId, availableLevels[0], false);
+  } else {
+      // إذا كان هناك أكثر من طور، افتح نافذة اختيار الطور
+      showLevelsModal(centerId, availableLevels);
+  }
 }
 
-function openSubMenu(level, parentId) {
+// دالة عرض الأطوار المتاحة فقط
+function showLevelsModal(centerId, availableLevels) {
     let html = '<div class="icon-container">';
-    let title = '';
-
-    if (level === 'primary') {
-        title = 'أساتذة الطور الابتدائي - اختر التخصص:';
+    
+    availableLevels.forEach(lvlId => {
+        let lvlInfo = ICONS.levels[lvlId] || { name: lvlId, icon: 'fa-layer-group' };
         html += `
-            <div class="icon-btn" onclick="openLink(${parentId}, 'arabic', 'primary')">
-                <i class="fa-solid fa-book-open"></i> اللغة العربية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'primary')">
-                <i class="fa-solid fa-language"></i> اللغة الفرنسية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'primary')">
-                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'primary')">
-                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
-            </div>
-        `;
-    } else if (level === 'middle_secondary') {
-        title = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
-        html += `
-            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'middle_secondary')">
-                <i class="fa-solid fa-language"></i> اللغة الفرنسية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'middle_secondary')">
-                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'middle_secondary')">
-                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'others', 'middle_secondary')">
-                <i class="fa-solid fa-layer-group"></i> باقي التخصصات
-            </div>
-        `;
-    }
-
+          <div class="icon-btn" onclick="showSpecsModal('${centerId}', '${lvlId}', true)">
+            <i class="fa-solid ${lvlInfo.icon}"></i> ${lvlInfo.name}
+          </div>`;
+    });
+    
     html += '</div>';
 
     Swal.fire({
-        title: title,
+        title: 'اختر الطور المستهدف:',
         html: html,
         showConfirmButton: true,
         confirmButtonText: 'إغلاق',
         confirmButtonColor: '#939393',
-        showDenyButton: true,
-        denyButtonText: 'عودة للخلف',
-        denyButtonColor: '#1E68E8',
-        showCloseButton: false,
         scrollbarPadding: false
-    }).then((result) => {
-        if (result.isDenied) {
-            openCenter(parentId);
+    });
+}
+
+// دالة عرض التخصصات المتاحة فقط في الطور المحدد
+// دالة عرض التخصصات المتاحة فقط في الطور المحدد
+function showSpecsModal(centerId, lvlId, showBackButton) {
+    const specsData = SITE_SETTINGS.dbLinks[centerId][lvlId] || {};
+    const availableSpecs = Object.keys(specsData);
+
+    if (availableSpecs.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد تخصصات مبرمجة لهذا الطور.', 'info');
+        return;
+    }
+
+    // --- التعديل هنا: جلب اسم الطور لعرضه للوضوح ---
+    const levelName = SITE_SETTINGS.UI_NAMES.levels[lvlId] || (ICONS.levels[lvlId] ? ICONS.levels[lvlId].name : lvlId);
+
+    let html = '<div class="icon-container">';
+    
+    availableSpecs.forEach(spcId => {
+        let spcInfo = ICONS.specs[spcId] || { name: spcId, icon: 'fa-book' };
+        html += `
+          <div class="icon-btn" onclick="openLink('${centerId}', '${lvlId}', '${spcId}')">
+            <i class="fa-solid ${spcInfo.icon}"></i> ${spcInfo.name}
+          </div>`;
+    });
+    
+    html += '</div>';
+
+    let options = {
+        // --- التعديل هنا: دمج اسم الطور وعبارة "اختر التخصص المناسب" بشكل أنيق ---
+        title: `<div style="color: #1E68E8; font-size: 20px; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 10px;">
+                    <i class="fa-solid fa-layer-group"></i> ${levelName}
+                </div>
+                <div style="color: #475569; font-size: 16px;">يرجى اختيار التخصص المناسب:</div>`,
+        html: html,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#939393',
+        scrollbarPadding: false
+    };
+
+    // إظهار زر التراجع فقط إذا كانت النافذة قد فُتحت من نافذة الأطوار (لو كان هناك أكثر من طور)
+    if (showBackButton) {
+        options.showDenyButton = true;
+        options.denyButtonText = '<i class="fa-solid fa-arrow-right"></i> تراجع للوراء';
+        options.denyButtonColor = '#1E68E8';
+    }
+
+    Swal.fire(options).then((result) => {
+        if (result.isDenied && showBackButton) {
+            const availableLevels = Object.keys(SITE_SETTINGS.dbLinks[centerId]);
+            showLevelsModal(centerId, availableLevels);
         }
     });
 }
 
-// التوجيه الديناميكي لصفحة إدارة المقاييس
-function openLink(centerId, type, level = null) {
-    // تعيين الأطوار الافتراضية للمراكز التي لا تحتوي على خيار الطور
-    if (!level) {
-        if (centerId === 1 || centerId === 2) {
-            level = 'primary';
-        } else if (centerId === 3) {
-            level = 'middle_secondary';
-        }
-    }
-    // التوجيه لصفحة رفع الملفات مع تمرير المعطيات
-    window.location.href = `manage_courses.html?c=${centerId}&l=${level}&s=${type}`;
+// دالة التوجيه النهائي لصفحة إدارة المقاييس
+function openLink(centerId, levelId, specId) {
+    window.location.href = `manage_courses.html?c=${centerId}&l=${levelId}&s=${specId}`;
 }
+
+// ==================== 4. تأثير الكتابة السلسة ====================
+const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
+const typeWriterElement = document.getElementById('typewriter-text');
+let charIndex = 0;
+
+function typeWriter() {
+    if (charIndex < textToType.length) {
+        typeWriterElement.innerHTML += textToType.charAt(charIndex);
+        charIndex++;
+        setTimeout(typeWriter, 45); 
+    } else {
+        setTimeout(startFadeOut, 3000); 
+    }
+}
+
+function startFadeOut() {
+    typeWriterElement.classList.add('fade-out');
+    setTimeout(() => {
+        typeWriterElement.innerHTML = "";
+        charIndex = 0;
+        typeWriterElement.classList.remove('fade-out'); 
+        setTimeout(typeWriter, 500); 
+    }, 1000);
+}
+
+// الجديدة:
+window.onload = async function() { 
+    typeWriter(); 
+    const hasPermission = await checkUserPermissions();
+    if (hasPermission) {
+        initSiteSettings();
+    }
+};
+
+
 </script>
 
 </body>

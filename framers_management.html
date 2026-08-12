@@ -243,11 +243,10 @@
         <!-- بطاقة إحصائيات الساعات للدورة -->
         <div class="shift-stats-board">
            <div class="shift-stat-item">
-                <span class="shift-stat-title"><i class="fa-solid fa-bullseye"></i> الساعات المستهدفة للدورة</span>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
-                    <input type="number" id="targetSessionHours" value="60" onchange="window.saveTargetHours()" style="width: 70px; text-align: center; font-size: 20px; font-weight: bold; background: #fff; border: 1px solid #cbd5e1; color: #0FBA50; border-radius: 6px; padding: 2px; outline:none;">
-                    <span style="font-size: 14px;">ساعة</span>
-                    <button onclick="saveTargetHours()" style="background:#0FBA50; color:white; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-family:'Cairo'; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition:0.2s;"><i class="fa-solid fa-save"></i> حفظ</button>
+                <span class="shift-stat-title"><i class="fa-solid fa-bullseye"></i> الحجم الساعي المعتمد للدورة</span>
+                <div style="display: flex; justify-content: center; align-items: baseline; gap: 5px;">
+                    <span class="shift-stat-val" id="targetSessionHoursDisplay" style="color: #0FBA50;">0</span>
+                    <span style="font-size: 14px; color: #cbd5e1;">ساعة</span>
                 </div>
             </div>
             <div class="shift-stat-item">
@@ -375,11 +374,12 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const db = firebase.firestore();
 
-const MODULES_LIST = ["تعليمية المادة", "التشريع المدرسي", "علم النفس التربوي", "هندسة التكوين", "تكنولوجيا الإعلام والاتصال", "التقويم والمعالجة البيداغوجية", "النظام التربوي الجزائري"];
-const FRAMER_ROLES = ["المسؤول الإداري", "المسؤول البيداغوجي", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
+const MODULES_LIST = ["تعليمية المادة", "التشريع المدرسي", "علم النفس التربوي", "هندسة التكوين", "تكنولوجيا الإعلام والاتصال", "التقويم والمعالجة البيداغوجية", "الشفافية والوقاية من الفساد", "النظام التربوي الجزائري"];
+const FRAMER_ROLES = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
 const UNIQUE_ROLES = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
 
+let currentUserRole = "";
 let employeePhotosMap = {}; 
 let INSPECTOR_CENTER = "";
 let framersData = [];
@@ -387,6 +387,7 @@ let centerData = [];
 let framersBaseDataCache = {}; 
 let currentFramerPage = 1;
 const framersPerPage = 10;
+let isFirstFramerLoad = true;
 
 let isShiftMode = false; 
 let currentShiftData = []; 
@@ -426,7 +427,28 @@ function logout() {
     window.location.href = "index.html";
 }
 
+// متغير عالمي لتخزين إعدادات الحجم الساعي القادمة من المديرية
+let globalHourlySettings = null;
+
 async function initializeSystem() {
+    const userEmpId = sessionStorage.getItem("userEmpId");
+    if (userEmpId && userEmpId !== "ADMIN_ACCESS") {
+        try {
+            const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
+            if (adminDoc.exists) {
+                currentUserRole = adminDoc.data().jobTitle || "";
+            }
+        } catch(e) { console.warn("تعذر جلب دور المستخدم:", e); }
+    }
+
+    // 🌟 الجديد: جلب إعدادات الموقع (الحجم الساعي) من المديرية 🌟
+    try {
+        const stDoc = await db.collection("site_settings").doc("main").get();
+        if (stDoc.exists && stDoc.data().HOURLY_VOLUME) {
+            globalHourlySettings = stDoc.data().HOURLY_VOLUME;
+        }
+    } catch(e) { console.warn("تعذر جلب إعدادات المديرية:", e); }
+
     fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
         const responseText = await photoRes.text();
         if (responseText && responseText.includes("[")) {
@@ -454,8 +476,25 @@ async function initializeSystem() {
     await loadSettings();
     await checkAndAutoRegisterInspector();
     await loadFramersData();
-    
 }
+
+// 🌟 دالة مساعدة لمعرفة عدد ساعات اليوم حسب وظيفة المؤطر والدورة 🌟
+window.getDailyHoursForRole = function(role, sessionNum) {
+    if (!globalHourlySettings || !globalHourlySettings[`s${sessionNum}`]) return 0;
+    let sData = globalHourlySettings[`s${sessionNum}`];
+    
+    if (["المسؤول الإداري", "المسؤول البيداغوجي", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي"].includes(role)) {
+        return parseFloat(sData.presidents?.hoursPerDay) || 4; // افتراضياً 4 ساعات للرؤساء كما طلبت
+    } else if (role === "المقتصد(ة)") {
+        return parseFloat(sData.bursars?.hoursPerDay) || 0;
+    } else if (role === "حارس") {
+        return parseFloat(sData.guards?.hoursPerDay) || 0;
+    } else if (["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(role)) {
+        return 0; // الأساتذة يدوياً بالساعات
+    } else {
+        return parseFloat(sData.admins?.hoursPerDay) || 0; // الباقي إداريين
+    }
+};
 
 // ================= إعدادات الساعات المستهدفة =================
 async function loadSettings() {
@@ -465,21 +504,7 @@ async function loadSettings() {
     } catch(e) {}
 }
 
-window.saveTargetHours = async function() {
-    const session = document.getElementById('shiftSessionSelect').value;
-    let val = parseFloat(document.getElementById('targetSessionHours').value);
-    if(isNaN(val)) val = 0;
 
-    targetHoursData[session] = val;
-    
-    try {
-        await db.collection("center_framers").doc("settings_" + INSPECTOR_CENTER).set(targetHoursData, { merge: true });
-        window.renderShiftsTable(); 
-        Swal.fire({ toast: true, position: 'bottom-end', icon: 'success', title: 'تم حفظ الساعات المستهدفة', showConfirmButton: false, timer: 1500 });
-    } catch(e) {
-        Swal.fire('خطأ', 'فشل الاتصال', 'error');
-    }
-}
 
 // ================= التسجيل التلقائي وجلب البيانات =================
 async function checkAndAutoRegisterInspector() {
@@ -487,26 +512,62 @@ async function checkAndAutoRegisterInspector() {
     if (!inspectorId || inspectorId === "ADMIN_ACCESS") return;
 
     try {
-        const framerRef = db.collection("center_framers").doc(String(inspectorId));
-        const doc = await framerRef.get();
+        // 1. المفتاح المركب الجديد (رقم التعريف + اسم المركز)
+        const newDocId = String(inspectorId) + "_" + INSPECTOR_CENTER;
+        const framerRef = db.collection("center_framers").doc(newDocId);
         
-        if (!doc.exists) {
-            const baseData = await fetchEmployeeBaseData(inspectorId);
-            if (baseData) {
+        // 2. 🌟 تنظيف التكرار: البحث عن الملف القديم وحذفه إذا كان موجوداً 🌟
+        const oldFramerRef = db.collection("center_framers").doc(String(inspectorId));
+        const oldDoc = await oldFramerRef.get();
+        if (oldDoc.exists) {
+            await oldFramerRef.delete(); // حذف الملف القديم لمنع التكرار
+        }
+
+        const doc = await framerRef.get();
+        const baseData = await fetchEmployeeBaseData(inspectorId);
+        
+        if (baseData) {
+            // تنسيق رقم الهاتف ليصبح 00 00 00 00 00
+            let rawPhone = (baseData.phone || "").trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+
+            // تحديد الوظيفة الحقيقية بدقة
+            let actualRole = currentUserRole;
+            if (!actualRole) {
+                let rankStr = baseData.grade || baseData.rank || '-';
+                if (rankStr.includes("مفتش")) actualRole = "المسؤول البيداغوجي";
+                else if (rankStr.includes("مدير")) actualRole = "المسؤول الإداري";
+                else actualRole = "عضو تأطير";
+            }
+
+            if (!doc.exists) {
+                // تسجيل جديد بالمفتاح المركب
                 await framerRef.set({
                     empId: String(inspectorId),
                     center: INSPECTOR_CENTER,
-                    role: "المسؤول البيداغوجي",
-                    phone: baseData.phone || "",
+                    role: actualRole,
+                    phone: formattedPhone,
                     ccp: baseData.ccp || "",
                     ccpKey: "",
-                    s1: false, s2: false, s3: false,
+                    s1: true, s2: true, s3: true,
                     shifts: [], 
                     isProtected: true 
                 });
+            } else {
+                // تصحيح وتحديث البيانات إذا لزم الأمر
+                let existingData = doc.data();
+                if (existingData.role !== actualRole || !existingData.s1) {
+                    await framerRef.update({
+                        role: actualRole,
+                        phone: formattedPhone,
+                        s1: true, s2: true, s3: true
+                    });
+                }
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        console.warn("خطأ في التسجيل التلقائي والتنظيف:", e);
+    }
 }
 
 async function fetchEmployeeBaseData(empId) {
@@ -526,39 +587,61 @@ async function fetchEmployeeBaseData(empId) {
     return null;
 }
 
-async function loadFramersData() {
-    try {
-        const snap = await db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).get();
-        
-        const fetchPromises = snap.docs.map(async (doc) => {
-            let data = doc.data();
-            if (!data.empId || doc.id.startsWith("settings_")) return null; 
+// ================= جلب بيانات المؤطرين (باستخدام الاستماع اللحظي Real-Time) =================
+function loadFramersData() {
+    // استخدمنا onSnapshot بدلاً من get لتحديث الجدول تلقائياً عند أي تغيير (إضافة، تعديل، حذف)
+    db.collection("center_framers")
+      .where("center", "==", INSPECTOR_CENTER)
+      .onSnapshot(async (snapshot) => {
+        try {
+            const fetchPromises = snapshot.docs.map(async (doc) => {
+                let data = doc.data();
+                if (!data.empId || doc.id.startsWith("settings_")) return null; 
+                
+                data.shifts = data.shifts || [];
+                let baseData = await fetchEmployeeBaseData(data.empId);
+                if (baseData) return { ...data, docId: doc.id, baseInfo: baseData };
+                return null;
+            });
+
+            // انتظار جلب البيانات الأساسية لكل المؤطرين
+            const results = await Promise.all(fetchPromises);
+            framersData = results.filter(item => item !== null);
             
-            data.shifts = data.shifts || [];
-            let baseData = await fetchEmployeeBaseData(data.empId);
-            if (baseData) return { ...data, docId: doc.id, baseInfo: baseData };
-            return null;
-        });
+            // تحديث الفلاتر والجدول فوراً
+            populateFramerFilters();
+            window.filterFramersTable();
+            if (isShiftMode) window.renderShiftsTable();
 
-        const results = await Promise.all(fetchPromises);
-        framersData = results.filter(item => item !== null);
-        
-        populateFramerFilters();
-        window.filterFramersTable();
-        if (isShiftMode) window.renderShiftsTable();
+            // إخفاء شاشة التحميل عند أول جلب ناجح للبيانات فقط
+            if (isFirstFramerLoad) {
+                document.getElementById("loader").style.display = "none";
+                isFirstFramerLoad = false;
+            }
 
-        // إخفاء شريط الانتظار فقط بعد اكتمال جلب وعرض البيانات بنجاح
-        document.getElementById("loader").style.display = "none";
-
-    } catch (e) {
-        console.error("خطأ أثناء جلب المؤطرين:", e); // سيساعدك على تتبع الأخطاء مستقبلاً
-        Swal.fire('خطأ', 'تعذر جلب بيانات المؤطرين.', 'error');
-        // لن يتم إخفاء شريط الانتظار هنا تنفيذاً لطلبك، أو يمكنك إضافة زر لتحديث الصفحة إذا لزم الأمر
-    }
+        } catch (e) {
+            console.error("خطأ أثناء جلب المؤطرين لحظياً:", e);
+            if (isFirstFramerLoad) Swal.fire('خطأ', 'تعذر جلب بيانات المؤطرين.', 'error');
+        }
+    }, (error) => {
+        console.error("Listener error:", error);
+        Swal.fire('خطأ', 'انقطع الاتصال بقاعدة البيانات (المؤطرين).', 'error');
+    });
 }
 
 // ================= التبديل النظيف بين الواجهتين =================
 window.toggleWorkshiftMode = function() {
+    // 🌟 منع المسؤول الإداري من دخول تسيير الدوام 🌟
+    if (currentUserRole === "المسؤول الإداري") {
+        Swal.fire({
+            icon: 'error',
+            title: 'صلاحيات مقيدة',
+            text: 'عذراً، تسيير الدوام والمحاسبة من الصلاحيات الحصرية للمسؤول البيداغوجي.',
+            confirmButtonColor: '#102a43'
+        });
+        return;
+    }
+
     isShiftMode = !isShiftMode;
     const btnToggle = document.getElementById('btnToggleMode');
     const mainSection = document.getElementById('mainFramersSection');
@@ -728,9 +811,15 @@ window.renderShiftsTable = function() {
     const tbody = document.getElementById('shiftsTableBody');
     tbody.innerHTML = '';
 
-    // إصلاح قراءة الساعات وتحديث الحقل
-    let targetHours = targetHoursData[session] !== undefined && !isNaN(targetHoursData[session]) ? parseFloat(targetHoursData[session]) : 60;
-    document.getElementById('targetSessionHours').value = targetHours;
+    // 🌟 الجديد: جلب الحجم الساعي المعتمد من إعدادات المديرية مباشرة 🌟
+    let sessionNum = session.replace('s', ''); // استخراج الرقم (1, 2, 3)
+    let targetHours = 0;
+    if (globalHourlySettings && globalHourlySettings[`s${sessionNum}`]) {
+        targetHours = parseFloat(globalHourlySettings[`s${sessionNum}`].globalTotal) || 0;
+    }
+    
+    // عرض الرقم في الواجهة
+    document.getElementById('targetSessionHoursDisplay').innerText = targetHours;
 
     let shiftData = framersData.filter(f => f[session] === true);
     
@@ -765,13 +854,23 @@ window.renderShiftsTable = function() {
         let totalHours = 0;
         let shiftsArray = f.shifts || [];
         
+        // الحساب المطور الجديد
         shiftsArray.forEach(sh => {
-            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) {
+                    totalHours += parseFloat(sh.calculatedHours);
+                    totalHoursCompleted += parseFloat(sh.calculatedHours);
+                }
+            }
             if (sh.type === 'ساعات') {
                 totalHours += parseFloat(sh.amount);
                 totalHoursCompleted += parseFloat(sh.amount);
             }
         });
+
+        // 🌟 التعديل هنا: إخفاء الأيام للأساتذة 🌟
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
 
        let specsHtml = '-';
         let modsHtml = '-';
@@ -826,7 +925,7 @@ window.renderShiftsTable = function() {
                 </td>
                 <td style="padding:5px; text-align:center; vertical-align:middle;">${specsHtml}</td>
                 <td style="padding:5px; text-align:center; vertical-align:middle;">${modsHtml}</td>
-                <td style="padding:10px; text-align:center; vertical-align:middle; font-weight:900; font-size:16px; color:#d35400;">${totalDays}</td>
+                <td style="padding:10px; text-align:center; vertical-align:middle; font-weight:900; font-size:16px; color:#d35400;">${displayDays}</td>
                 <td style="padding:10px; text-align:center; vertical-align: middle; font-weight:900; font-size:16px; color:#1E68E8;">${totalHours}</td>
                 <td style="padding:10px; text-align:center; vertical-align: middle; white-space:nowrap;">
                     <div style="display:flex; gap:5px; justify-content:center;">
@@ -1120,15 +1219,16 @@ window.showAddFramerForm = function(empId, baseData) {
             window.updateAddGroups();
             window.toggleTeacherFields(); // ضبط حجم النافذة فور الفتح حسب الوظيفة المحددة مسبقاً
         },
-        preConfirm: () => {
-            const phone = document.getElementById('fr-phone').value.replace(/\s/g, '');
+        preConfirm: async () => { // لاحظ إضافة كلمة async هنا
+            // جلب الهاتف وتنسيقه
+            let rawPhone = document.getElementById('fr-phone').value.trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+
             const ccp = document.getElementById('fr-ccp').value;
             const cle = document.getElementById('fr-cle').value;
             const role = document.getElementById('fr-role').value;
             
-            let framingSpecs = [];
-            let framingModules = [];
-            let framingGroups = [];
+            let framingSpecs = []; let framingModules = []; let framingGroups = [];
 
             if(role === 'أستاذ مؤطر') {
                 document.querySelectorAll('.spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
@@ -1144,31 +1244,37 @@ window.showAddFramerForm = function(empId, baseData) {
                     }
                 });
 
-                // شروط الإلزامية الخاصة بالأستاذ المؤطر
-                if (framingSpecs.length === 0) {
-                    Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!');
-                    return false;
-                }
-                if (framingGroups.length === 0) {
-                    Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!');
-                    return false;
-                }
-                if (framingModules.length === 0) {
-                    Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!');
-                    return false;
-                }
+                if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
+                if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
+                if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
             }
 
             if (!role) { Swal.showValidationMessage('الرجاء اختيار وظيفة المؤطر!'); return false; }
-            if (!/^(05|06|07)[0-9]{8}$/.test(phone) && phone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
+            if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
             
-            if (UNIQUE_ROLES.includes(role) && framersData.some(f => f.role === role)) {
-                Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); return false;
+            // 🌟 الحماية الذكية: منع تعيين شخص كمسؤول إذا كان مسؤولاً في مركز آخر 🌟
+            if (UNIQUE_ROLES.includes(role)) {
+                if (framersData.some(f => f.role === role)) {
+                    Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); 
+                    return false;
+                }
+                const globalCheck = await db.collection("center_framers").where("empId", "==", empId).get();
+                let isManagerElsewhere = false;
+                globalCheck.forEach(d => {
+                    if (UNIQUE_ROLES.includes(d.data().role)) isManagerElsewhere = true;
+                });
+                if (isManagerElsewhere) {
+                    Swal.showValidationMessage(`يُمنع تسجيل المسؤول الإداري أو البيداغوجي في أكثر من مركز!`); 
+                    return false;
+                }
             }
 
             return {
-                empId: empId, center: INSPECTOR_CENTER, role: role, phone: document.getElementById('fr-phone').value,
-                ccp: ccp, ccpKey: cle, s1: document.getElementById('fr-s1').checked, s2: document.getElementById('fr-s2').checked, s3: document.getElementById('fr-s3').checked,
+                empId: empId, center: INSPECTOR_CENTER, role: role, 
+                phone: formattedPhone, ccp: ccp, ccpKey: cle, 
+                s1: document.getElementById('fr-s1').checked, 
+                s2: document.getElementById('fr-s2').checked, 
+                s3: document.getElementById('fr-s3').checked,
                 shifts: [], isProtected: false, framingSpecs, framingModules, framingGroups
             };
         }
@@ -1176,7 +1282,10 @@ window.showAddFramerForm = function(empId, baseData) {
         if (res.isConfirmed) {
             Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                await db.collection("center_framers").doc(empId).set(res.value);
+                // 🌟 إنشاء المفتاح المركب (الرقم الوظيفي + اسم المركز) 🌟
+                const newDocId = empId + "_" + INSPECTOR_CENTER;
+                await db.collection("center_framers").doc(newDocId).set(res.value);
+                
                 Swal.fire('نجاح', 'تم تسجيل المؤطر بنجاح.', 'success');
                 loadFramersData(); 
             } catch (e) { Swal.fire('خطأ', 'تعذر الحفظ.', 'error'); }
@@ -1191,7 +1300,9 @@ window.editFramer = function(docId) {
         return;
     }
 
-    const isProtectedRole = f.isProtected && f.role === 'المسؤول البيداغوجي';
+   
+    const isProtectedRole = f.isProtected;
+	
     let rolesHtml = '';
     if (isProtectedRole) {
         rolesHtml = `<option value="${f.role}" selected>${f.role}</option>`;
@@ -1391,7 +1502,10 @@ window.editFramer = function(docId) {
             window.updateEditGroups();
         },
         preConfirm: () => {
-            const phone = document.getElementById('edit-fr-phone').value.replace(/\s/g, '');
+            // جلب الهاتف وتنسيقه ليحفظ بصيغة 00 00 00 00 00
+            let rawPhone = document.getElementById('edit-fr-phone').value.trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+
             const ccp = document.getElementById('edit-fr-ccp').value;
             const cle = document.getElementById('edit-fr-cle').value;
             
@@ -1420,27 +1534,21 @@ window.editFramer = function(docId) {
                     }
                 });
 
-                // شروط الإلزامية الجديدة للأستاذ المؤطر
-                if (framingSpecs.length === 0) {
-                    Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!');
-                    return false;
-                }
-                if (framingGroups.length === 0) {
-                    Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!');
-                    return false;
-                }
-                if (framingModules.length === 0) {
-                    Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!');
-                    return false;
-                }
+                if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
+                if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
+                if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
             }
 
-            if (!/^(05|06|07)[0-9]{8}$/.test(phone) && phone.length > 0) { 
+            // التحقق من الهاتف الخام
+            if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { 
                 Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
                 return false; 
             }
             
-            return { phone, ccp, ccpKey: cle, role, s1, s2, s3, framingSpecs, framingModules, framingGroups };
+            return { 
+                phone: formattedPhone, // استخدام الهاتف المنسق للحفظ
+                ccp, ccpKey: cle, role, s1, s2, s3, framingSpecs, framingModules, framingGroups 
+            };
         }
 
     }).then(async (res) => {
@@ -1813,6 +1921,29 @@ window.promptAddShift = function(docId) {
     if(!framer) return;
 
     let defaultDate = getTodayDate();
+    let sessionVal = document.getElementById('shiftSessionSelect').value; 
+    let sessionNum = sessionVal.replace('s', ''); // استخراج رقم الدورة (1, 2, 3)
+    
+    let isTeacher = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(framer.role);
+    let dailyHours = getDailyHoursForRole(framer.role, sessionNum);
+    
+    let typeOptions = '';
+    let amountValue = '';
+    let hintText = '';
+
+    if (isTeacher) {
+        typeOptions = `<option value="ساعات" selected>بالساعات</option>`;
+        amountValue = '';
+        hintText = `<i class="fa-solid fa-clock"></i> فئة الأساتذة: يرجى إدخال عدد الساعات المنجزة مباشرة.`;
+    } else {
+        typeOptions = `<option value="أيام" selected>بالأيام</option>`;
+        amountValue = '1';
+        if (dailyHours > 0) {
+            hintText = `<i class="fa-solid fa-calculator"></i> سيتم تسجيل (${dailyHours} ساعات) تلقائياً لكل يوم بناءً على إعدادات المديرية.`;
+        } else {
+            hintText = `<i class="fa-solid fa-triangle-exclamation" style="color:red;"></i> تنبيه: لم يتم تحديد ساعات لهذه الفئة في إعدادات المديرية! الساعات ستكون 0.`;
+        }
+    }
 
     Swal.fire({
         title: '<i class="fa-solid fa-calendar-plus" style="color:#0FBA50; margin-left:8px;"></i> إضافة دوام جديد',
@@ -1835,52 +1966,45 @@ window.promptAddShift = function(docId) {
                     <div style="display:flex; gap:15px;">
                         <div style="flex:1;">
                             <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">طبيعة الدوام:</label>
-                            <select id="sh-type" class="swal2-select" style="width:100%; margin:0; height:45px; padding:0 10px; font-family:'Cairo'; font-weight:bold;" onchange="window.toggleShiftAmountInput()">
-                                <option value="أيام" selected>بالأيام</option>
-                                <option value="ساعات">بالساعات</option>
+                            <select id="sh-type" class="swal2-select" style="width:100%; margin:0; height:45px; padding:0 10px; font-family:'Cairo'; font-weight:bold; background:#e2e8f0; pointer-events:none;" disabled>
+                                ${typeOptions}
                             </select>
                         </div>
                         <div style="flex:1;">
                             <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">العدد:</label>
-                            <input type="number" id="sh-amount" value="1" step="0.5" class="swal2-input" style="width:100%; margin:0; height:45px; text-align:center; font-weight:bold; font-size:18px; color:#0FBA50;">
+                            <input type="number" id="sh-amount" value="${amountValue}" step="0.5" placeholder="${isTeacher ? 'مثال: 4' : ''}" class="swal2-input" style="width:100%; margin:0; height:45px; text-align:center; font-weight:bold; font-size:18px; color:#0FBA50;">
                         </div>
                     </div>
-                    <div id="sh-hint" style="font-size:12px; color:#1E68E8; margin-top:10px; text-align:center; font-weight:bold; background:#eff6ff; padding:8px; border-radius:6px;">
-                        <i class="fa-solid fa-circle-info"></i> يتم تسجيل (1 يوم عمل) كقيمة افتراضية.
+                    <div style="font-size:12px; color:#1E68E8; margin-top:10px; text-align:center; font-weight:bold; background:#eff6ff; padding:8px; border-radius:6px;">
+                        ${hintText}
                     </div>
                 </div>
             </div>
         `,
         showCancelButton: true, confirmButtonText: 'حفظ وإضافة', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
-        didOpen: () => {
-            window.toggleShiftAmountInput = () => {
-                const type = document.getElementById('sh-type').value;
-                const amtInput = document.getElementById('sh-amount');
-                const hint = document.getElementById('sh-hint');
-                if(type === 'أيام') {
-                    amtInput.value = 1; amtInput.style.color = '#0FBA50';
-                    hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> يتم تسجيل (1 يوم عمل) كقيمة افتراضية.';
-                } else {
-                    amtInput.value = ''; amtInput.placeholder = 'مثال: 4'; amtInput.style.color = '#1E68E8';
-                    hint.innerHTML = '<i class="fa-solid fa-clock"></i> أدخل عدد الساعات التي عملها المؤطر.';
-                }
-            };
-        },
         preConfirm: () => {
             const date = document.getElementById('sh-date').value;
-            const type = document.getElementById('sh-type').value;
+            const type = isTeacher ? 'ساعات' : 'أيام';
             const amount = parseFloat(document.getElementById('sh-amount').value);
 
             if (!date) { Swal.showValidationMessage('الرجاء اختيار التاريخ!'); return false; }
             if (!amount || amount <= 0) { Swal.showValidationMessage('الرجاء إدخال عدد صحيح أكبر من الصفر!'); return false; }
 
+            // 🌟 حساب الساعات الفعلية بناءً على الفئة 🌟
+            let calculatedHours = 0;
+            if (type === 'أيام') {
+                calculatedHours = amount * dailyHours;
+            } else {
+                calculatedHours = amount; // الأستاذ يضع الساعات بيده
+            }
+
             // التحقق من الساعات المتبقية
-            if (type === 'ساعات' && amount > window.currentRemainingHours) {
-                Swal.showValidationMessage(`عذراً، الساعات المدخلة (${amount}) تتجاوز الساعات المتبقية للدورة (${window.currentRemainingHours})!`);
+            if (calculatedHours > window.currentRemainingHours) {
+                Swal.showValidationMessage(`عذراً، الساعات المحسوبة (${calculatedHours}) تتجاوز الساعات المتبقية للدورة (${window.currentRemainingHours})!`);
                 return false;
             }
 
-            return { id: Date.now().toString(), date, type, amount };
+            return { id: Date.now().toString(), date, type, amount, calculatedHours };
         }
     }).then(async (result) => {
         if (result.isConfirmed) {
@@ -1909,12 +2033,18 @@ window.viewShiftHistory = function(docId, page = 1) {
     // الترتيب التنازلي لرؤية أحدث الساعات المضافة أولاً
     shifts.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-    // حساب الإجماليات من كل السجلات (وليس فقط الصفحة الحالية)
+    // حساب الإجماليات
     let totalDays = 0; let totalHours = 0;
     shifts.forEach(sh => {
-        if(sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+        if(sh.type === 'أيام') {
+            totalDays += parseFloat(sh.amount);
+            if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+        }
         if(sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
     });
+
+    
+    let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(framer.role) ? '--' : totalDays;
 
     // حساب الصفحات
     const totalPages = Math.ceil(shifts.length / shiftHistPerPage) || 1;
@@ -2038,6 +2168,11 @@ window.editShiftEntry = function(docId, shiftId) {
     let shiftIndex = framer.shifts.findIndex(s => s.id === shiftId);
     let shift = framer.shifts[shiftIndex];
 
+    let sessionVal = document.getElementById('shiftSessionSelect').value; 
+    let sessionNum = sessionVal.replace('s', '');
+    let isTeacher = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(framer.role);
+    let dailyHours = getDailyHoursForRole(framer.role, sessionNum);
+
     Swal.fire({
         title: '<i class="fa-solid fa-pen-to-square" style="color:#ffc107;"></i> تعديل سجل الدوام',
         html: `
@@ -2048,7 +2183,7 @@ window.editShiftEntry = function(docId, shiftId) {
                 <div style="display:flex; gap:15px;">
                     <div style="flex:1;">
                         <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">النوع:</label>
-                        <select id="e-sh-type" class="swal2-select" style="width:100%; height:45px; margin:0; padding:0 10px;">
+                        <select id="e-sh-type" class="swal2-select" style="width:100%; height:45px; margin:0; padding:0 10px; background:#e2e8f0; pointer-events:none;" disabled>
                             <option value="أيام" ${shift.type === 'أيام' ? 'selected' : ''}>أيام</option>
                             <option value="ساعات" ${shift.type === 'ساعات' ? 'selected' : ''}>ساعات</option>
                         </select>
@@ -2063,25 +2198,23 @@ window.editShiftEntry = function(docId, shiftId) {
         showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#f59e0b',
         preConfirm: () => {
             const date = document.getElementById('e-sh-date').value;
-            const type = document.getElementById('e-sh-type').value;
             const amount = parseFloat(document.getElementById('e-sh-amount').value);
             
             if (!date || !amount) { Swal.showValidationMessage('بيانات ناقصة!'); return false; }
 
-            // التحقق من الساعات المتبقية مع أخذ الساعات القديمة بعين الاعتبار
-            let allowedAmount = window.currentRemainingHours;
-            
-            // إذا كان التعديل على سجل من نوع "ساعات"، نعيد الساعات القديمة للرصيد المتاح
-            if (shift.type === 'ساعات') {
-                allowedAmount += parseFloat(shift.amount); 
-            }
+            // حساب الساعات الجديدة
+            let calculatedHours = shift.type === 'أيام' ? (amount * dailyHours) : amount;
 
-            if (type === 'ساعات' && amount > allowedAmount) {
-                Swal.showValidationMessage(`عذراً، الساعات المدخلة تتجاوز الرصيد المتاح (${allowedAmount})!`);
+            // حساب الرصيد المتاح بإرجاع الساعات القديمة للمجموع أولاً
+            let oldCalculatedHours = shift.calculatedHours !== undefined ? parseFloat(shift.calculatedHours) : (shift.type === 'ساعات' ? parseFloat(shift.amount) : 0);
+            let allowedAmount = window.currentRemainingHours + oldCalculatedHours;
+            
+            if (calculatedHours > allowedAmount) {
+                Swal.showValidationMessage(`عذراً، الساعات المحسوبة (${calculatedHours}) تتجاوز الرصيد المتاح (${allowedAmount})!`);
                 return false;
             }
 
-            return { id: shift.id, date, type, amount };
+            return { id: shift.id, date, type: shift.type, amount, calculatedHours };
         }
     }).then(async (result) => {
         if (result.isConfirmed) {
@@ -2133,9 +2266,15 @@ window.printShiftsTabList = function() {
         let b = f.baseInfo;
         let totalDays = 0, totalHours = 0;
         (f.shifts || []).forEach(sh => {
-            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+            }
             if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
         });
+        
+        
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
         
         rowsHtml += `
             <tr>
@@ -2144,7 +2283,7 @@ window.printShiftsTabList = function() {
                 <td class="nowrap">${b.grade || b.rank || '-'}</td>
                 <td>${b.place || b.workplace || '-'}</td>
                 <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
-                <td class="center-text"><b>${totalDays}</b></td>
+                <td class="center-text"><b>${displayDays}</b></td>
                 <td class="center-text"><b>${totalHours}</b></td>
             </tr>
         `;
@@ -2217,9 +2356,15 @@ window.printDetailedShiftsList = function() {
         let b = f.baseInfo;
         let totalDays = 0, totalHours = 0;
         (f.shifts || []).forEach(sh => {
-            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+            }
             if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
         });
+
+        
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
 
         let specs = '-';
         let mods = '-';
@@ -2262,7 +2407,7 @@ window.printDetailedShiftsList = function() {
                 <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
                 <td style="font-size:12px;">${specs}</td>
                 <td style="font-size:12px;">${mods}</td>
-                <td class="center-text"><b>${totalDays}</b></td>
+                <td class="center-text"><b>${displayDays}</b></td>
                 <td class="center-text"><b>${totalHours}</b></td>
             </tr>
         `;
@@ -2326,8 +2471,11 @@ window.printShiftHistory = function(docId) {
     let rowsHtml = '';
     
     shifts.forEach((sh, idx) => {
-        if(sh.type === 'أيام') totalDays += parseFloat(sh.amount);
-        if(sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        if (sh.type === 'أيام') {
+    totalDays += parseFloat(sh.amount);
+    if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+}
+if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
         
         rowsHtml += `
             <tr>
@@ -2421,9 +2569,14 @@ window.exportShiftsTabExcel = function() {
         let b = f.baseInfo;
         let totalDays = 0, totalHours = 0;
         (f.shifts || []).forEach(sh => {
-            if (sh.type === 'أيام') totalDays += parseFloat(sh.amount);
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+            }
             if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
         });
+        
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
         
         let specs = '-';
         let mods = '-';
@@ -2463,7 +2616,7 @@ window.exportShiftsTabExcel = function() {
                 <td style="border: 1px solid #000;">${f.role || '-'}</td>
                 <td style="border: 1px solid #000;">${specs}</td>
                 <td style="border: 1px solid #000;">${mods}</td>
-                <td style="border: 1px solid #000;">${totalDays}</td>
+                <td style="border: 1px solid #000;">${displayDays}</td>
                 <td style="border: 1px solid #000;">${totalHours}</td>
             </tr>
         `;
