@@ -443,6 +443,9 @@
         <button class="btn-print" style="background: #8e44ad;" onclick="window.open('scanner.html', '_blank')">
           <i class="fa-solid fa-qrcode"></i> فتح ماسح الباركود
         </button>
+		<button class="btn-print" style="background: #e67e22;" onclick="generateScannerLink()">
+          <i class="fa-solid fa-link"></i> إنشاء رابط الحضور
+         </button>
       </div>
 
       <!-- 2. حقول الفلترة (متعددة الاختيارات أسفل الأزرار) -->
@@ -3921,6 +3924,123 @@ async function exportToExcel() {
         Swal.fire('خطأ', 'حدث مشكل أثناء تصدير الملف.', 'error');
     }
 }
+
+
+// ================= نظام الرابط السري الموحد للماسح =================
+window.generateScannerLink = async function() {
+    Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        // البحث عن رابط (Token) فعال لهذا المركز
+        const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
+        let currentToken = '';
+        let oldDocId = null;
+
+        if (!snapshot.empty) {
+            currentToken = snapshot.docs[0].id; // الرمز هو نفسه اسم الوثيقة
+            oldDocId = currentToken;
+        } else {
+            // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
+            currentToken = generateRandomToken(15);
+            await db.collection('scanner_tokens').doc(currentToken).set({
+                center: INSPECTOR_CENTER,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            oldDocId = currentToken;
+        }
+
+        window.showLinkModal(currentToken, oldDocId);
+
+    } catch (e) {
+        console.error(e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+    }
+};
+
+function generateRandomToken(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let t = '';
+    for (let i = 0; i < length; i++) t += chars.charAt(Math.floor(Math.random() * chars.length));
+    return t;
+}
+
+window.showLinkModal = function(token, oldDocId) {
+    let currentPath = window.location.href;
+    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+    let fullLink = `${baseUrl}/scanner.html?token=${token}`; // الرابط يحتوي على الكود السري فقط
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-link" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
+        html: `
+            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.5; text-align: right;">
+                هذا هو الرابط <b>الموحد</b> لمركزك. يمكنك نسخه وإرساله للمكلف بالمسح.<br>
+                <span style="color:#d90429; font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> ملاحظة: إذا ضغطت على (تغيير الرابط) سيتم إبطال هذا الرابط فوراً ولن يعمل مجدداً.</span>
+            </div>
+            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:15px; background:#f8fafc; color:#102a43; outline:none;">
+            
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="copyScannerLink()" style="background:#0FBA50; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-copy"></i> نسخ الرابط
+                </button>
+                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-arrows-rotate"></i> تغيير الرابط
+                </button>
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
+    });
+};
+
+window.copyScannerLink = function() {
+    let copyText = document.getElementById("scannerLinkInput");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); 
+    navigator.clipboard.writeText(copyText.value).then(() => {
+        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم نسخ الرابط بنجاح!', showConfirmButton: false, timer: 2000});
+    });
+};
+
+window.regenerateToken = function(oldDocId) {
+    Swal.fire({
+        title: 'تأكيد تغيير الرابط',
+        text: 'الرابط القديم سيتوقف عن العمل فوراً. هل أنت متأكد؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، غيّر الرابط',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // إبطال الرابط القديم بحذفه
+                if (oldDocId) {
+                    await db.collection('scanner_tokens').doc(oldDocId).delete();
+                }
+                
+                // إنشاء رابط جديد
+                let currentToken = generateRandomToken(15);
+                await db.collection('scanner_tokens').doc(currentToken).set({
+                    center: INSPECTOR_CENTER,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                window.showLinkModal(currentToken, currentToken);
+                Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
+
+            } catch (e) {
+                console.error(e);
+                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
+            }
+        } else {
+            window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة في حالة الإلغاء
+        }
+    });
+};
+
 
 </script>
 </body>
