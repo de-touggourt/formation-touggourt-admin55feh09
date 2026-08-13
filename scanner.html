@@ -172,23 +172,31 @@ let scannedCardsCount = 0; // متغير عداد البطاقات
 window.onload = async function() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط السري...`;
+    document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط والأمان...`;
 
-    // 1. استخراج الرمز السري (Token) من الرابط
+    // 1. استخراج الرمز السري من الرابط
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
 
     if (!token) {
         Swal.fire({
             icon: 'error', title: 'رابط غير صالح',
-            text: 'لا يمكن الوصول للماسح. الرابط غير كامل وينقصه الرمز السري.',
+            text: 'الرابط غير كامل وينقصه الرمز السري.',
             allowOutsideClick: false, showConfirmButton: false
         });
         return; 
     }
 
+    // === الجديد: توليد أو جلب بصمة الجهاز الحالي ===
+    let myDeviceId = localStorage.getItem('scanner_device_id');
+    if (!myDeviceId) {
+        // إنشاء معرف فريد للجهاز إذا لم يكن موجوداً
+        myDeviceId = 'DEV_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+        localStorage.setItem('scanner_device_id', myDeviceId);
+    }
+
     try {
-        // 2. التحقق من الرمز في قاعدة البيانات وجلب اسم المركز
+        // 2. التحقق من الرمز في قاعدة البيانات
         let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
         if (!tokenDoc.exists) {
             Swal.fire({
@@ -198,9 +206,31 @@ window.onload = async function() {
             });
             return;
         }
+
+        let tokenData = tokenDoc.data();
+
+        // === الجديد: التحقق من حماية الجهاز الموحد ===
+        if (tokenData.registeredDevice) {
+            // الرابط تم فتحه مسبقاً، يجب أن نتأكد أنه نفس الجهاز
+            if (tokenData.registeredDevice !== myDeviceId) {
+                Swal.fire({
+                    icon: 'error', 
+                    title: 'حظر أمني: الرابط مستخدم!',
+                    text: 'هذا الرابط تم استخدامه مسبقاً في هاتف/جهاز آخر ومقفل عليه. اطلب رابطاً جديداً من رئيس المركز.',
+                    allowOutsideClick: false, 
+                    showConfirmButton: false
+                });
+                return; // إيقاف التنفيذ فوراً
+            }
+        } else {
+            // هذه أول مرة يفتح فيها الرابط، سنقوم بتسجيل هذا الجهاز ليقفل عليه
+            await db.collection('scanner_tokens').doc(token).update({
+                registeredDevice: myDeviceId
+            });
+        }
         
-        // 3. السماح بالدخول وتحديد المركز من قاعدة البيانات بشكل خفي
-        activeCenter = tokenDoc.data().center;
+        // 3. السماح بالدخول وتحديد المركز
+        activeCenter = tokenData.center;
         
         document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
         

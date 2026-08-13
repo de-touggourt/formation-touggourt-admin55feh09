@@ -3967,15 +3967,78 @@ function generateRandomToken(length) {
 window.showLinkModal = function(token, oldDocId) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner.html?token=${token}`; // الرابط يحتوي على الكود السري فقط
+    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
+
+    // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
+    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
+
+    // === الجديد: دالة تكبير الـ QR Code (تعمل بملء الشاشة) ===
+    window.enlargeQR = function() {
+        let overlay = document.createElement('div');
+        overlay.id = 'qr-fullscreen-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)'; // لون داكن يطابق ألوان لوحة المفتش
+        overlay.style.backdropFilter = 'blur(5px)'; // تشويش الخلفية
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.cursor = 'zoom-out';
+        
+        // إغلاق التكبير عند الضغط
+        overlay.onclick = function() { document.body.removeChild(overlay); };
+        
+        // تصميم الصورة المكبرة
+        let img = document.createElement('img');
+        img.src = qrCodeUrl;
+        img.style.width = '400px';
+        img.style.height = '400px';
+        img.style.maxWidth = '90vw';
+        img.style.maxHeight = '90vw';
+        img.style.backgroundColor = 'white';
+        img.style.padding = '20px';
+        img.style.borderRadius = '20px';
+        img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+        
+        // نص توجيهي للإغلاق
+        let text = document.createElement('div');
+        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
+        text.style.color = 'white';
+        text.style.marginTop = '25px';
+        text.style.fontFamily = 'Cairo';
+        text.style.fontSize = '18px';
+        text.style.fontWeight = 'bold';
+        
+        overlay.appendChild(img);
+        overlay.appendChild(text);
+        document.body.appendChild(overlay);
+    };
 
     Swal.fire({
-        title: '<i class="fa-solid fa-link" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
+        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
         html: `
-            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.5; text-align: right;">
-                هذا هو الرابط <b>الموحد</b> لمركزك. يمكنك نسخه وإرساله للمكلف بالمسح.<br>
-                <span style="color:#d90429; font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> ملاحظة: إذا ضغطت على (تغيير الرابط) سيتم إبطال هذا الرابط فوراً ولن يعمل مجدداً.</span>
+            <!-- === واجهة الـ QR المصغرة في النافذة === -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;" onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#0FBA50';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#e2e8f0';">
+                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; display: block; border-radius: 8px;">
+                </div>
+                <span style="font-size: 13px; color: #1E68E8; margin-top: 12px; font-weight: 800; background: #eff6ff; padding: 6px 15px; border-radius: 20px; cursor: pointer;" onclick="enlargeQR()">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i> اضغط لتكبير الباركود
+                </span>
             </div>
+
+            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.6; text-align: right;">
+                هذا هو الرابط <b>الموحد</b> لمركزك.<br>
+                <div style="background:#e8fbf0; border:1px solid #0FBA50; padding:8px; border-radius:6px; margin: 8px 0;">
+                    <span style="color:#0FBA50; font-size:13px;"><i class="fa-solid fa-shield-halved"></i> <b>حماية قفل الجهاز:</b> هذا الرابط سيقفل تلقائياً على <b>أول هاتف</b> يفتحه.</span>
+                </div>
+            </div>
+            
             <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:15px; background:#f8fafc; color:#102a43; outline:none;">
             
             <div style="display:flex; gap:10px; justify-content:center;">
@@ -3983,7 +4046,7 @@ window.showLinkModal = function(token, oldDocId) {
                     <i class="fa-solid fa-copy"></i> نسخ الرابط
                 </button>
                 <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
-                    <i class="fa-solid fa-arrows-rotate"></i> تغيير الرابط
+                    <i class="fa-solid fa-arrows-rotate"></i> تغيير وإبطال
                 </button>
             </div>
         `,
