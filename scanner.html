@@ -123,6 +123,10 @@
 </head>
 <body>
 
+<div id="counterBadge" style="position: absolute; top: 20px; left: 20px; background: rgba(15, 186, 80, 0.85); color: white; padding: 10px 20px; border-radius: 15px; font-weight: bold; font-family: 'Cairo'; z-index: 20; border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(5px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-size: 15px;">
+    <i class="fa-solid fa-id-card"></i> البطاقات الممسوحة: <span id="scanCountValue" style="font-size: 20px; font-weight: 900; margin-right: 5px;">0</span>
+</div>
+
   <button class="btn-back" onclick="window.close()"><i class="fa-solid fa-arrow-right"></i> رجوع</button>
 
   <div class="header">
@@ -162,13 +166,49 @@ const db = firebase.firestore();
 let html5QrCode;
 let todayDate = "";
 let isScanningPaused = false; 
+let activeCenter = "";
+let scannedCardsCount = 0; // متغير عداد البطاقات
 
-window.onload = function() {
+window.onload = async function() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    document.getElementById("dateInfo").innerText = `تاريخ السجل: ${todayDate}`;
+    document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط السري...`;
 
-    startScanner();
+    // 1. استخراج الرمز السري (Token) من الرابط
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (!token) {
+        Swal.fire({
+            icon: 'error', title: 'رابط غير صالح',
+            text: 'لا يمكن الوصول للماسح. الرابط غير كامل وينقصه الرمز السري.',
+            allowOutsideClick: false, showConfirmButton: false
+        });
+        return; 
+    }
+
+    try {
+        // 2. التحقق من الرمز في قاعدة البيانات وجلب اسم المركز
+        let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
+        if (!tokenDoc.exists) {
+            Swal.fire({
+                icon: 'error', title: 'رابط منتهي أو غير صحيح',
+                text: 'هذا الرابط غير صالح أو تم إبطاله من قبل رئيس المركز.',
+                allowOutsideClick: false, showConfirmButton: false
+            });
+            return;
+        }
+        
+        // 3. السماح بالدخول وتحديد المركز من قاعدة البيانات بشكل خفي
+        activeCenter = tokenDoc.data().center;
+        
+        document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
+        
+        startScanner();
+    } catch (error) {
+        console.error("Token error:", error);
+        Swal.fire('خطأ', 'تعذر التحقق من الرابط. تأكد من اتصالك بالإنترنت.', 'error');
+    }
 };
 
 function startScanner() {
@@ -181,7 +221,6 @@ function startScanner() {
         onScanSuccess,
         onScanFailure
     ).catch(err => {
-        console.error("Camera Error:", err);
         Swal.fire('خطأ في الكاميرا', 'يرجى السماح للمتصفح بالوصول إلى كاميرا الهاتف.', 'error');
     });
 }
@@ -191,17 +230,10 @@ async function onScanSuccess(decodedText, decodedResult) {
     let scannedId = decodedText.trim();
     isScanningPaused = true; 
 
-    // تشغيل صوت المسح
     let audio = new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
     audio.play().catch(e=>console.log(e));
 
     try {
-        let activeCenter = sessionStorage.getItem("inspectorCenter");
-        if (!activeCenter) {
-            Swal.fire('خطأ', 'لم يتم التعرف على المركز الحالي. يرجى تسجيل الدخول مجدداً.', 'error').then(() => { isScanningPaused = false; });
-            return;
-        }
-
         // ==========================================
         // 1. البحث في قاعدة المتكونين
         // ==========================================
@@ -211,12 +243,13 @@ async function onScanSuccess(decodedText, decodedResult) {
             let trainee = { empId: traineeSnap.docs[0].data().id, ...traineeSnap.docs[0].data() };
             let centerName = trainee.center;
 
-            if (!centerName || centerName !== activeCenter) {
+            // استخدام trim() لحل مشكلة عدم التعرف على المركز
+            if (!centerName || centerName.trim() !== activeCenter.trim()) {
                 Swal.fire({ icon: 'warning', title: 'خطأ في البيانات', text: `المتكون لا ينتمي لمركزك الحالي!`, confirmButtonText: 'حسناً' }).then(() => { isScanningPaused = false; });
                 return;
             }
 
-            const docId = `${centerName}_${todayDate}`;
+            const docId = `${centerName.trim()}_${todayDate}`;
             let attDoc = await db.collection('attendance_daily').doc(docId).get();
             let sysMode = "closed"; 
             let existingRecords = {}; 
@@ -227,36 +260,17 @@ async function onScanSuccess(decodedText, decodedResult) {
                 if (data.records) existingRecords = data.records;
             }
 
-            // التحقق مما إذا مسح بطاقته مسبقاً
             if (existingRecords[trainee.empId] && existingRecords[trainee.empId].time && existingRecords[trainee.empId].time !== '') {
-                let recStatus = existingRecords[trainee.empId].status;
-                let recTime = existingRecords[trainee.empId].time;
-                
                 Swal.fire({
-                    icon: 'info',
-                    title: 'مسجل مسبقاً!',
-                    html: `
-                        <div style="line-height: 2; font-size:15px; text-align:right;">
-                            لقد تم تسجيل حضور المتكون <b>${trainee.name || '-'}</b> مسبقاً.<br>
-                            الوضعية الحالية: <span style="color:#0FBA50; font-weight:bold;">${recStatus}</span> على الساعة <span dir="ltr">${recTime}</span>
-                        </div>
-                    `,
-                    confirmButtonText: 'استمرار المسح',
-                    confirmButtonColor: '#203a43',
-                    timer: 8000,
-                    timerProgressBar: true
+                    icon: 'info', title: 'مسجل مسبقاً!',
+                    html: `لقد تم تسجيل حضور المتكون <b>${trainee.name || '-'}</b> مسبقاً.<br>الوضعية الحالية: <span style="color:#0FBA50; font-weight:bold;">${existingRecords[trainee.empId].status}</span>`,
+                    confirmButtonText: 'استمرار المسح', timer: 8000, timerProgressBar: true
                 }).then(() => { isScanningPaused = false; });
                 return;
             }
 
             if (sysMode === "closed") {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'النظام مغلق',
-                    text: `تسجيل حضور المتكونين لمركز (${centerName}) مغلق حالياً.`,
-                    confirmButtonText: 'استمرار المسح',
-                    confirmButtonColor: '#d90429'
-                }).then(() => { isScanningPaused = false; }); 
+                Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `تسجيل حضور المتكونين مغلق حالياً.`, confirmButtonText: 'استمرار المسح', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
                 return;
             }
 
@@ -267,9 +281,13 @@ async function onScanSuccess(decodedText, decodedResult) {
             let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
 
             await db.collection('attendance_daily').doc(docId).set({
-                center: centerName, date: todayDate,
+                center: centerName.trim(), date: todayDate,
                 records: { [trainee.empId]: { status: status, time: timeString } }
             }, { merge: true });
+
+            // زيادة العداد وتحديثه في الشاشة
+            scannedCardsCount++;
+            document.getElementById("scanCountValue").innerText = scannedCardsCount;
 
             Swal.fire({
                 title: 'تم التسجيل بنجاح!',
@@ -285,26 +303,23 @@ async function onScanSuccess(decodedText, decodedResult) {
                         <b>مادة التخصص:</b> ${trainee.maty || trainee.specialty || '-'}
                     </div>
                 `,
-                icon: 'success',
-                confirmButtonText: 'مسح البطاقة التالية',
-                confirmButtonColor: '#203a43',
-                timer: 20000,
-                timerProgressBar: true
+                icon: 'success', confirmButtonText: 'مسح البطاقة التالية', timer: 20000, timerProgressBar: true
             }).then(() => { isScanningPaused = false; });
 
         } else {
             // ==========================================
-            // 2. البحث في قاعدة المؤطرين (في حال لم يجده كمتكون)
+            // 2. البحث في قاعدة المؤطرين (باستخدام المعرف المركب)
             // ==========================================
-            let framerDoc = await db.collection("center_framers").doc(scannedId).get();
+            let framerDocId = `${scannedId}_${activeCenter.trim()}`;
+            let framerDoc = await db.collection("center_framers").doc(framerDocId).get();
             
-            if (!framerDoc.exists || framerDoc.data().center !== activeCenter) {
-                Swal.fire({ icon: 'error', title: 'غير مسجل', text: `الرقم (${scannedId}) غير مسجل في مركزك الحالي (لا متكون ولا مؤطر)!`, confirmButtonText: 'حسناً', confirmButtonColor: '#203a43' }).then(() => { isScanningPaused = false; });
+            if (!framerDoc.exists) {
+                Swal.fire({ icon: 'error', title: 'غير مسجل', text: `الرقم (${scannedId}) غير مسجل في مركزك (لا متكون ولا مؤطر)!`, confirmButtonText: 'حسناً', confirmButtonColor: '#203a43' }).then(() => { isScanningPaused = false; });
                 return;
             }
 
             let framerData = framerDoc.data();
-            let centerName = framerData.center;
+            let centerName = framerData.center.trim();
             const docId = `${centerName}_${todayDate}`;
             
             let attDoc = await db.collection('framers_attendance_daily').doc(docId).get();
@@ -317,44 +332,24 @@ async function onScanSuccess(decodedText, decodedResult) {
                 if (data.records) existingRecords = data.records;
             }
 
-            // التحقق مما إذا مسح بطاقته مسبقاً كمؤطر
             if (existingRecords[scannedId] && existingRecords[scannedId].time && existingRecords[scannedId].time !== '') {
-                let recStatus = existingRecords[scannedId].status;
-                let recTime = existingRecords[scannedId].time;
-                
                 Swal.fire({
-                    icon: 'info',
-                    title: 'مسجل مسبقاً!',
-                    html: `
-                        <div style="line-height: 2; font-size:15px; text-align:right;">
-                            لقد تم تسجيل حضور هذا المؤطر مسبقاً.<br>
-                            الوضعية الحالية: <span style="color:#0FBA50; font-weight:bold;">${recStatus}</span> على الساعة <span dir="ltr">${recTime}</span>
-                        </div>
-                    `,
-                    confirmButtonText: 'استمرار المسح',
-                    confirmButtonColor: '#203a43',
-                    timer: 8000,
-                    timerProgressBar: true
+                    icon: 'info', title: 'مسجل مسبقاً!',
+                    html: `لقد تم تسجيل حضور هذا المؤطر مسبقاً.<br>الوضعية: <span style="color:#0FBA50; font-weight:bold;">${existingRecords[scannedId].status}</span>`,
+                    confirmButtonText: 'استمرار المسح', timer: 8000, timerProgressBar: true
                 }).then(() => { isScanningPaused = false; });
                 return; 
             }
 
             if (sysMode === "closed") {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'النظام مغلق',
-                    text: `تسجيل حضور المؤطرين لمركز (${centerName}) مغلق حالياً.`,
-                    confirmButtonText: 'استمرار المسح',
-                    confirmButtonColor: '#d90429'
-                }).then(() => { isScanningPaused = false; }); 
+                Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `تسجيل حضور المؤطرين مغلق حالياً.`, confirmButtonText: 'استمرار المسح', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
                 return;
             }
 
             const d = new Date();
             const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-            let status = "حاضر"; // للمؤطرين يوجد فقط خيار حاضر
+            let status = "حاضر"; 
 
-            // جلب الاسم من القاعدة الأساسية
             let baseSnap = await db.collection("employeescomnew").doc(scannedId).get();
             if (!baseSnap.exists) baseSnap = await db.collection("employeescomplus").doc(scannedId).get();
             let framerName = baseSnap.exists ? baseSnap.data().name : 'غير متوفر';
@@ -363,6 +358,10 @@ async function onScanSuccess(decodedText, decodedResult) {
                 center: centerName, date: todayDate,
                 records: { [scannedId]: { status: status, time: timeString } }
             }, { merge: true });
+
+            // زيادة العداد وتحديثه في الشاشة
+            scannedCardsCount++;
+            document.getElementById("scanCountValue").innerText = scannedCardsCount;
 
             Swal.fire({
                 title: 'تم التسجيل بنجاح!',
@@ -377,11 +376,7 @@ async function onScanSuccess(decodedText, decodedResult) {
                         <b>الوظيفة بالمركز:</b> ${framerData.role || '-'}
                     </div>
                 `,
-                icon: 'success',
-                confirmButtonText: 'مسح البطاقة التالية',
-                confirmButtonColor: '#203a43',
-                timer: 20000,
-                timerProgressBar: true
+                icon: 'success', confirmButtonText: 'مسح البطاقة التالية', timer: 20000, timerProgressBar: true
             }).then(() => { isScanningPaused = false; });
         }
 
@@ -392,7 +387,7 @@ async function onScanSuccess(decodedText, decodedResult) {
 }
 
 function onScanFailure(error) { 
-    // يتم تجاهل الأخطاء الصامتة (حين لا يجد الباركود في الإطار)
+    // تجاهل الأخطاء الصامتة
 }
 </script>
 </body>
