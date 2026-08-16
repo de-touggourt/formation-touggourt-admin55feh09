@@ -250,6 +250,11 @@
         <i class="fa-solid fa-chalkboard-user"></i>   تسيير المؤطرين
       </button>
 	  
+	  <!-- زر الإحصاء الشامل للحضور -->
+      <button class="logout-btn" style="background: #e91e63; color: white;" onclick="openAdminAttendanceStats()">
+        <i class="fa-solid fa-chart-pie"></i> متابعة وإحصاء الحضور
+      </button>
+	  
       <button class="logout-btn" style="background: #1E68E8;" onclick="window.location.href='dashboard_finale_upload.html'">
         <i class="fa-solid fa-folder-open"></i> إدارة الملفات
       </button>
@@ -563,6 +568,7 @@
             <button class="tab-btn" onclick="switchSettingTab('links', this)"><i class="fa-brands fa-google-drive"></i> روابط التكوين والفيديوهات</button>
             <button class="tab-btn" onclick="switchSettingTab('hourly_volume', this)"><i class="fa-solid fa-clock"></i> الحجم الساعي</button>
             <button class="tab-btn" onclick="switchSettingTab('images', this)"><i class="fa-solid fa-cloud-arrow-up"></i> رفع الصور لفايربيز</button>
+			<button class="tab-btn" onclick="switchSettingTab('drive', this)"><i class="fa-brands fa-google-drive"></i> إدارة Google Drive</button>
 		</div>
 
         <div class="settings-body" id="settingsBody">
@@ -641,6 +647,123 @@
     </div>
 </div>
 
+
+<!-- ================= نافذة الاستعلام والإحصاء الشامل للحضور (المديرية) ================= -->
+<style>
+    .stat-hero-card {
+        flex: 1; min-width: 160px;
+        background: white; border-radius: 16px; padding: 20px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.06); border-bottom: 5px solid transparent;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        transition: transform 0.3s ease;
+    }
+    .stat-hero-card:hover { transform: translateY(-5px); }
+    .stat-hero-title { font-size: 15px; font-weight: 800; color: #64748b; margin-bottom: 8px; }
+    .stat-hero-value { font-size: 32px; font-weight: 900; line-height: 1; }
+    .stat-hero-sub { font-size: 14px; font-weight: bold; margin-top: 5px; }
+</style>
+
+<div class="modal-overlay" id="adminAttStatsModal">
+  <div class="modal-content" style="width: 98%; height: 98%; background: #f0f4f8;">
+    <div class="modal-header" style="background: #e91e63;">
+      <h2><i class="fa-solid fa-chart-pie"></i> الإحصاء والاستعلام الشامل للحضور والغياب</h2>
+      <button class="close-modal" style="background: #c2185b;" onclick="closeAdminAttendanceStats()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- الفلاتر العلوية -->
+    <div class="att-filters" style="background: #fff; padding: 15px; border-bottom: 1px solid #ddd; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <select id="statCatFilter" class="crud-input" style="width: 140px; margin: 0; padding: 8px;" onchange="renderAdminAttendanceStats()">
+            <option value="trainees">المتكونون</option>
+            <option value="framers">المؤطرون</option>
+        </select>
+        
+        <select id="statCenterFilter" class="crud-input" style="width: 180px; margin: 0; padding: 8px;" onchange="renderAdminAttendanceStats()">
+            <!-- يُملأ ديناميكياً -->
+        </select>
+        
+        <select id="statDateMode" class="crud-input" style="width: 160px; margin: 0; padding: 8px;" onchange="toggleStatDateInputs()">
+            <option value="today">اليوم</option>
+            <option value="specific">تاريخ محدد</option>
+            <option value="range">فترة زمنية (من - إلى)</option>
+            <option value="s1">الدورة الأولى (تلقائي)</option>
+            <option value="s2">الدورة الثانية (تلقائي)</option>
+            <option value="s3">الدورة الثالثة (تلقائي)</option>
+            <option value="all">كل الأيام المسجلة</option>
+        </select>
+        
+        <input type="date" id="statDateSpecific" class="crud-input" style="display:none; width: 140px; margin: 0; padding: 8px;" onchange="renderAdminAttendanceStats()">
+        <input type="date" id="statDateFrom" class="crud-input" style="display:none; width: 140px; margin: 0; padding: 8px;" onchange="renderAdminAttendanceStats()">
+        <input type="date" id="statDateTo" class="crud-input" style="display:none; width: 140px; margin: 0; padding: 8px;" onchange="renderAdminAttendanceStats()">
+        
+        <select id="statStatusFilter" class="crud-input" style="width: 140px; margin: 0; padding: 8px;" onchange="renderAdminAttendanceStats()">
+            <option value="الكل">كل الحالات</option>
+            <option value="حاضر">حاضر</option>
+            <option value="غائب">غائب</option>
+            <option value="متأخر">متأخر</option>
+            <option value="غير محدد">غير محدد</option>
+        </select>
+        
+        <input type="text" id="statSearch" class="crud-input" placeholder="بحث (اسم، رقم)..." style="flex: 1; min-width: 150px; margin: 0; padding: 8px;" oninput="
+		ndanceStats()">
+    </div>
+
+    <!-- أزرار الإجراءات السريعة -->
+    <div style="padding: 12px 15px; background: #fff; border-bottom: 1px solid #ddd; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn-print" style="background: #0FBA50;" onclick="setStatStatus('حاضر')"><i class="fa-solid fa-user-check"></i> قائمة الحاضرين</button>
+        <button class="btn-print" style="background: #d90429;" onclick="setStatStatus('غائب')"><i class="fa-solid fa-user-xmark"></i> المعنيون بالغياب</button>
+        <button class="btn-print" id="btnLateFramersControl" style="background: #ff9800;" onclick="setStatStatus('متأخر')"><i class="fa-solid fa-user-clock"></i> المتأخرون</button>
+        <span style="flex: 1;"></span>
+        <button class="btn-print" style="background: #1E68E8;" onclick="printAdminAttStats()"><i class="fa-solid fa-print"></i> طباعة التقرير الشامل</button>
+        <button class="btn-print" style="background: #107c41;" onclick="exportAdminAttStatsExcel()"><i class="fa-solid fa-file-excel"></i> تصدير Excel</button>
+    </div>
+
+    <div style="flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- عنوان الدورة المستنتج آلياً -->
+        <div id="statSessionInfo" style="text-align: center; padding: 10px; background: #e8fbf0; border: 2px dashed #0FBA50; border-radius: 8px; font-weight: 900; color: #0FBA50; font-size: 18px; display: none;"></div>
+
+        <!-- البطاقات الإحصائية الجميلة -->
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;" id="statCardsContainer">
+            <!-- تُملأ عبر الجافاسكربت -->
+        </div>
+
+        <!-- جدول مقارنة المراكز -->
+        <div id="statCenterComparisonContainer" style="display:none; background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+            <h3 style="margin-top:0; color:#102a43; border-bottom: 2px dashed #eee; padding-bottom: 10px;"><i class="fa-solid fa-chart-column" style="color:#e91e63;"></i> إحصائية مقارنة حسب المراكز</h3>
+            <table class="att-table">
+                <thead style="background: #1e293b; color: white;">
+                    <tr>
+                        <th style="text-align: right;">المركز</th>
+                        <th style="text-align: center;">الإجمالي</th>
+                        <th style="text-align: center;">الحاضرون</th>
+                        <th style="text-align: center;">الغائبون</th>
+                        <th style="text-align: center;" id="thCenterLate">المتأخرون</th>
+                        <th style="text-align: center;">نسبة الحضور</th>
+                    </tr>
+                </thead>
+                <tbody id="statCenterComparisonBody"></tbody>
+            </table>
+        </div>
+
+        <!-- الجدول التفصيلي للأشخاص -->
+        <div style="background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); flex: 1; display: flex; flex-direction: column;">
+            <h3 style="margin-top:0; color:#102a43; border-bottom: 2px dashed #eee; padding-bottom: 10px;"><i class="fa-solid fa-list-check" style="color:#1E68E8;"></i> القائمة التفصيلية (مع الصور والسجل)</h3>
+            <div class="table-responsive" style="flex: 1;">
+                <table class="att-table">
+                    <thead style="background: #334e68; color: white;" id="statDetailsHead">
+                        <!-- يُملأ ديناميكياً -->
+                    </thead>
+                    <tbody id="statDetailsBody"></tbody>
+                </table>
+            </div>
+            <div id="statPagination" class="pagination-container" style="display:none; margin-top: 15px;"></div>
+        </div>
+    </div>
+  </div>
+</div>
+
+
+
 <script>
 // =========================================================================
 // 1. تهيئة فايربيز والبيانات الثابتة
@@ -691,6 +814,9 @@ const MODULE_AR_NAMES = {
 // =========================================================================
 // 2. دالة الهجرة وجلب البيانات من Firestore
 // =========================================================================
+// =========================================================================
+// 2. دالة الهجرة وجلب البيانات من Firestore
+// =========================================================================
 async function initSiteSettings() {
     const docRef = db.collection("site_settings").doc("main");
     try {
@@ -701,8 +827,16 @@ async function initSiteSettings() {
             presidents: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             bursars: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             admins: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
-            teachers: { count: 0, days: 0, hoursPerDay: 0, total: 0 }, // تم توحيد الأساتذة
+            teachers: { count: 0, days: 0, hoursPerDay: 0, total: 0 }, 
+            guards: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             globalTotal: 0
+        };
+
+        // 🌟 الهيكل الافتراضي لتواريخ الدورات 🌟
+        const defaultSessionDates = {
+            s1: { start: "2026-08-01", end: "2026-08-10" },
+            s2: { start: "2026-08-15", end: "2026-08-25" },
+            s3: { start: "2026-09-01", end: "2026-09-10" }
         };
 
         if (!docSnap.exists) {
@@ -712,6 +846,7 @@ async function initSiteSettings() {
                 dbLinks: (typeof dbLinks !== 'undefined') ? dbLinks : {},
                 GLOBAL_CYCLE_STATUS: (typeof GLOBAL_CYCLE_STATUS !== 'undefined') ? GLOBAL_CYCLE_STATUS : {1:true, 2:false, 3:false},
                 MODULE_CYCLE_STATUS: (typeof MODULE_CYCLE_STATUS !== 'undefined') ? MODULE_CYCLE_STATUS : {},
+                SESSION_DATES: defaultSessionDates, // 🌟 إضافة التواريخ 🌟
                 HOURLY_VOLUME: {
                     s1: JSON.parse(JSON.stringify(defaultSessionVol)),
                     s2: JSON.parse(JSON.stringify(defaultSessionVol)),
@@ -732,7 +867,7 @@ async function initSiteSettings() {
             if (doc.exists) {
                 SITE_SETTINGS = doc.data();
                 
-                // حماية النظام وحقن البيانات إذا كانت النسخة قديمة ولا تحتوي على الدورات الثلاث
+                // حماية النظام وحقن البيانات إذا كانت النسخة قديمة
                 if (!SITE_SETTINGS.HOURLY_VOLUME || !SITE_SETTINGS.HOURLY_VOLUME.s1) {
                     SITE_SETTINGS.HOURLY_VOLUME = {
                         s1: JSON.parse(JSON.stringify(defaultSessionVol)),
@@ -741,41 +876,36 @@ async function initSiteSettings() {
                         isLocked: false
                     };
                 }
+
+                // 🌟 حماية لإضافة التواريخ للنسخ القديمة 🌟
+                if (!SITE_SETTINGS.SESSION_DATES) {
+                    SITE_SETTINGS.SESSION_DATES = defaultSessionDates;
+                }
                 
                 if (SITE_SETTINGS.UI_NAMES) {
                     SITE_SETTINGS.UI_NAMES.levels = FIXED_LEVELS;
                     SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
                 }
 
-                // --- كود هجرة البيانات لفصل الطورين دون ضياع الروابط والفيديوهات القديمة ---
+                // كود الهجرة القديم للروابط...
                 if (SITE_SETTINGS.dbLinks) {
                     let requiresMigration = false;
                     for (let centerId in SITE_SETTINGS.dbLinks) {
-                        // إذا وجد النظام الطور المدمج القديم
                         if (SITE_SETTINGS.dbLinks[centerId]["middle_secondary"]) {
-                            // نسخ كل الفيديوهات والروابط للطور المتوسط
                             SITE_SETTINGS.dbLinks[centerId]["middle"] = JSON.parse(JSON.stringify(SITE_SETTINGS.dbLinks[centerId]["middle_secondary"]));
-                            // نسخ كل الفيديوهات والروابط للطور الثانوي
                             SITE_SETTINGS.dbLinks[centerId]["secondary"] = JSON.parse(JSON.stringify(SITE_SETTINGS.dbLinks[centerId]["middle_secondary"]));
-                            
-                            // حذف الطور القديم
                             delete SITE_SETTINGS.dbLinks[centerId]["middle_secondary"];
                             requiresMigration = true;
                         }
                     }
-                    // حفظ التعديلات بصمت في قاعدة البيانات إذا تم اكتشاف الهيكل القديم وتفكيكه
-                    if (requiresMigration) {
-                        db.collection("site_settings").doc("main").set(SITE_SETTINGS);
-                    }
+                    if (requiresMigration) db.collection("site_settings").doc("main").set(SITE_SETTINGS);
                 }
-                // -------------------------------------------------------------------------
 
                 populateCentersDropdownsDynamic(); 
                 updateDashboardStatsDynamic(); 
-                
                 if (typeof renderTable === 'function') renderTable(); 
 
-                if (document.getElementById('settingsModal').style.display === 'flex') {
+                if (document.getElementById('settingsModal') && document.getElementById('settingsModal').style.display === 'flex') {
                     refreshCurrentTab();
                 }
             }
@@ -805,6 +935,7 @@ function refreshCurrentTab() {
     if (CURRENT_TAB === 'links') renderLinksTab();
     if (CURRENT_TAB === 'hourly_volume') renderHourlyVolumeTab(); 
 	if (CURRENT_TAB === 'images') renderImagesTab();
+	if (CURRENT_TAB === 'drive') renderDriveTab();
 }
 
 // =========================================================================
@@ -1222,7 +1353,14 @@ window.createNewCenterStruct = async function(data) {
         });
     }
 
-    await saveSettingsToFirestore(true, 'تم إضافة المركز وتكوين هيكلته المخصصة بنجاح');
+    await saveSettingsToFirestore(false); // حفظ صامت
+if (SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) {
+    // تشغيل مزامنة درايف تلقائياً للمركز الجديد
+    await syncSingleCenterDrive(newKey); 
+} else {
+    Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم إضافة المركز بنجاح (المزامنة مع درايف غير مفعلة)'});
+}
+
 }
 
 // دالة تحديث مركز موجود (دمج آمن للبيانات)
@@ -1260,7 +1398,13 @@ window.updateCenterStruct = async function(data) {
     }
 
     SITE_SETTINGS.dbLinks[key] = newLinks;
-    await saveSettingsToFirestore(true, 'تم تعديل بيانات المركز وهيكلته بنجاح');
+    await saveSettingsToFirestore(false); // حفظ صامت
+if (SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) {
+    // تشغيل المزامنة لإنشاء أي أطوار أو تخصصات جديدة أضيفت
+    await syncSingleCenterDrive(key); 
+} else {
+    Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تعديل بيانات المركز بنجاح'});
+}
 }
 
 // دالة حذف المركز
@@ -1282,7 +1426,44 @@ window.deleteCenter = async function(key) {
 // =========================================================================
 function renderCyclesTab() {
     const body = document.getElementById('settingsBody');
-    let html = `<div class="setting-card">
+    const dates = SITE_SETTINGS.SESSION_DATES || {
+        s1: { start: "", end: "" }, s2: { start: "", end: "" }, s3: { start: "", end: "" }
+    };
+
+    let html = `
+    <!-- 🌟 بطاقة إعداد التواريخ الجديدة 🌟 -->
+    <div class="setting-card">
+        <h3><i class="fa-regular fa-calendar-days"></i> إعداد تواريخ الدورات التكوينية <span style="font-size:12px; color:#777; font-weight:normal;">(تُستخدم للاستنتاج الآلي في إحصائيات الحضور)</span></h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+    `;
+    
+    [1, 2, 3].forEach(i => {
+        let sData = dates[`s${i}`] || {start:'', end:''};
+        html += `
+            <div style="background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #cbd5e1;">
+                <h4 style="margin:0 0 10px 0; color:#1E68E8; text-align:center;">الدورة ${i}</h4>
+                <div style="display:flex; gap:10px; flex-direction:column;">
+                    <div>
+                        <label style="font-size:12px; font-weight:bold; color:#475569;">تاريخ البداية:</label>
+                        <input type="date" id="sd_start_${i}" class="crud-input" value="${sData.start}">
+                    </div>
+                    <div>
+                        <label style="font-size:12px; font-weight:bold; color:#475569;">تاريخ النهاية:</label>
+                        <input type="date" id="sd_end_${i}" class="crud-input" value="${sData.end}">
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `
+        </div>
+        <div style="text-align:left;">
+            <button class="btn-action btn-save" onclick="saveSessionDates()"><i class="fa-solid fa-floppy-disk"></i> حفظ التواريخ</button>
+        </div>
+    </div>
+    
+    <div class="setting-card">
         <h3><i class="fa-solid fa-power-off"></i> لوحة التحكم العامة في الدورات التكوينية</h3>
         <div style="display:flex; gap:30px; flex-wrap:wrap; justify-content:center; padding: 20px; background: #f8fafc; border-radius: 10px;">`;
     
@@ -1328,6 +1509,16 @@ function renderCyclesTab() {
     
     body.innerHTML = html;
 }
+
+// 🌟 دالة حفظ التواريخ 🌟
+window.saveSessionDates = async function() {
+    SITE_SETTINGS.SESSION_DATES = {
+        s1: { start: document.getElementById('sd_start_1').value, end: document.getElementById('sd_end_1').value },
+        s2: { start: document.getElementById('sd_start_2').value, end: document.getElementById('sd_end_2').value },
+        s3: { start: document.getElementById('sd_start_3').value, end: document.getElementById('sd_end_3').value }
+    };
+    await saveSettingsToFirestore(true, 'تم حفظ تواريخ الدورات بنجاح');
+};
 
 async function updateGlobalCycle(cycle, val) { SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] = val; await saveSettingsToFirestore(false); }
 async function updateModuleCycle(module, cycle, val) { SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] = val; await saveSettingsToFirestore(false); }
@@ -5283,6 +5474,906 @@ window.bulkResetImages = async function() {
         }
     });
 };
+
+
+// =====================================================================
+// نظام الاستعلام والإحصاء الشامل للحضور (المديرية) - Read Only
+// =====================================================================
+
+let adminAttUnsubTrainees = null;
+let adminAttUnsubFramers = null;
+let adminAttDataTrainees = [];
+let adminAttDataFramers = [];
+let globalFramersListForStats = [];
+let statProcessedRecords = [];
+let statCurrentPage = 1;
+const statRowsPerPage = 15;
+
+// استنتاج الدورة بناءً على التاريخ الفعلي (تقرأ من إعدادات الفايربيز)
+function getSessionByDate(dateStr) {
+    if (!dateStr || !SITE_SETTINGS || !SITE_SETTINGS.SESSION_DATES) return "خارج فترة الدورات";
+    
+    // ضبط الوقت للصفر لضمان دقة المقارنة بالأيام
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0); 
+    
+    const dates = SITE_SETTINGS.SESSION_DATES;
+    
+    const parseDate = (dString) => {
+        if (!dString) return null;
+        let dt = new Date(dString);
+        dt.setHours(0, 0, 0, 0);
+        return dt;
+    };
+
+    let s1Start = parseDate(dates.s1?.start); let s1End = parseDate(dates.s1?.end);
+    let s2Start = parseDate(dates.s2?.start); let s2End = parseDate(dates.s2?.end);
+    let s3Start = parseDate(dates.s3?.start); let s3End = parseDate(dates.s3?.end);
+
+    if (s1Start && s1End && d >= s1Start && d <= s1End) return "الدورة الأولى";
+    if (s2Start && s2End && d >= s2Start && d <= s2End) return "الدورة الثانية";
+    if (s3Start && s3End && d >= s3Start && d <= s3End) return "الدورة الثالثة";
+    
+    return "خارج فترة الدورات";
+}
+
+function openAdminAttendanceStats() {
+    document.getElementById('adminAttStatsModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    db.collection("center_framers").get().then(snap => {
+        globalFramersListForStats = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    });
+
+    const cFilter = document.getElementById('statCenterFilter');
+    let currentVal = cFilter.value;
+    cFilter.innerHTML = '<option value="الكل">كل المراكز (الولاية)</option>';
+    for (let k in SITE_SETTINGS.UI_NAMES.centers) {
+        cFilter.innerHTML += `<option value="${SITE_SETTINGS.UI_NAMES.centers[k]}">${SITE_SETTINGS.UI_NAMES.centers[k]}</option>`;
+    }
+    if (currentVal) cFilter.value = currentVal;
+
+    const todayDate = new Date().toISOString().split('T')[0];
+    document.getElementById('statDateSpecific').value = todayDate;
+    document.getElementById('statDateFrom').value = todayDate;
+    document.getElementById('statDateTo').value = todayDate;
+    
+    toggleStatDateInputs();
+
+    Swal.fire({title: 'جاري الاتصال بالسجلات...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+
+    if (!adminAttUnsubTrainees) {
+        adminAttUnsubTrainees = db.collection('attendance_daily').onSnapshot(snap => {
+            adminAttDataTrainees = snap.docs.map(doc => {
+                let date = doc.id.slice(-10);
+                let center = doc.id.slice(0, -11);
+                return { id: doc.id, center, date, records: doc.data().records || {} };
+            });
+            renderAdminAttendanceStats();
+        });
+    }
+    if (!adminAttUnsubFramers) {
+        adminAttUnsubFramers = db.collection('framers_attendance_daily').onSnapshot(snap => {
+            adminAttDataFramers = snap.docs.map(doc => {
+                let date = doc.id.slice(-10);
+                let center = doc.id.slice(0, -11);
+                return { id: doc.id, center, date, records: doc.data().records || {} };
+            });
+            renderAdminAttendanceStats();
+        });
+    }
+    
+    setTimeout(() => Swal.close(), 1200); 
+}
+
+function closeAdminAttendanceStats() {
+    document.getElementById('adminAttStatsModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    if(adminAttUnsubTrainees) { adminAttUnsubTrainees(); adminAttUnsubTrainees = null; }
+    if(adminAttUnsubFramers) { adminAttUnsubFramers(); adminAttUnsubFramers = null; }
+}
+
+function toggleStatDateInputs() {
+    const mode = document.getElementById('statDateMode').value;
+    document.getElementById('statDateSpecific').style.display = mode === 'specific' ? 'inline-block' : 'none';
+    document.getElementById('statDateFrom').style.display = mode === 'range' ? 'inline-block' : 'none';
+    document.getElementById('statDateTo').style.display = mode === 'range' ? 'inline-block' : 'none';
+    renderAdminAttendanceStats();
+}
+
+function setStatStatus(status) {
+    document.getElementById('statStatusFilter').value = status;
+    renderAdminAttendanceStats();
+}
+
+function renderAdminAttendanceStats() {
+    const catF = document.getElementById('statCatFilter').value;
+    const centerF = document.getElementById('statCenterFilter').value;
+    const dateMode = document.getElementById('statDateMode').value;
+    const statusF = document.getElementById('statStatusFilter').value;
+    const search = document.getElementById('statSearch').value.toLowerCase();
+
+    const todayDate = new Date().toISOString().split('T')[0];
+    let datesToProcess = new Set();
+    let rawDocs = catF === 'trainees' ? adminAttDataTrainees : adminAttDataFramers;
+
+    // استنتاج الدورة أو تحديد النطاق الزمني
+    let sessionText = "";
+
+    if (dateMode === 'today') {
+        datesToProcess.add(todayDate);
+        sessionText = getSessionByDate(todayDate);
+    } else if (dateMode === 'specific') {
+        const specDate = document.getElementById('statDateSpecific').value;
+        datesToProcess.add(specDate);
+        sessionText = getSessionByDate(specDate);
+    } else if (dateMode === 'range') {
+        let curr = new Date(document.getElementById('statDateFrom').value);
+        let end = new Date(document.getElementById('statDateTo').value);
+        sessionText = "من " + document.getElementById('statDateFrom').value + " إلى " + document.getElementById('statDateTo').value;
+        while(curr <= end) {
+            datesToProcess.add(curr.toISOString().split('T')[0]);
+            curr.setDate(curr.getDate() + 1);
+        }
+    } else if (dateMode === 's1' || dateMode === 's2' || dateMode === 's3') {
+        // 🌟 الفلترة حسب تواريخ الدورة المجلوبة من قاعدة البيانات 🌟
+        const dates = SITE_SETTINGS.SESSION_DATES || {};
+        let startStr = dates[dateMode]?.start;
+        let endStr = dates[dateMode]?.end;
+        
+        if (startStr && endStr) {
+            let curr = new Date(startStr);
+            let end = new Date(endStr);
+            while(curr <= end) {
+                datesToProcess.add(curr.toISOString().split('T')[0]);
+                curr.setDate(curr.getDate() + 1);
+            }
+            sessionText = dateMode === 's1' ? "الدورة الأولى" : (dateMode === 's2' ? "الدورة الثانية" : "الدورة الثالثة");
+        } else {
+            sessionText = "تواريخ الدورة غير مضبوطة في إعدادات الموقع";
+        }
+    } else if (dateMode === 'all') {
+        rawDocs.forEach(d => { if(centerF === 'الكل' || d.center === centerF) datesToProcess.add(d.date); });
+    }
+
+    // إظهار أو إخفاء حقل معلومات النطاق
+    const infoDiv = document.getElementById('statSessionInfo');
+    if(dateMode === 'all') {
+        infoDiv.style.display = 'none';
+        window.currentStatSessionText = "متعدد الدورات (كل الأيام)";
+    } else {
+        infoDiv.style.display = 'block';
+        infoDiv.innerHTML = `<i class="fa-solid fa-bullseye"></i> نطاق الفلترة: [ ${sessionText} ]`;
+        window.currentStatSessionText = sessionText;
+    }
+
+    let centersList = centerF === 'الكل' ? Object.keys(SITE_SETTINGS.UI_NAMES.centers).map(k=>SITE_SETTINGS.UI_NAMES.centers[k]) : [centerF];
+    
+    // ربط الأسماء والمراكز
+    let assignedMap = {};
+    centersList.forEach(c => {
+        if (catF === 'trainees') assignedMap[c] = allData.filter(d => d.center === c);
+        else assignedMap[c] = globalFramersListForStats.filter(d => d.center === c);
+    });
+
+    let flatRecords = [];
+    centersList.forEach(center => {
+        let people = assignedMap[center] || [];
+        datesToProcess.forEach(date => {
+            if(!date) return;
+            let docId = `${center}_${date}`;
+            let docData = rawDocs.find(d => d.id === docId);
+            let records = docData ? docData.records : {};
+            
+            people.forEach(p => {
+                let rec = records[p.empId] || { status: 'غير محدد', time: '--:--' };
+                flatRecords.push({
+                    empId: p.empId,
+                    name: p.name,
+                    photoUrl: p.photoUrl_fb || p.preFetchedPhoto, // تمرير الصورة
+                    rank: p.rank || '-',
+                    specialty: p.specialty || '-',
+                    group: p.group || '-',
+                    role: p.role || '-',
+                    center: center,
+                    date: date,
+                    status: rec.status,
+                    time: rec.time || '--:--',
+                    session: getSessionByDate(date)
+                });
+            });
+        });
+    });
+
+    // فلترة البحث والحالة
+    statProcessedRecords = flatRecords.filter(r => {
+        let matchStatus = statusF === 'الكل' || r.status === statusF;
+        let matchSearch = (r.name||'').toLowerCase().includes(search) || (r.empId||'').toLowerCase().includes(search);
+        return matchStatus && matchSearch;
+    });
+
+    // الإحصاء (للأسطر المطابقة للبحث)
+    let stats = { total: 0, present: 0, absent: 0, late: 0, unspecified: 0 };
+    let centerStats = {};
+    centersList.forEach(c => centerStats[c] = { total: 0, present: 0, absent: 0, late: 0 });
+
+    let searchOnlyRecords = flatRecords.filter(r => (r.name||'').toLowerCase().includes(search) || (r.empId||'').toLowerCase().includes(search));
+
+    searchOnlyRecords.forEach(r => {
+        stats.total++;
+        if(centerStats[r.center]) centerStats[r.center].total++;
+        
+        if (r.status === 'حاضر') { stats.present++; if(centerStats[r.center]) centerStats[r.center].present++; }
+        else if (r.status === 'غائب') { stats.absent++; if(centerStats[r.center]) centerStats[r.center].absent++; }
+        else if (r.status === 'متأخر') { stats.late++; if(centerStats[r.center]) centerStats[r.center].late++; }
+        else { stats.unspecified++; }
+    });
+
+    let showLate = catF === 'trainees' || stats.late > 0;
+    const btnLateFramersControl = document.getElementById('btnLateFramersControl');
+    if (btnLateFramersControl) btnLateFramersControl.style.display = showLate ? 'inline-flex' : 'none';
+    
+    let thCenterLate = document.getElementById('thCenterLate');
+    if(thCenterLate) thCenterLate.style.display = showLate ? 'table-cell' : 'none';
+
+    // بناء البطاقات الإحصائية الاحترافية
+    const calcPct = (val) => stats.total > 0 ? ((val/stats.total)*100).toFixed(1) : 0;
+    let cardsHtml = `
+        <div class="stat-hero-card" style="border-color: #1e293b;">
+            <div class="stat-hero-title">الإجمالي للفلتر</div>
+            <div class="stat-hero-value" style="color: #1e293b;">${stats.total}</div>
+        </div>
+        <div class="stat-hero-card" style="border-color: #0FBA50; background: #f0fdf4;">
+            <div class="stat-hero-title">الحاضرون</div>
+            <div class="stat-hero-value" style="color: #0FBA50;">${stats.present}</div>
+            <div class="stat-hero-sub" style="color: #0FBA50;">نسبة الحضور: ${calcPct(stats.present)}%</div>
+        </div>
+        <div class="stat-hero-card" style="border-color: #d90429; background: #fff5f5;">
+            <div class="stat-hero-title">الغائبون</div>
+            <div class="stat-hero-value" style="color: #d90429;">${stats.absent}</div>
+            <div class="stat-hero-sub" style="color: #d90429;">نسبة الغياب: ${calcPct(stats.absent)}%</div>
+        </div>
+    `;
+    if(showLate) {
+        cardsHtml += `
+        <div class="stat-hero-card" style="border-color: #ff9800; background: #fffaf0;">
+            <div class="stat-hero-title">المتأخرون</div>
+            <div class="stat-hero-value" style="color: #ff9800;">${stats.late}</div>
+            <div class="stat-hero-sub" style="color: #ff9800;">نسبة التأخر: ${calcPct(stats.late)}%</div>
+        </div>`;
+    }
+    cardsHtml += `
+        <div class="stat-hero-card" style="border-color: #94a3b8; background: #f8fafc;">
+            <div class="stat-hero-title">غير محدد</div>
+            <div class="stat-hero-value" style="color: #64748b;">${stats.unspecified}</div>
+        </div>
+    `;
+    document.getElementById('statCardsContainer').innerHTML = cardsHtml;
+
+    // جدول مقارنة المراكز
+    const compContainer = document.getElementById('statCenterComparisonContainer');
+    if (centerF === 'الكل' && centersList.length > 1) {
+        compContainer.style.display = 'block';
+        let cHtml = '';
+        centersList.forEach(c => {
+            let cs = centerStats[c];
+            if (cs.total > 0) {
+                let cpct = ((cs.present/cs.total)*100).toFixed(1);
+                cHtml += `
+                    <tr>
+                        <td style="font-weight:bold; color:#1E68E8; text-align:right;">${c}</td>
+                        <td style="text-align:center; font-weight:bold;">${cs.total}</td>
+                        <td style="text-align:center; color:#0FBA50; font-weight:bold;">${cs.present}</td>
+                        <td style="text-align:center; color:#d90429; font-weight:bold;">${cs.absent}</td>
+                        ${showLate ? `<td style="text-align:center; color:#ff9800; font-weight:bold;">${cs.late}</td>` : ''}
+                        <td style="text-align:center; font-weight:bold; background:#e8fbf0; color:#0FBA50;">${cpct}%</td>
+                    </tr>
+                `;
+            }
+        });
+        document.getElementById('statCenterComparisonBody').innerHTML = cHtml;
+    } else {
+        compContainer.style.display = 'none';
+    }
+
+    // إعداد الترويسة بدون حقل (الدورة) لتظهر الصورة بدلا منها ويبقى التاريخ
+    const thead = document.getElementById('statDetailsHead');
+    if (catF === 'trainees') {
+        thead.innerHTML = `<tr><th style="width:40px; text-align:center;">#</th><th style="width:50px; text-align:center;">الصورة</th><th style="text-align:center;">الرقم</th><th style="text-align:right;">الاسم</th><th style="text-align:center;">المركز</th><th style="text-align:right;">الرتبة والتخصص</th><th style="text-align:center;">الفوج</th><th style="text-align:center; direction:ltr;">التاريخ</th><th style="text-align:center;">الوضعية</th><th style="width:100px; text-align:center;">إجراء</th></tr>`;
+    } else {
+        thead.innerHTML = `<tr><th style="width:40px; text-align:center;">#</th><th style="width:50px; text-align:center;">الصورة</th><th style="text-align:center;">الرقم</th><th style="text-align:right;">الاسم</th><th style="text-align:center;">المركز</th><th style="text-align:center;">الوظيفة</th><th style="text-align:center; direction:ltr;">التاريخ</th><th style="text-align:center;">الوضعية</th><th style="width:100px; text-align:center;">إجراء</th></tr>`;
+    }
+
+    statCurrentPage = 1;
+    renderStatDetailsTable();
+}
+
+function renderStatDetailsTable() {
+    const tbody = document.getElementById('statDetailsBody');
+    tbody.innerHTML = '';
+    const catF = document.getElementById('statCatFilter').value;
+
+    if (statProcessedRecords.length === 0) {
+        let cols = catF === 'trainees' ? 10 : 9;
+        tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center; padding:20px; font-weight:bold;">لا توجد سجلات مطابقة للفلتر.</td></tr>`;
+        document.getElementById('statPagination').style.display = 'none';
+        return;
+    }
+
+    const totalPages = Math.ceil(statProcessedRecords.length / statRowsPerPage);
+    const start = (statCurrentPage - 1) * statRowsPerPage;
+    const paginated = statProcessedRecords.slice(start, start + statRowsPerPage);
+
+    paginated.forEach((r, idx) => {
+        let statusColor = r.status === 'حاضر' ? '#0FBA50' : (r.status === 'غائب' ? '#d90429' : (r.status === 'متأخر' ? '#ff9800' : '#777'));
+        let bgStyle = r.status === 'غائب' ? 'background:#ffeaea;' : (r.status === 'متأخر' ? 'background:#fff8eb;' : '');
+        
+        // تجهيز الصورة
+        let coreEmpId = extractCoreId(r.empId);
+        let driveUrl = employeePhotosMap[coreEmpId];
+        let initialUrl = r.photoUrl ? r.photoUrl : driveUrl;
+        
+        const photoHtml = `<div class="profile-pic-container" style="width:36px; height:36px; margin:0 auto; border-color:#cbd5e1;">
+            ${initialUrl ? `<img src="${initialUrl}" class="profile-pic-img" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size:16px;"></i>`}
+        </div>`;
+
+        let html = `<tr style="${bgStyle}">
+            <td style="text-align:center;">${start + idx + 1}</td>
+            <td style="text-align:center; vertical-align:middle;">${photoHtml}</td>
+            <td style="text-align:center; font-weight:bold; font-family:monospace;">${r.empId}</td>
+            <td style="text-align:right; font-weight:bold;">${r.name}</td>
+            <td style="text-align:center; font-weight:bold; color:#1E68E8;">${r.center}</td>
+        `;
+
+        if (catF === 'trainees') {
+            html += `<td style="text-align:right; line-height:1.4;">${r.rank}<br><span style="font-size:12px; color:#555;">${r.specialty}</span></td>
+                     <td style="text-align:center; font-weight:bold;">${r.group}</td>`;
+        } else {
+            html += `<td style="text-align:center; font-weight:bold; color:#e67e22;">${r.role}</td>`;
+        }
+
+        // تم إزالة اسم الدورة من الجدول، والاعتماد على التاريخ فقط، مع إضافة زر (السجل)
+        let safeName = (r.name || '').replace(/'/g, "\\'");
+        html += `
+            <td style="text-align:center; direction:ltr; font-family:monospace; font-weight:bold;">${r.date}</td>
+            <td style="text-align:center;">
+                <span style="color:${statusColor}; font-weight:bold;">${r.status}</span><br>
+                <span style="font-size:11px; color:#555;">${r.time}</span>
+            </td>
+            <td style="text-align:center; vertical-align:middle;">
+                <button onclick="viewAdminAttHistory('${r.empId}', '${safeName}')" class="btn-print" style="background:#102a43; padding:5px 12px; margin:0 auto; font-size:12px; border-radius:6px;" title="عرض سجل غيابات وحضور هذا الشخص">
+                    <i class="fa-solid fa-clock-rotate-left"></i> السجل
+                </button>
+            </td>
+        </tr>`;
+        tbody.innerHTML += html;
+    });
+
+    renderStatPagination(totalPages);
+}
+
+function renderStatPagination(totalPages) {
+    const container = document.getElementById("statPagination");
+    if (totalPages <= 1) { container.style.display = "none"; return; }
+    container.style.display = "flex";
+    
+    let startItem = (statCurrentPage - 1) * statRowsPerPage + 1;
+    let endItem = Math.min(statCurrentPage * statRowsPerPage, statProcessedRecords.length);
+    
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${statProcessedRecords.length} سجل</div>`;
+    html += `<div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${statCurrentPage === 1 ? 'disabled' : ''} onclick="changeStatPage(${statCurrentPage - 1})">السابق</button>`;
+
+    let startPage = Math.max(1, statCurrentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="page-btn ${i === statCurrentPage ? 'active' : ''}" onclick="changeStatPage(${i})">${i}</button>`;
+    }
+
+    html += `<button class="page-btn" ${statCurrentPage === totalPages ? 'disabled' : ''} onclick="changeStatPage(${statCurrentPage + 1})">التالي</button></div>`;
+    container.innerHTML = html;
+}
+
+function changeStatPage(page) {
+    statCurrentPage = page;
+    renderStatDetailsTable();
+}
+
+// ================= دالة السجل الفردي للمتكون/المؤطر =================
+window.viewAdminAttHistory = function(empId, name) {
+    // جلب كل السجلات الخاصة بهذا الشخص من البيانات المفلترة حالياً
+    let userRecords = statProcessedRecords.filter(r => r.empId === empId);
+    userRecords.sort((a, b) => b.date.localeCompare(a.date)); // ترتيب تنازلي للأحدث
+
+    let pres = 0, abs = 0, late = 0, unspec = 0;
+    let rows = '';
+    
+    userRecords.forEach((r, idx) => {
+        if(r.status === 'حاضر') pres++;
+        else if(r.status === 'غائب') abs++;
+        else if(r.status === 'متأخر') late++;
+        else unspec++;
+
+        let c = r.status === 'حاضر' ? '#0FBA50' : (r.status === 'غائب' ? '#d90429' : (r.status === 'متأخر' ? '#ff9800' : '#777'));
+        rows += `<tr>
+            <td style="text-align:center;">${idx+1}</td>
+            <td dir="ltr" style="text-align:center; font-family:monospace; font-weight:bold;">${r.date}</td>
+            <td style="color:${c}; font-weight:bold; text-align:center;">${r.status} <span style="font-size:10px;">(${r.time})</span></td>
+        </tr>`;
+    });
+
+    let safeName = name.replace(/'/g, "\\'");
+
+    Swal.fire({
+        title: `<i class="fa-solid fa-clock-rotate-left" style="color:#102a43;"></i> سجل الحضور: ${name}`,
+        width: '600px',
+        html: `
+            <div style="display:flex; gap:10px; margin-bottom:15px; justify-content:center;">
+                <div style="background:#e8fbf0; color:#0FBA50; padding:10px; border-radius:8px; border:1px solid #0FBA50; flex:1; font-weight:bold;">حاضر: ${pres}</div>
+                <div style="background:#ffeaea; color:#d90429; padding:10px; border-radius:8px; border:1px solid #d90429; flex:1; font-weight:bold;">غائب: ${abs}</div>
+                <div style="background:#fff8eb; color:#ff9800; padding:10px; border-radius:8px; border:1px solid #ff9800; flex:1; font-weight:bold;">متأخر: ${late}</div>
+            </div>
+            <div style="max-height:300px; overflow-y:auto; border:1px solid #ddd; border-radius:8px;">
+                <table class="att-table" style="width:100%; margin:0;">
+                    <thead style="background:#102a43; color:white; position:sticky; top:0;">
+                        <tr><th style="width:40px; text-align:center;">#</th><th style="text-align:center;">التاريخ</th><th style="text-align:center;">الوضعية والتوقيت</th></tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <div style="margin-top:15px; text-align:center;">
+                <button class="btn-print" style="margin:0 auto; background:#1E68E8; padding:8px 20px;" onclick="printAdminAttHistory('${empId}', '${safeName}')"><i class="fa-solid fa-print"></i> طباعة السجل الفردي</button>
+            </div>
+        `,
+        showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+    });
+};
+
+// ================= دالة طباعة السجل الفردي =================
+window.printAdminAttHistory = function(empId, name) {
+    let userRecords = statProcessedRecords.filter(r => r.empId === empId);
+    userRecords.sort((a, b) => b.date.localeCompare(a.date));
+    
+    let pres = 0, abs = 0, late = 0;
+    let rows = '';
+    
+    userRecords.forEach((r, idx) => {
+        if(r.status === 'حاضر') pres++;
+        else if(r.status === 'غائب') abs++;
+        else if(r.status === 'متأخر') late++;
+
+        rows += `<tr>
+            <td style="text-align:center;">${idx+1}</td>
+            <td dir="ltr" style="text-align:center; font-family:monospace;">${r.date}</td>
+            <td style="text-align:center; font-weight:bold;">${r.status} <span style="font-size:11px;">(${r.time})</span></td>
+        </tr>`;
+    });
+
+    let printWindow = window.open('', '', 'width=800,height=900');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>سجل حضور - ${name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .title { text-align: center; font-size: 20px; font-weight: 900; text-decoration: underline; margin-bottom: 20px; }
+            .info-box { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-bottom: 20px; background: #fafafa; font-size: 15px; font-weight: bold;}
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            table.data-table th, table.data-table td { border: 1px solid #000; padding: 8px; font-size: 14px; text-align: center; }
+            table.data-table th { background: #f0f0f0; font-weight: 700; }
+            .totals-box { display: flex; justify-content: space-around; border: 2px solid #000; padding: 10px; border-radius: 8px; font-size: 16px; font-weight: bold; background: #eee; }
+            @media print { th, .totals-box { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } .info-box{background: transparent;} }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية<br>مديرية التربية لولاية توقرت</div>
+        <div class="title">السجل التفصيلي للحضور والغياب</div>
+        <div class="info-box">
+            الاسم واللقب: ${name} <br>
+            الرقم الوظيفي: <span style="font-family:monospace;" dir="ltr">${empId}</span> <br>
+            نطاق الإحصاء: ${window.currentStatSessionText}
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr><th style="width:10%;">الرقم</th><th style="width:40%;">التاريخ</th><th style="width:50%;">الوضعية المسجلة</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <div class="totals-box">
+            <div>حاضر: ${pres}</div>
+            <div>غائب: ${abs}</div>
+            <div>متأخر: ${late}</div>
+            <div>الإجمالي: ${userRecords.length}</div>
+        </div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ================= دالة الطباعة الشاملة =================
+window.printAdminAttStats = function() {
+    if(statProcessedRecords.length === 0) return Swal.fire('تنبيه', 'لا توجد بيانات للطباعة', 'info');
+    
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let catF = document.getElementById('statCatFilter').value;
+    let isTrainees = catF === 'trainees';
+    let titleStr = "التقرير الشامل للحضور - " + (isTrainees ? "المتكونون" : "المؤطرون");
+
+    let rowsHtml = '';
+    statProcessedRecords.forEach((r, idx) => {
+        let extraCol = isTrainees ? `<td>${r.specialty}</td><td>${r.group}</td>` : `<td colspan="2">${r.role}</td>`;
+        rowsHtml += `<tr>
+            <td style="text-align:center;">${idx + 1}</td>
+            <td style="text-align:center; font-family:monospace;">${r.empId}</td>
+            <td style="text-align:right;"><b>${r.name}</b></td>
+            <td style="text-align:center;">${r.center}</td>
+            ${extraCol}
+            <td style="text-align:center; direction:ltr;">${r.date}</td>
+            <td style="text-align:center; font-weight:bold;">${r.status} <span style="font-size:11px;">(${r.time})</span></td>
+        </tr>`;
+    });
+
+    let extraTh = isTrainees ? `<th>التخصص</th><th>الفوج</th>` : `<th colspan="2">الوظيفة بالمركز</th>`;
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head><meta charset="UTF-8"><title>${titleStr}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; padding: 20px; font-size: 13px; }
+        .header { text-align: center; font-weight: 700; font-size: 15px; margin-bottom: 10px; }
+        .title { text-align: center; font-size: 20px; font-weight: 900; margin-bottom: 20px; text-decoration: underline; }
+        .sub-titles { text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; color: #333; background: #f9f9f9; padding: 8px 15px; border-radius: 5px; border: 1px dashed #ccc; display: table; margin: 0 auto 20px auto;}
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: right; }
+        th { background: #eee; text-align: center; font-weight: bold; }
+        @media print { th { background-color: #eee !important; -webkit-print-color-adjust: exact; } .sub-titles {background: transparent; border:none;} }
+    </style></head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية<br>مديرية التربية لولاية توقرت</div>
+        <div class="title">${titleStr}</div>
+        ${window.currentStatSessionText ? `<div class="sub-titles">الفترة الزمنية: ${window.currentStatSessionText}</div>` : ''}
+        <table>
+            <thead><tr><th style="width:4%;">#</th><th style="width:10%;">الرقم</th><th style="width:20%;">الاسم</th><th style="width:15%;">المركز</th>${extraTh}<th style="width:15%;">التاريخ</th><th style="width:12%;">الوضعية</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        <script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script>
+    </body></html>`;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.exportAdminAttStatsExcel = async function() {
+    if (statProcessedRecords.length === 0) return Swal.fire('تنبيه', 'لا توجد بيانات.', 'info');
+    Swal.fire({ title: 'جاري التصدير...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const catF = document.getElementById('statCatFilter').value;
+        const isTrainees = catF === 'trainees';
+        const ws = workbook.addWorksheet('سجلات الحضور', { views: [{ rightToLeft: true }] });
+
+        let cols = [
+            { header: 'الرقم', key: 'idx', width: 5 },
+            { header: 'الرقم الوظيفي', key: 'empId', width: 15 },
+            { header: 'الاسم واللقب', key: 'name', width: 30 },
+            { header: 'المركز', key: 'center', width: 20 }
+        ];
+
+        if (isTrainees) {
+            cols.push({ header: 'الرتبة', key: 'rank', width: 20 });
+            cols.push({ header: 'التخصص', key: 'specialty', width: 25 });
+            cols.push({ header: 'الفوج', key: 'group', width: 15 });
+        } else {
+            cols.push({ header: 'الوظيفة بالمركز', key: 'role', width: 25 });
+        }
+
+        cols.push({ header: 'التاريخ', key: 'date', width: 15 });
+        cols.push({ header: 'الحالة', key: 'status', width: 15 });
+        cols.push({ header: 'التوقيت', key: 'time', width: 12 });
+
+        ws.columns = cols;
+
+        statProcessedRecords.forEach((r, i) => {
+            let rowObj = {
+                idx: i + 1, empId: r.empId, name: r.name, center: r.center,
+                date: r.date, status: r.status, time: r.time
+            };
+            if(isTrainees) {
+                rowObj.rank = r.rank; rowObj.specialty = r.specialty; rowObj.group = r.group;
+            } else {
+                rowObj.role = r.role;
+            }
+            ws.addRow(rowObj);
+        });
+
+        ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE91E63' } };
+        ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `احصاء_الحضور_${new Date().getTime()}.xlsx`);
+        Swal.close();
+    } catch(e) {
+        Swal.fire('خطأ', 'فشل التصدير', 'error');
+    }
+};
+// =====================================================================
+
+// =========================================================================
+// GOOGLE DRIVE STRUCTURE MANAGER - نظام إدارة مجلدات جوجل درايف
+// =========================================================================
+
+// 1. تهيئة إعدادات درايف الافتراضية إذا لم تكن موجودة
+function initDriveSettings() {
+    let needsSave = false;
+    if (!SITE_SETTINGS.DRIVE_SETTINGS) {
+        SITE_SETTINGS.DRIVE_SETTINGS = {
+            rootFolderId: "",
+            rootFolderUrl: "",
+            academicYear: "2026-2027",
+            appsScriptUrl: ""
+        };
+        needsSave = true;
+    }
+    if (!SITE_SETTINGS.DRIVE_STRUCTURE) {
+        SITE_SETTINGS.DRIVE_STRUCTURE = {};
+        needsSave = true;
+    }
+    return needsSave;
+}
+
+// 2. استخراج ID المجلد من الرابط
+function extractDriveId(input) {
+    if (!input) return "";
+    let match = input.match(/folders\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    match = input.match(/id=([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    return input; // ربما أدخل الـ ID مباشرة
+}
+
+// 3. واجهة تبويب Google Drive
+window.renderDriveTab = function() {
+    initDriveSettings();
+    const body = document.getElementById('settingsBody');
+    const dSettings = SITE_SETTINGS.DRIVE_SETTINGS;
+
+    let html = `
+    <div class="setting-card">
+        <h3><i class="fa-brands fa-google-drive"></i> إعدادات الربط مع Google Drive</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div>
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">رابط Web App (Apps Script):</label>
+                <input type="text" id="drive_script_url" class="crud-input" value="${dSettings.appsScriptUrl}" placeholder="https://script.google.com/macros/s/..." dir="ltr">
+            </div>
+            <div>
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">رابط أو معرف المجلد الرئيسي (Root):</label>
+                <input type="text" id="drive_root_id" class="crud-input" value="${dSettings.rootFolderId}" placeholder="مثال: 1aBcDeFgHiJkLmNoPqRsTuVwXyZ" dir="ltr">
+            </div>
+            <div>
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">السنة الدراسية الحالية:</label>
+                <input type="text" id="drive_academic_year" class="crud-input" value="${dSettings.academicYear}" placeholder="2026-2027" style="font-weight:bold; text-align:center;">
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-action btn-save" onclick="saveDriveSettings()"><i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات</button>
+            <button class="btn-action" style="background:#f59e0b;" onclick="testDriveConnection()"><i class="fa-solid fa-wifi"></i> اختبار الاتصال</button>
+        </div>
+    </div>
+
+    <div class="setting-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin:0; border:none; padding:0;"><i class="fa-solid fa-folder-tree"></i> المزامنة وإدارة الهيكلة</h3>
+            <button class="btn-action" style="background:#1E68E8; font-size: 15px;" onclick="syncAllCentersDrive()"><i class="fa-solid fa-rotate"></i> مزامنة / إنشاء المجلدات لجميع المراكز</button>
+        </div>
+        
+        <div id="driveTreeContainer" style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; max-height: 500px; overflow-y: auto;">
+            ${buildDriveTreeHtml()}
+        </div>
+    </div>`;
+
+    body.innerHTML = html;
+}
+
+// 4. بناء شجرة المجلدات في الواجهة
+function buildDriveTreeHtml() {
+    let year = SITE_SETTINGS.DRIVE_SETTINGS.academicYear;
+    let centers = SITE_SETTINGS.UI_NAMES.centers;
+    
+    let html = `<details open style="margin-bottom:10px;">
+        <summary style="font-weight:bold; font-size:16px; cursor:pointer; color:#0FBA50;">
+            <i class="fa-solid fa-folder"></i> ملفات مراكز التكوين - ${year}
+        </summary>
+        <div style="margin-right: 20px; margin-top: 10px; border-right: 2px dashed #cbd5e1; padding-right: 15px;">`;
+
+    for (let key in centers) {
+        let centerName = centers[key];
+        html += `
+        <div style="margin-bottom: 10px; background: white; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; display:flex; justify-content: space-between; align-items:center;">
+            <strong style="color:#1E68E8;"><i class="fa-solid fa-school"></i> ${centerName}</strong>
+            <button class="btn-action" style="background:#10b981; padding: 5px 10px; font-size: 12px;" onclick="syncSingleCenterDrive('${key}')">
+                <i class="fa-solid fa-cloud-arrow-up"></i> مزامنة المركز
+            </button>
+        </div>`;
+    }
+
+    html += `</div></details>`;
+    return html;
+}
+
+// 5. حفظ إعدادات درايف
+window.saveDriveSettings = async function() {
+    let scriptUrl = document.getElementById('drive_script_url').value.trim();
+    let rootIdInput = document.getElementById('drive_root_id').value.trim();
+    let year = document.getElementById('drive_academic_year').value.trim();
+
+    if (!scriptUrl || !rootIdInput || !year) {
+        return Swal.fire('خطأ', 'يرجى تعبئة جميع الحقول', 'error');
+    }
+
+    SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl = scriptUrl;
+    SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId = extractDriveId(rootIdInput);
+    SITE_SETTINGS.DRIVE_SETTINGS.academicYear = year;
+
+    await saveSettingsToFirestore(true, 'تم حفظ إعدادات Google Drive بنجاح');
+    renderDriveTab();
+}
+
+// 6. اختبار الاتصال
+window.testDriveConnection = async function() {
+    const dSettings = SITE_SETTINGS.DRIVE_SETTINGS;
+    if (!dSettings.appsScriptUrl || !dSettings.rootFolderId) return Swal.fire('تنبيه', 'احفظ الإعدادات أولاً', 'warning');
+
+    Swal.fire({ title: 'جاري الاتصال...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        let res = await fetch(dSettings.appsScriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'testConnection', rootFolderId: dSettings.rootFolderId })
+        });
+        let data = await res.json();
+        if (data.success) {
+            Swal.fire('نجاح', `تم الاتصال بنجاح. اسم المجلد الرئيسي:\n${data.name}`, 'success');
+        } else {
+            Swal.fire('فشل', 'تأكد من المعرف وصلاحيات Apps Script.', 'error');
+        }
+    } catch (e) {
+        Swal.fire('خطأ بالاتصال', 'تأكد من رابط الـ Apps Script واتصال الإنترنت.', 'error');
+    }
+}
+
+// 7. الدالة الجوهرية: تجهيز الهيكل وإرساله للـ Apps Script
+async function processCenterSync(centerKey) {
+    const dSettings = SITE_SETTINGS.DRIVE_SETTINGS;
+    const centerName = SITE_SETTINGS.UI_NAMES.centers[centerKey];
+    const centerLinks = SITE_SETTINGS.dbLinks[centerKey] || {};
+    
+    // بناء الهيكلة المطلوبة للمركز
+    let payloadStructure = { "1": {}, "2": {}, "3": {} };
+    
+    [1, 2, 3].forEach(session => {
+        for (let lvlKey in centerLinks) {
+            payloadStructure[session][lvlKey] = { name: FIXED_LEVELS[lvlKey], specs: {} };
+            
+            for (let specKey in centerLinks[lvlKey]) {
+                payloadStructure[session][lvlKey].specs[specKey] = { name: FIXED_SPECS[specKey], modules: [] };
+                
+                for (let modKey in SITE_SETTINGS.MODULE_CYCLE_STATUS) {
+                    // إرسال فقط المقاييس التي لا تزال موجودة في إعدادات النظام
+                    if (centerLinks[lvlKey][specKey][modKey]) {
+                        payloadStructure[session][lvlKey].specs[specKey].modules.push({
+                            key: modKey,
+                            name: MODULE_AR_NAMES[modKey] || modKey
+                        });
+                    }
+                }
+            }
+        }
+    });
+
+    const payload = {
+        action: "syncCenter",
+        rootFolderId: dSettings.rootFolderId,
+        academicYear: dSettings.academicYear,
+        centerName: centerName,
+        structure: payloadStructure
+    };
+
+    // الاتصال بـ Apps Script
+    let res = await fetch(dSettings.appsScriptUrl, { method: 'POST', body: JSON.stringify(payload) });
+    let result = await res.json();
+
+    if (!result.success) throw new Error(result.error);
+
+    // تحديث SITE_SETTINGS.dbLinks تلقائياً
+    let returnedLinks = result.links;
+    for (let session in returnedLinks) {
+        for (let lvlKey in returnedLinks[session]) {
+            for (let specKey in returnedLinks[session][lvlKey]) {
+                for (let modKey in returnedLinks[session][lvlKey][specKey]) {
+                    let folderData = returnedLinks[session][lvlKey][specKey][modKey];
+                    
+                    // تحديث الرابط في قاعدة البيانات الحالية
+                    if (SITE_SETTINGS.dbLinks[centerKey][lvlKey] && SITE_SETTINGS.dbLinks[centerKey][lvlKey][specKey] && SITE_SETTINGS.dbLinks[centerKey][lvlKey][specKey][modKey]) {
+                        // لا نستبدل الرابط إلا إذا كان فارغاً (لتجنب مسح تعديل يدوي قام به المدير)
+                        if (!SITE_SETTINGS.dbLinks[centerKey][lvlKey][specKey][modKey][session]) {
+                            SITE_SETTINGS.dbLinks[centerKey][lvlKey][specKey][modKey][session] = folderData.url;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 8. مزامنة مركز واحد
+window.syncSingleCenterDrive = async function(centerKey) {
+    if (!SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) return Swal.fire('تنبيه', 'يرجى إعداد Google Drive أولاً', 'warning');
+    
+    Swal.fire({
+        title: 'جاري إنشاء ومزامنة المجلدات',
+        html: `مركز: <b>${SITE_SETTINGS.UI_NAMES.centers[centerKey]}</b><br><br>يرجى الانتظار، قد تستغرق العملية بضع ثواني...`,
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        await processCenterSync(centerKey);
+        await saveSettingsToFirestore(false); // حفظ صامت
+        Swal.fire('تمت المزامنة بنجاح', 'تم بناء المجلدات وربطها تلقائياً بالنظام', 'success');
+    } catch (error) {
+        console.error(error);
+        Swal.fire('خطأ', 'حدث فشل أثناء المزامنة: ' + error.message, 'error');
+    }
+}
+
+// 9. مزامنة جميع المراكز
+window.syncAllCentersDrive = async function() {
+    if (!SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) return Swal.fire('تنبيه', 'يرجى إعداد Google Drive أولاً', 'warning');
+
+    let centersKeys = Object.keys(SITE_SETTINGS.UI_NAMES.centers);
+    if (centersKeys.length === 0) return Swal.fire('تنبيه', 'لا توجد مراكز للمزامنة', 'info');
+
+    let successCount = 0;
+    
+    Swal.fire({
+        title: 'مزامنة شاملة',
+        html: `جاري معالجة المراكز <span id="sync_progress">0 / ${centersKeys.length}</span>...<br><br><span id="sync_current_name" style="color:#1E68E8; font-weight:bold;"></span>`,
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    for (let i = 0; i < centersKeys.length; i++) {
+        let key = centersKeys[i];
+        document.getElementById('sync_current_name').innerText = SITE_SETTINGS.UI_NAMES.centers[key];
+        
+        try {
+            await processCenterSync(key);
+            successCount++;
+        } catch (error) {
+            console.error("Failed to sync center:", key, error);
+        }
+        document.getElementById('sync_progress').innerText = `${i + 1} / ${centersKeys.length}`;
+    }
+
+    await saveSettingsToFirestore(false);
+    
+    if (successCount === centersKeys.length) {
+        Swal.fire('اكتملت العملية', 'تمت مزامنة جميع المراكز بنجاح وتوليد روابطها الآلية.', 'success');
+    } else {
+        Swal.fire('مكتمل جزئياً', `تم مزامنة ${successCount} من أصل ${centersKeys.length} مراكز. تحقق من السجلات.`, 'warning');
+    }
+}
 
 </script>
 </body>
