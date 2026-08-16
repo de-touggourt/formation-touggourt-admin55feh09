@@ -180,7 +180,7 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
     </div>
 </section>
 
-<footer>© 2025 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
+<footer>© 2026 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
 
 <script>
 // ==================== 1. الحماية وإعدادات الجلسة ====================
@@ -242,7 +242,8 @@ let SITE_SETTINGS = null;
 const ICONS = {
     levels: {
         'primary': { name: 'الطور الابتدائي', icon: 'fa-child-reaching' },
-        'middle_secondary': { name: 'الطور المتوسط والثانوي', icon: 'fa-user-graduate' }
+        'middle': { name: 'الطور المتوسط', icon: 'fa-school' },
+        'secondary': { name: 'الطور الثانوي', icon: 'fa-user-graduate' }
     },
     specs: {
         'arabic': { name: 'اللغة العربية', icon: 'fa-book-open' },
@@ -376,10 +377,23 @@ function showLevelsModal(centerId, availableLevels) {
     let html = '<div class="icon-container">';
     
     availableLevels.forEach(lvlId => {
-        let lvlInfo = ICONS.levels[lvlId] || { name: lvlId, icon: 'fa-layer-group' };
+        // تحديد الأيقونة والاسم الافتراضي
+        let defaultIcon = 'fa-layer-group';
+        let defaultName = lvlId;
+        
+        if (ICONS.levels[lvlId]) {
+            defaultIcon = ICONS.levels[lvlId].icon;
+            defaultName = ICONS.levels[lvlId].name;
+        }
+        
+        // الأولوية لجلب الاسم العربي من إعدادات قاعدة البيانات (Firebase)
+        let levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
+                        ? SITE_SETTINGS.UI_NAMES.levels[lvlId] 
+                        : defaultName;
+
         html += `
           <div class="icon-btn" onclick="showSpecsModal('${centerId}', '${lvlId}', true)">
-            <i class="fa-solid ${lvlInfo.icon}"></i> ${lvlInfo.name}
+            <i class="fa-solid ${defaultIcon}"></i> ${levelName}
           </div>`;
     });
     

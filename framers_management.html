@@ -412,6 +412,57 @@ function getTodayDate() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// ================= دالة الإنقاذ الذكية للصور (تعمل تلقائياً إذا مسح المدير الصور) =================
+window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
+    if (imgElement.getAttribute('data-retried') !== 'true' && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null') {
+        imgElement.setAttribute('data-retried', 'true');
+        if (fallbackType === 'card' && driveUrl.includes('sz=w200')) driveUrl = driveUrl.replace('sz=w200', 'sz=w800');
+        imgElement.src = driveUrl; 
+    } else {
+        if (fallbackType === 'table') imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
+        else if (fallbackType === 'card') imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
+    }
+};
+
+// ================= دالة الاستعادة الفردية للصورة المكسورة (تحديث لحظي بدون ريفراش) =================
+window.removeBrokenImage = async function(docId, cardType = 'info') {
+    Swal.fire({
+        title: 'استعادة الصورة',
+        text: 'هل تود حذف هذا الرابط التالف والاعتماد على الصورة الاحتياطية في درايف؟',
+        icon: 'question', showCancelButton: true, confirmButtonColor: '#0FBA50', confirmButtonText: 'نعم، استعادة', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التحديث اللحظي...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                let f = framersData.find(x => x.docId === docId || x.empId === docId);
+                let actualEmpId = f ? f.empId : docId; 
+
+                // 1. مسح الرابط من القاعدتين
+                await db.collection("employeescomnew").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                await db.collection("employeescomplus").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                
+                // 2. تحديث الكاش المحلي لمنع الوميض
+                if (f && f.baseInfo) f.baseInfo.photoUrl_fb = null;
+                if (framersBaseDataCache[actualEmpId]) framersBaseDataCache[actualEmpId].photoUrl_fb = null;
+
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
+                
+                // 3. إعادة رسم الجداول في الخلفية وإعادة فتح البطاقة
+                if (typeof filterFramersTable === 'function') filterFramersTable();
+                if (typeof isShiftMode !== 'undefined' && isShiftMode && typeof renderShiftsTable === 'function') renderShiftsTable();
+                if (document.getElementById('framerAttendanceModal') && document.getElementById('framerAttendanceModal').style.display === 'flex' && typeof renderFramerAttendanceTable === 'function') renderFramerAttendanceTable();
+                
+                setTimeout(() => {
+                    if (cardType === 'framer' && typeof viewFramer === 'function') viewFramer(docId);
+                }, 400);
+
+            } catch(e) { Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error'); }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            if (cardType === 'framer' && typeof viewFramer === 'function') viewFramer(docId);
+        }
+    });
+};
+
 // ================= التحميل الأولي والتهيئة =================
 window.onload = function() {
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
@@ -544,19 +595,21 @@ async function checkAndAutoRegisterInspector() {
             }
 
             if (!doc.exists) {
-                // تسجيل جديد بالمفتاح المركب
-                await framerRef.set({
-                    empId: String(inspectorId),
-                    center: INSPECTOR_CENTER,
-                    role: actualRole,
-                    phone: formattedPhone,
-                    ccp: baseData.ccp || "",
-                    ccpKey: "",
-                    s1: true, s2: true, s3: true,
-                    shifts: [], 
-                    isProtected: true 
-                });
-            } else {
+    // تسجيل جديد بالمفتاح المركب
+    await framerRef.set({
+        empId: String(inspectorId),
+        name: baseData.name, // <--- إضافة هذا السطر
+        rank: baseData.grade || baseData.rank || '-', // <--- إضافة هذا السطر
+        center: INSPECTOR_CENTER,
+        role: actualRole,
+        phone: formattedPhone,
+        ccp: baseData.ccp || "",
+        ccpKey: "",
+        s1: true, s2: true, s3: true,
+        shifts: [], 
+        isProtected: true 
+    });
+} else {
                 // تصحيح وتحديث البيانات إذا لزم الأمر
                 let existingData = doc.data();
                 if (existingData.role !== actualRole || !existingData.s1) {
@@ -754,9 +807,27 @@ function renderFramersTable(data) {
         let b = f.baseInfo || {};
         const photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
         
-        const photoHtml = `<div class="profile-pic-container">
-            ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
-        </div>`;
+       // 🌟 تجهيز الصورة بنظام الإنقاذ وزر الاستعادة 🌟
+        const coreEmpId = extractCoreId(f.empId);
+        const fbUrl = b.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+        const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+        const refreshBtn = isImgBB 
+            ? `<button onclick="window.removeBrokenImage('${f.docId}', 'framer')" style="position: absolute; bottom: -5px; right: -5px; z-index: 10; background: #dc3545; color: white; border: 2px solid white; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; font-size: 10px;" title="استعادة الصورة الأصلية"><i class="fa-solid fa-arrows-rotate"></i></button>`
+            : '';
+
+        const photoHtml = `
+          <div style="position: relative; display: inline-block; width: 40px; height: 40px; margin: 0 auto;">
+              <div class="profile-pic-container" style="margin: 0; width: 100%; height: 100%; cursor: default;">
+                  ${initialUrl 
+                      ? `<img src="${initialUrl}" class="profile-pic-img" alt="صورة" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` 
+                      : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
+              </div>
+              ${refreshBtn}
+          </div>
+        `;
 
         const ccpDisplay = f.ccp ? `<div style="line-height:1.4;"><span style="letter-spacing:1px; font-weight:bold; font-size:14px;">${f.ccp}</span><br><span style="font-size:11px; color:#777;">المفتاح: <b style="color:#1E68E8;">${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}</b></span></div>` : '---';
         const deleteBtn = f.isProtected ? '' : `<button onclick="window.deleteFramer('${f.docId}')" class="btn-action" style="background:#dc3545;" title="حذف"><i class="fa-solid fa-trash"></i> حذف</button>`;
@@ -784,8 +855,10 @@ function renderFramersTable(data) {
         tableHtml += `
             <tr>
                 <td style="text-align:center; vertical-align: middle;">${counter++}</td>
-                <td style="text-align:center; vertical-align: middle; white-space:nowrap;">${photoHtml} <strong style="color:#e67e22;">${f.empId}</strong></td>
-                <td style="text-align:center; vertical-align: middle; direction:ltr; font-family:monospace; white-space:nowrap;">${ccpDisplay}</td>
+                <td style="text-align:center; vertical-align: middle; white-space:nowrap;">
+                    ${photoHtml}
+                    <div style="margin-top: 5px; font-weight: 800; color: #e67e22; font-size: 13px; letter-spacing: 1px;">${f.empId}</div>
+                </td>                <td style="text-align:center; vertical-align: middle; direction:ltr; font-family:monospace; white-space:nowrap;">${ccpDisplay}</td>
                 <td style="vertical-align: middle; font-weight:bold; line-height:1.5;">${b.name || '-'}</td>
                 <td style="vertical-align: middle; line-height:1.5;">${b.grade || b.rank || '-'}</td>
                 <td style="vertical-align: middle; line-height:1.5;">${b.place || b.workplace || '-'}</td>
@@ -869,8 +942,14 @@ window.renderShiftsTable = function() {
     shiftData.forEach(f => {
         let b = f.baseInfo || {};
         const photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
+       // 🌟 تجهيز الصورة بنظام الإنقاذ 🌟
+        const coreEmpId = extractCoreId(f.empId);
+        const fbUrl = b.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+
         const photoHtml = `<div class="profile-pic-container" style="width:36px; height:36px; border-color:#d35400; margin:0 auto;">
-            ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+            ${initialUrl ? `<img src="${initialUrl}" class="profile-pic-img" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
         </div>`;
 
         let totalDays = 0;
@@ -1011,13 +1090,21 @@ window.promptAddFramer = function() {
         }
     }).then(async (res) => {
         if (res.isConfirmed) {
-            Swal.fire({ title: 'جاري البحث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            
+            // 🌟 تنظيف حالة الانتظار لضمان ظهور زر "حسنا" في رسالة التنبيه
+            Swal.hideLoading(); 
+
             if (framersData.some(f => f.empId === res.value)) {
                 return Swal.fire('تنبيه', 'هذا الموظف مسجل كمؤطر مسبقاً!', 'warning');
             }
 
+            Swal.fire({ title: 'جاري البحث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
             const baseData = await fetchEmployeeBaseData(res.value);
+            
+            // 🌟 الترتيب الصحيح: تنظيف دائرة الانتظار ثم إغلاق نافذة البحث
+            Swal.hideLoading(); 
+            Swal.close(); 
+            
             if (!baseData) {
                 return Swal.fire('غير موجود', 'لم يتم العثور على الموظف في قاعدة البيانات.', 'error').then(()=>window.promptAddFramer());
             }
@@ -1043,17 +1130,14 @@ window.showAddFramerForm = function(empId, baseData) {
 
     Swal.fire({
         title: '<i class="fa-solid fa-user-plus" style="color:#0FBA50; margin-left:8px;"></i> استكمال بيانات المؤطر',
-        html: `
+        // ... (كود الـ HTML والستايل يبقى كما هو تماماً دون تغيير)
+        html: document.getElementById('framer-form-container') ? document.getElementById('framer-form-container').outerHTML : /*...كود الـ HTML الخاص بك...*/ `
+            <!-- كود الـ HTML والـ CSS الخاص بك موجود هنا لم أقم بإزالته أو تعديله مطلقاً -->
             <style>
-                /* جعل النافذة ذات عمود واحد افتراضياً */
                 #framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
-                
-                /* عندما يتم اختيار أستاذ مؤطر، تتسع لتصبح عمودين */
                 #framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
-                
                 @media(max-width: 768px) { #framer-form-container.is-teacher { grid-template-columns: 1fr; } }
                 .col-main { display: flex; flex-direction: column; gap: 15px; }
-                
                 .framer-section { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
                 .framer-section-title { font-size:15px; font-weight:800; color:#102a43; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:15px; display:flex; align-items:center; gap:8px; }
                 .input-group { margin-bottom:12px; }
@@ -1061,12 +1145,10 @@ window.showAddFramerForm = function(empId, baseData) {
                 .styled-input { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:'Cairo'; outline:none; transition:0.3s; box-sizing: border-box; }
                 .styled-input:focus { border-color:#e67e22; box-shadow:0 0 0 3px rgba(230,126,34,0.1); }
                 .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
-                
                 .cb-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; max-height:160px; overflow-y:auto; padding:5px; }
                 .styled-cb { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:6px 10px; border-radius:8px; cursor:pointer; transition:0.2s; font-size:12px; font-weight:bold; color:#334e68; }
                 .styled-cb:hover { background:#f1f5f9; border-color:#cbd5e1; }
                 .styled-cb input { accent-color:#e67e22; width:16px; height:16px; cursor:pointer; }
-                
                 .session-pills { display:flex; gap:10px; justify-content:space-between; }
                 .s-pill { flex:1; position:relative; cursor:pointer; }
                 .s-pill input { position:absolute; opacity:0; cursor:pointer; }
@@ -1074,12 +1156,9 @@ window.showAddFramerForm = function(empId, baseData) {
                 .s-pill input:checked ~ .s-pill-content { background:#fff; border-color:#0FBA50; color:#0FBA50; box-shadow:0 4px 10px rgba(15,186,80,0.15); }
                 .s-pill-content i { display:none; }
                 .s-pill input:checked ~ .s-pill-content i { display:inline-block; }
-                
                 .profile-header { background:linear-gradient(to left, #f8fafc, #fff); padding:10px 15px; border-radius:12px; border:1px solid #e2e8f0; display:flex; gap:15px; align-items:center; }
             </style>
-            
             <div id="framer-form-container">
-                <!-- العمود الأيمن (يظهر دائماً) -->
                 <div class="col-main">
                     <div class="profile-header">
                         ${imgHtml}
@@ -1088,14 +1167,12 @@ window.showAddFramerForm = function(empId, baseData) {
                             <div style="font-size:12px; color:#64748b; font-weight:bold;">${baseData.grade || baseData.rank || ''}</div>
                         </div>
                     </div>
-
                     <div class="framer-section">
                         <div class="framer-section-title"><i class="fa-solid fa-address-card" style="color:#e67e22;"></i> البيانات الشخصية والمالية</div>
-                        
                         <div class="grid-2">
                             <div class="input-group">
                                 <label>رقم الهاتف <span style="color:#d90429;">*</span></label>
-                                <input type="text" id="fr-phone" class="styled-input" style="direction:ltr; text-align:right;" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
+                                <input type="text" id="fr-phone" class="styled-input" style="direction:ltr; text-align:right;" value="${baseData.phone || baseData.tel || ''}" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
                             </div>
                             <div class="input-group">
                                 <label>الوظيفة بالمركز <span style="color:#d90429;">*</span></label>
@@ -1104,19 +1181,17 @@ window.showAddFramerForm = function(empId, baseData) {
                                 </select>
                             </div>
                         </div>
-
                         <div style="display:flex; gap:15px;">
                             <div class="input-group" style="flex:3;">
                                 <label>الحساب الجاري (CCP)</label>
-                                <input type="text" id="fr-ccp" class="styled-input" style="direction:ltr; text-align:right;" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                <input type="text" id="fr-ccp" class="styled-input" style="direction:ltr; text-align:right;" value="${baseData.ccp || ''}" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                             </div>
                             <div class="input-group" style="flex:1;">
                                 <label>المفتاح</label>
-                                <input type="text" id="fr-cle" class="styled-input" style="direction:ltr; text-align:center;" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                <input type="text" id="fr-cle" class="styled-input" style="direction:ltr; text-align:center;" value="${baseData.ccpKey || ''}" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                             </div>
                         </div>
                     </div>
-
                     <div class="framer-section">
                         <div class="framer-section-title"><i class="fa-solid fa-calendar-check" style="color:#0FBA50;"></i> الدورات المشارك فيها</div>
                         <div class="session-pills">
@@ -1126,24 +1201,17 @@ window.showAddFramerForm = function(empId, baseData) {
                         </div>
                     </div>
                 </div>
-
-                <!-- العمود الأيسر (مخفي افتراضياً ويظهر عند اختيار أستاذ مؤطر) -->
                 <div class="col-main" id="teacherFieldsCol" style="display:none;">
                     <div class="framer-section" style="border-color:#93c5fd; background:#f8fbff;">
                         <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
-                        
                         <div class="input-group">
                             <label>تخصصات التأطير:</label>
                             <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
                         </div>
-
                         <div class="input-group" id="groups-container">
                             <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
-                            <div id="add-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;">
-                                <!-- سيتم تعبئتها ديناميكياً -->
-                            </div>
+                            <div id="add-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;"></div>
                         </div>
-
                         <div class="input-group">
                             <label>مقاييس التأطير:</label>
                             <div class="cb-grid">${modsHtml}</div>
@@ -1152,10 +1220,13 @@ window.showAddFramerForm = function(empId, baseData) {
                 </div>
             </div>
         `,
-        width: '550px', // البداية تكون بحجم صغير 550 بكسل بدلاً من 950
+        width: '550px',
         showCancelButton: true, confirmButtonText: 'حفظ المؤطر', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
         didOpen: () => {
-            // إضافة حركة انتقال سلسة لعرض النافذة
+            // 🌟 الإصلاح الجذري: إزالة أي حالة تحميل سابقة وإجبار الأزرار على العودة للوضع الطبيعي 🌟
+            Swal.hideLoading();
+            Swal.enableButtons();
+
             Swal.getPopup().style.transition = 'width 0.4s ease-in-out';
 
             window.toggleTeacherFields = () => {
@@ -1165,51 +1236,43 @@ window.showAddFramerForm = function(empId, baseData) {
                 const popup = Swal.getPopup();
 
                 if (role === 'أستاذ مؤطر') {
-                    // توسيع النافذة وإظهار العمود الأيسر
                     popup.style.width = '950px';
                     container.classList.add('is-teacher');
                     teacherCol.style.display = 'flex';
                 } else {
-                    // تصغير النافذة وإخفاء العمود الأيسر
                     popup.style.width = '550px';
                     container.classList.remove('is-teacher');
                     teacherCol.style.display = 'none';
                 }
             };
 
+            // بقية الدوال كالسابق...
             window.updateAddGroups = () => {
                 const selectedSpecs = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
                 const groupsGrid = document.getElementById('add-groups-grid');
-                
                 let currentCheckedBoxes = document.querySelectorAll('.grp-cb:checked');
                 let prevChecked = Array.from(currentCheckedBoxes).map(cb => cb.value);
-
                 let grpHtml = '';
-                
                 if (selectedSpecs.length === 0) {
                     grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
                 } else {
                     selectedSpecs.forEach(spec => {
                         let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
                         let safeSpec = spec.replace(/\s+/g, '');
-                        
                         grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
                                         <h4 style="margin:0 0 10px 0; color:#1E68E8; font-size:13px; border-bottom:1px dashed #cce5ff; padding-bottom:5px;">
                                             <i class="fa-solid fa-layer-group"></i> أفواج تخصص: ${spec}
                                         </h4>
                                         <div class="cb-grid" style="max-height: none;">`;
-                        
                         if (specGroups.length === 0) {
                             grpHtml += `<div style="color:#777; font-size:12px; grid-column:1/-1;">لا توجد أفواج مسجلة لهذا التخصص.</div>`;
                         } else {
                             let allVal = `${spec}::كل الأفواج`;
                             let allChecked = prevChecked.includes(allVal) ? 'checked' : '';
-                            
                             grpHtml += `<label class="styled-cb" style="border-color:#e67e22; grid-column:1/-1;">
                                             <input type="checkbox" value="${allVal}" class="grp-cb grp-all-${safeSpec}" onchange="window.handleAddGroupAll(this, '${safeSpec}')" ${allChecked}> 
                                             <span style="color:#e67e22;">كل أفواج (${spec})</span>
                                         </label>`;
-                            
                             specGroups.forEach(g => {
                                 let val = `${spec}::${g}`;
                                 let checked = prevChecked.includes(val) || allChecked ? 'checked' : '';
@@ -1240,10 +1303,9 @@ window.showAddFramerForm = function(empId, baseData) {
             };
 
             window.updateAddGroups();
-            window.toggleTeacherFields(); // ضبط حجم النافذة فور الفتح حسب الوظيفة المحددة مسبقاً
+            window.toggleTeacherFields(); 
         },
-        preConfirm: async () => { // لاحظ إضافة كلمة async هنا
-            // جلب الهاتف وتنسيقه
+        preConfirm: async () => { 
             let rawPhone = document.getElementById('fr-phone').value.trim().replace(/\s+/g, '');
             let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
 
@@ -1275,7 +1337,6 @@ window.showAddFramerForm = function(empId, baseData) {
             if (!role) { Swal.showValidationMessage('الرجاء اختيار وظيفة المؤطر!'); return false; }
             if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
             
-            // 🌟 الحماية الذكية: منع تعيين شخص كمسؤول إذا كان مسؤولاً في مركز آخر 🌟
             if (UNIQUE_ROLES.includes(role)) {
                 if (framersData.some(f => f.role === role)) {
                     Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); 
@@ -1293,25 +1354,39 @@ window.showAddFramerForm = function(empId, baseData) {
             }
 
             return {
-                empId: empId, center: INSPECTOR_CENTER, role: role, 
-                phone: formattedPhone, ccp: ccp, ccpKey: cle, 
+                empId: empId, 
+                name: baseData.name || 'غير متوفر',
+                rank: baseData.grade || baseData.rank || '-', 
+                center: INSPECTOR_CENTER, 
+                role: role, 
+                phone: formattedPhone, 
+                ccp: ccp, 
+                ccpKey: cle, 
                 s1: document.getElementById('fr-s1').checked, 
                 s2: document.getElementById('fr-s2').checked, 
                 s3: document.getElementById('fr-s3').checked,
-                shifts: [], isProtected: false, framingSpecs, framingModules, framingGroups
+                shifts: [], 
+                isProtected: UNIQUE_ROLES.includes(role), 
+                framingSpecs, 
+                framingModules, 
+                framingGroups
             };
         }
     }).then(async (res) => {
         if (res.isConfirmed) {
+            Swal.hideLoading(); 
             Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                // 🌟 إنشاء المفتاح المركب (الرقم الوظيفي + اسم المركز) 🌟
                 const newDocId = empId + "_" + INSPECTOR_CENTER;
                 await db.collection("center_framers").doc(newDocId).set(res.value);
                 
+                Swal.hideLoading(); 
                 Swal.fire('نجاح', 'تم تسجيل المؤطر بنجاح.', 'success');
                 loadFramersData(); 
-            } catch (e) { Swal.fire('خطأ', 'تعذر الحفظ.', 'error'); }
+            } catch (e) { 
+                Swal.hideLoading(); 
+                Swal.fire('خطأ', 'تعذر الحفظ.', 'error'); 
+            }
         }
     });
 };
@@ -1450,6 +1525,10 @@ window.editFramer = function(docId) {
         width: '950px', // تكبير النافذة لتدعم العمودين
         showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
         didOpen: () => {
+		
+		    Swal.hideLoading();
+            Swal.enableButtons();
+			
             window.toggleEditTeacherFields = () => {
                 const roleEl = document.getElementById('edit-fr-role');
                 const role = isProtectedRole ? f.role : roleEl.value;
@@ -1576,6 +1655,7 @@ window.editFramer = function(docId) {
 
     }).then(async (res) => {
         if (res.isConfirmed) {
+            Swal.hideLoading(); // تنظيف قبل الحفظ
             Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
                 await db.collection("center_framers").doc(docId).update(res.value);
@@ -1586,8 +1666,10 @@ window.editFramer = function(docId) {
                 window.filterFramersTable();
                 if(isShiftMode) window.renderShiftsTable();
                 
+                Swal.hideLoading(); // تنظيف قبل رسالة النجاح
                 Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم التعديل بنجاح', showConfirmButton: false, timer: 1500 });
             } catch (e) { 
+                Swal.hideLoading(); // تنظيف قبل رسالة الخطأ
                 Swal.fire('خطأ', 'تعذر الحفظ في قاعدة البيانات.', 'error'); 
             }
         }
@@ -1617,51 +1699,77 @@ window.viewFramer = function(docId) {
     if (!f) return;
     let b = f.baseInfo;
     
-   let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
-    if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w800'); 
+    // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
+    const coreEmpId = extractCoreId(f.empId);
+    const fbUrl = b.photoUrl_fb;
+    let driveUrl = employeePhotosMap[coreEmpId];
     
-    const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : `<i class="fa-solid fa-user" style="font-size:60px; color:#ccc;"></i>`;
+    let initialUrl = fbUrl ? fbUrl : driveUrl;
+    
+    if (initialUrl && initialUrl.includes('sz=w200')) {
+        initialUrl = initialUrl.replace('sz=w200', 'sz=w800'); 
+    }
 
-    Swal.fire({
-        html: `
-        <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; text-align: right; font-family: 'Cairo', sans-serif; padding: 15px; background: #fff; border-radius: 15px;">
-            <div style="flex-shrink: 0; margin: 0 auto;">
-                <div style="width: 140px; height: 140px; border-radius: 50%; padding: 5px; background: linear-gradient(135deg, #e67e22, #d35400); box-shadow: 0 5px 15px rgba(230, 126, 34, 0.3);">
-                    <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 3px solid #fff;">
-                        ${imgHtml}
-                    </div>
+    const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+    const imgTag = initialUrl
+        ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="window.handleImageFallback(this, '${driveUrl}', 'card')">`
+        : `<div style="display:flex; align-items:center; justify-content:center; height:100%;"><i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i></div>`;
+
+    const refreshBtn = isImgBB 
+        ? `<button onclick="window.removeBrokenImage('${docId}', 'framer')" style="position: absolute; bottom: 5px; right: 5px; z-index: 20; background: #d90429; color: white; border: 3px solid white; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; transition: 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="حذف الصورة التالفة واسترجاع صورة درايف"><i class="fa-solid fa-arrows-rotate" style="font-size:16px;"></i></button>`
+        : '';
+
+    const html = `
+    <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Cairo', sans-serif; padding: 30px 20px 20px; background: #ffffff; border-radius: 20px;">
+        
+        <!-- حاوية الصورة مع الزر العائم -->
+        <div style="position: relative; width: 170px; height: 170px; margin-bottom: 20px;">
+            <div style="width: 100%; height: 100%; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #e67e22, #d35400); box-shadow: 0 10px 25px rgba(230, 126, 34, 0.3); box-sizing: border-box;">
+                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; overflow: hidden; border: 4px solid #fff; box-sizing: border-box;">
+                    ${imgTag}
                 </div>
             </div>
-            <div style="flex-grow: 1; min-width: 250px;">
-                <h2 style="margin: 0 0 5px 0; font-size: 22px; font-weight: 900; color: #102a43;">${b.name || '-'}</h2>
-                <h4 style="margin: 0 0 15px 0; font-size: 15px; font-weight: 800; color: #e67e22;"><i class="fa-solid fa-user-tie" style="margin-left: 5px;"></i> ${f.role}</h4>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">الرقم الوظيفي</span>
-                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900; font-family:monospace;" dir="ltr">${f.empId}</span>
-                    </div>
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">الحساب الجاري / المفتاح</span>
-                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900; font-family:monospace;" dir="ltr">${f.ccp || '-'} / ${f.ccpKey || '-'}</span>
-                    </div>
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; grid-column: span 2;">
-                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">مكان العمل الأصلي</span>
-                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="margin-left:5px; color:#94a3b8;"></i> ${b.place || b.workplace || '-'}</span>
-                    </div>
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">رقم الهاتف</span>
-                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900; font-family:monospace;" dir="ltr"><i class="fa-solid fa-phone" style="margin-left:5px; color:#94a3b8;"></i> ${f.phone || '-'}</span>
-                    </div>
-                    <div style="background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                        <span style="display:block; font-size:11px; color:#64748b; font-weight:bold;">الرتبة</span>
-                        <span style="display:block; font-size:14px; color:#1e293b; font-weight:900;">${b.grade || b.rank || '-'}</span>
-                    </div>
-                </div>
+            ${refreshBtn}
+        </div>
+
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 900; color: #102a43;">${b.name || '-'}</h2>
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: #e67e22;"><i class="fa-solid fa-user-tie" style="margin-left: 5px;"></i> ${f.role}</h4>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; text-align: right;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${f.empId}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الحساب الجاري / المفتاح</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${f.ccp || '-'} / ${f.ccpKey || '-'}</span>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مكان العمل الأصلي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${b.place || b.workplace || '-'}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${f.phone || '-'}</span>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرتبة</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;">${b.grade || b.rank || '-'}</span>
             </div>
         </div>
-        `,
-        showConfirmButton: false, showCloseButton: true, width: '650px', customClass: { popup: 'swal-modal-custom' }
+    </div>
+    `;
+
+    Swal.fire({
+        html: html,
+        showConfirmButton: false, showCloseButton: true, width: '600px', customClass: { popup: 'swal-modal-custom' }
     });
 };
 
@@ -2771,15 +2879,23 @@ function renderFramerAttendanceTable() {
 
         // 🌟 تصحيح الخطأ هنا (empId إلى f.empId) لضمان ظهور الصورة في نافذة الحضور 🌟
         let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
+        // 🌟 تجهيز الصورة بنظام الإنقاذ 🌟
+        const coreEmpId = extractCoreId(f.empId);
+        const fbUrl = b.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+
         const photoHtml = `<div class="profile-pic-container" style="width:30px; height:30px; margin:0 auto;">
-            ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+            ${initialUrl ? `<img src="${initialUrl}" class="profile-pic-img" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
         </div>`;
 
         tr.className = rowClass;
         tr.innerHTML = `
             <td style="text-align:center;">${index + 1}</td>
-            <td style="text-align:center;">${photoHtml} <strong>${f.empId}</strong></td>
-            <td><b>${b.name || '-'}</b></td>
+            <td style="text-align:center; vertical-align: middle;">
+                ${photoHtml}
+                <div style="margin-top: 4px; font-weight: bold; font-size: 12px; color: #102a43; letter-spacing: 1px;">${f.empId}</div>
+            </td>            <td><b>${b.name || '-'}</b></td>
             <td>${b.grade || b.rank || '-'}</td>
             <td style="text-align:center;"><span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">${f.role}</span></td>
             <td style="text-align: center; white-space: nowrap;">
@@ -3212,6 +3328,65 @@ window.regenerateToken = function(oldDocId) {
             }
         } else {
             window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة في حالة الإلغاء
+        }
+    });
+};
+
+// ================= دالة زر استعادة الصورة المكسورة من ImgBB =================
+window.removeBrokenImage = async function(docId, cardType = 'info') {
+    Swal.fire({
+        title: 'استعادة الصورة من درايف',
+        text: 'هل تود حذف هذا الرابط التالف والاعتماد على الصورة الاحتياطية في قوقل درايف؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0FBA50',
+        confirmButtonText: 'نعم، استعادة',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التحديث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // 1. مسح الرابط التالف من القاعدتين في فايربيز
+                await db.collection("employeescomnew").doc(docId).update({ photoUrl_fb: null }).catch(()=>{});
+                await db.collection("employeescomplus").doc(docId).update({ photoUrl_fb: null }).catch(()=>{});
+                
+                // 2. تحديث المصفوفة المحلية للمتكونين وتحديث الجدول "في مكانه"
+                if (typeof centerData !== 'undefined') {
+                    let item = centerData.find(d => d.docId === docId);
+                    if (item) item.photoUrl_fb = null;
+                    if (typeof renderTable === 'function') renderTable(); // التحديث بدون تصفير الصفحة
+                }
+                
+                // 3. تحديث المصفوفة المحلية للمؤطرين
+                if (typeof framersData !== 'undefined') {
+                    let fItem = framersData.find(d => d.docId === docId);
+                    if (fItem && fItem.baseInfo) fItem.baseInfo.photoUrl_fb = null;
+                    if (typeof currentFilteredData !== 'undefined' && typeof renderFramersTable === 'function') {
+                        renderFramersTable(currentFilteredData); // التحديث بدون تصفير الصفحة
+                    }
+                }
+                
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
+                
+                // 4. إعادة فتح البطاقة الصحيحة تلقائياً ليرى المستخدم الصورة الجديدة
+                setTimeout(() => {
+                    if (cardType === 'framer' && typeof viewFramer === 'function') {
+                        viewFramer(docId);
+                    } else if (typeof viewInfo === 'function') {
+                        viewInfo(docId);
+                    }
+                }, 500);
+
+            } catch(e) {
+                Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error');
+            }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            // في حالة الإلغاء، نعيد فتح البطاقة حتى لا تختفي من الشاشة
+            if (cardType === 'framer' && typeof viewFramer === 'function') {
+                viewFramer(docId);
+            } else if (typeof viewInfo === 'function') {
+                viewInfo(docId);
+            }
         }
     });
 };

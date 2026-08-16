@@ -146,7 +146,7 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
     <div class="service video-card" onclick="openVideos()"><i class="fa-solid fa-circle-play"></i><h3>الفيديوهات المرفقة</h3></div>
 </section>
 
-<footer>© 2025 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
+<footer>© 2026 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
 
 <script>
 // ==================== إعدادات Firebase والاتصال اللحظي ====================
@@ -277,34 +277,189 @@ window.onload = async function() {
 };
 
 // ==================== الفيديوهات المرفقة ====================
-function openVideos() {
+// ==================== الفيديوهات المرفقة (النظام المطور - واسع ومنظم) ====================
+
+// دالة مزامنة الإدخالات في الواجهة مع المصفوفة قبل إعادة بناء النافذة
+function syncVideoInputs() {
+    if (!currentLinks['videos']) return;
+    let videos = currentLinks['videos'];
+    videos.forEach((vid, i) => {
+        let titleEl = document.getElementById(`vid_title_${i}`);
+        let urlEl = document.getElementById(`vid_url_${i}`);
+        if (titleEl) vid.title = titleEl.value;
+        if (urlEl) vid.url = urlEl.value;
+    });
+}
+
+// دالة إضافة حقل فيديو جديد
+window.addVideoField = function() {
+    syncVideoInputs();
+    if (!currentLinks['videos']) currentLinks['videos'] = [];
+    currentLinks['videos'].push({ title: "الدرس: ", url: "" });
+    openVideos(); 
+}
+
+// دالة حذف حقل فيديو مع تنبيه مسبق إذا كان الحقل يحتوي على بيانات
+window.removeVideoField = function(index) {
+    syncVideoInputs();
+    let vid = currentLinks['videos'][index];
+    
+    // إذا كان الحقل فارغاً تماماً، احذفه فوراً
+    if (!vid.url && (!vid.title || vid.title === "الدرس: ")) {
+        currentLinks['videos'].splice(index, 1);
+        openVideos();
+        return;
+    }
+
+    Swal.fire({
+        title: 'تأكيد الحذف',
+        text: 'هل أنت متأكد من حذف هذا الفيديو من القائمة؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'نعم، احذف العنصر',
+        cancelButtonText: 'تراجع'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            currentLinks['videos'].splice(index, 1);
+            openVideos();
+        }
+    });
+}
+
+// دالة حفظ الفيديوهات في قاعدة البيانات
+window.saveVideosToFirebase = async function() {
+    syncVideoInputs();
+    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        SITE_SETTINGS.dbLinks[cId][lvl][spc]['videos'] = currentLinks['videos'];
+        await db.collection("site_settings").doc("main").set(SITE_SETTINGS);
+        
+        Swal.fire({ 
+            icon: 'success', 
+            title: 'تم الحفظ بنجاح', 
+            text: 'تم تحديث قائمة الفيديوهات واعتمادها للطلبة.', 
+            timer: 2000, 
+            showConfirmButton: false 
+        });
+    } catch (error) {
+        console.error("خطأ في حفظ الفيديوهات:", error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات، لم يتم الحفظ.', 'error');
+    }
+}
+
+// الدالة الرئيسية لفتح نافذة إدارة الفيديوهات
+window.openVideos = function() {
     if(!SITE_SETTINGS) return;
-    let videos = currentLinks['videos'] || [];
-    let html = '<div style="display:flex; flex-direction:column; gap:15px; padding:10px; text-align:right; direction:rtl;">';
+    if (!currentLinks['videos']) currentLinks['videos'] = [];
+    let videos = currentLinks['videos'];
+    
+    // CSS مخصص لتكبير الحقول وتوسيع النافذة
+    let customCSS = `
+        <style>
+            .vid-modal-body { text-align: right; direction: rtl; font-family: 'Cairo', sans-serif; padding: 10px; }
+            .vid-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 20px; position: relative; border-right: 6px solid #1E68E8; box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
+            
+            /* التوزيع المرن للحقول: عمودي للهواتف، وأفقي واسع للكمبيوتر */
+            .vid-grid { display: flex; flex-direction: column; gap: 20px; }
+            @media (min-width: 800px) {
+                .vid-grid { flex-direction: row; align-items: flex-start; }
+                .vid-input-group-title { flex: 1.2; } /* يأخذ مساحة للعنوان */
+                .vid-input-group-url { flex: 2.8; }   /* يأخذ مساحة مضاعفة للرابط */
+            }
+            
+            .vid-input-group label { display: block; font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 10px; }
+            
+            /* تصميم الحقول واسعة وواضحة */
+            .vid-input { width: 100%; padding: 14px 18px; border: 2px solid #cbd5e1; border-radius: 10px; font-family: 'Cairo'; font-size: 15px; outline: none; transition: 0.3s; background: #f8fafc; color: #0f172a; font-weight: 600; box-sizing: border-box; }
+            .vid-input:focus { border-color: #1E68E8; background: #ffffff; box-shadow: 0 0 0 4px rgba(30,104,232,0.15); }
+            
+            .vid-actions { display: flex; gap: 15px; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #e2e8f0; }
+            
+            /* الأزرار */
+            .btn-v { padding: 10px 22px; border-radius: 10px; font-family: 'Cairo'; font-weight: bold; font-size: 15px; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; text-decoration: none; }
+            .btn-v-watch { background: #e0f2fe; color: #0284c7; }
+            .btn-v-watch:hover { background: #bae6fd; color: #0369a1; transform: translateY(-2px); }
+            .btn-v-delete { background: #fee2e2; color: #dc2626; }
+            .btn-v-delete:hover { background: #fecaca; color: #b91c1c; transform: translateY(-2px); }
+            
+            .btn-v-add { width: 100%; background: #f0fdf4; color: #16a34a; border: 3px dashed #bbf7d0; padding: 20px; justify-content: center; font-size: 18px; margin-bottom: 25px; transition: 0.3s; border-radius: 12px; }
+            .btn-v-add:hover { background: #dcfce7; border-color: #86efac; transform: translateY(-3px); box-shadow: 0 5px 15px rgba(22,163,74,0.1); }
+            
+            .btn-v-save { background: #1E68E8; color: white; padding: 16px 45px; font-size: 18px; justify-content: center; box-shadow: 0 5px 15px rgba(30,104,232,0.3); border-radius: 40px; transition: 0.3s; }
+            .btn-v-save:hover { background: #1557c0; transform: translateY(-3px); box-shadow: 0 8px 20px rgba(30,104,232,0.4); }
+            
+            /* تكبير نافذة SweetAlert لتتسع لـ 1100 بكسل */
+            .swal-modal-custom-wide { max-width: 1100px !important; padding: 30px 10px !important; }
+        </style>
+    `;
+    
+    let html = customCSS + '<div class="vid-modal-body"><div style="max-height: 65vh; overflow-y: auto; padding-left: 10px; padding-right: 5px; margin-bottom: 20px;">';
     
     if (videos.length === 0) {
         html += `
-        <div style="text-align:center; padding:40px 20px; color:#94a3b8; border:2px dashed #cbd5e1; border-radius:12px; background:#f8fafc;">
-            <i class="fa-solid fa-video-slash" style="font-size:40px; margin-bottom:15px; color:#cbd5e1;"></i>
-            <br><span style="font-size:16px; font-weight:bold;">لا توجد فيديوهات مرفقة حالياً في هذا التخصص.</span>
+        <div style="text-align:center; padding:60px 20px; color:#94a3b8; border:3px dashed #cbd5e1; border-radius:15px; background:#f8fafc; margin-bottom: 20px;">
+            <div style="width: 90px; height: 90px; background: #e2e8f0; border-radius: 50%; display: flex; justify-content: center; align-items: center; margin: 0 auto 20px auto;">
+                <i class="fa-solid fa-video-slash" style="font-size:40px; color:#94a3b8;"></i>
+            </div>
+            <span style="font-size:22px; font-weight:900; color: #334e68; display:block; margin-bottom:10px;">لا توجد فيديوهات مرفقة حالياً</span>
+            <span style="font-size:16px; color: #627d98;">اضغط على زر (أضف حقل فيديو جديد) بالأسفل للبدء في إدراج الروابط التعليمية.</span>
         </div>`;
     } else {
-        videos.forEach((vid) => {
+        videos.forEach((vid, index) => {
+            let watchBtn = vid.url 
+                ? `<a href="${vid.url}" target="_blank" class="btn-v btn-v-watch" title="انقر لتجربة رابط الفيديو"><i class="fa-solid fa-arrow-up-right-from-square"></i> فتح الرابط للتجربة</a>` 
+                : `<button class="btn-v" style="background:#f1f5f9; color:#94a3b8; cursor:not-allowed;" title="يرجى إدخال الرابط أولاً"><i class="fa-solid fa-arrow-up-right-from-square"></i> فتح الرابط للتجربة</button>`;
+
             html += `
-            <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-                <div style="font-weight:bold; color:#1e293b; font-size:16px; flex:1; display:flex; align-items:center; gap:10px;">
-                    <div style="width:40px; height:40px; background:#fee2e2; color:#dc2626; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-play"></i></div>
-                    ${vid.title || 'فيديو تعليمي بدون عنوان'}
+            <div class="vid-card">
+                <div class="vid-grid">
+                    <div class="vid-input-group-title">
+                        <label><i class="fa-solid fa-heading" style="color:#1E68E8; margin-left:8px; font-size:18px;"></i> عنوان الدرس أو الفيديو:</label>
+                        <input type="text" id="vid_title_${index}" class="vid-input" value="${vid.title || ''}" placeholder="اكتب العنوان هنا (مثال: الدرس الأول)...">
+                    </div>
+                    
+                    <!-- حقل الرابط محاذى لليسار ومساحته واسعة جداً -->
+                    <div class="vid-input-group-url">
+                        <label><i class="fa-solid fa-link" style="color:#1E68E8; margin-left:8px; font-size:18px;"></i> رابط الفيديو (Youtube / Google Drive):</label>
+                        <input type="text" id="vid_url_${index}" class="vid-input" value="${vid.url || ''}" placeholder="https://..." dir="ltr" style="text-align:left;">
+                    </div>
                 </div>
-                ${vid.url ? `<a href="${vid.url}" target="_blank" style="background:#dc2626; color:white; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:14px;"><i class="fa-solid fa-eye"></i> مشاهدة</a>` : `<span style="color:#94a3b8; font-size:13px; font-weight:bold; background:#f1f5f9; padding:5px 10px; border-radius:6px;">الرابط غير متوفر</span>`}
+                
+                <div class="vid-actions">
+                    ${watchBtn}
+                    <button onclick="removeVideoField(${index})" class="btn-v btn-v-delete" title="حذف هذا الحقل بشكل نهائي"><i class="fa-solid fa-trash-can"></i> حذف العنصر</button>
+                </div>
             </div>`;
         });
     }
-    html += '</div>';
+    
+    html += `</div>`; // إغلاق منطقة التمرير (Scroll)
+
+    html += `
+        <button onclick="addVideoField()" class="btn-v btn-v-add">
+            <i class="fa-solid fa-plus-circle" style="font-size:22px;"></i> أضف حقل فيديو جديد للقائمة
+        </button>
+    `;
+
+    html += `
+        <div style="display:flex; justify-content:center; border-top: 2px solid #e2e8f0; padding-top: 25px;">
+            <button onclick="saveVideosToFirebase()" class="btn-v btn-v-save">
+                <i class="fa-solid fa-floppy-disk" style="font-size:20px;"></i> حفظ واعتماد التعديلات
+            </button>
+        </div>
+    </div>`;
 
     Swal.fire({
-        title: '<i class="fa-solid fa-circle-play" style="color:#dc2626;"></i> الفيديوهات المرفقة',
-        html: html, showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#1e293b', width: window.innerWidth < 768 ? '95%' : '700px'
+        title: '<div style="font-family: Cairo; font-weight: 900; color: #0f172a; font-size: 26px;"><i class="fa-solid fa-clapperboard" style="color:#dc2626; margin-left: 10px;"></i> إدارة المحتوى المرئي</div>',
+        html: html, 
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: '1100px', // عرض النافذة أصبح 1100px (فسيحة جداً للكمبيوتر)
+        customClass: { popup: 'swal2-popup swal-modal-custom-wide' }, 
+        background: '#f1f5f9' 
     });
 }
 

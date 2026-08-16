@@ -369,11 +369,13 @@
       <table id="traineesTable">
         <thead>
           <tr>
+            <!-- 🌟 إضافة عمود التحديد الشامل هنا 🌟 -->
+            <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th style="width: 40px;">#</th>
             <th>الرقم الوظيفي</th>
             <th>الاسم واللقب</th>
             <th>تاريخ الميلاد</th>
-			<th>مكان الميلاد</th>
+            <th>مكان الميلاد</th>
             <th>دائرة الإقامة</th>
             <th>العنوان</th>
             <th>رقم الهاتف</th>
@@ -702,100 +704,155 @@ window.onload = function() {
     fetchData();
 };
 
-// ================= دالة جلب وعرض مسؤولي المركز وتحديد الصلاحية =================
-// ================= دالة جلب وعرض مسؤولي المركز وتحديد الصلاحية (بالميزة الذكية) =================
-async function loadCenterAdmins() {
-    try {
-        const userEmpId = sessionStorage.getItem("userEmpId");
+
+// ================= دالة الإنقاذ الذكية للصور (Smart Image Fallback) =================
+window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
+    // إذا لم نقم بتجربة رابط درايف بعد، والرابط موجود فعلاً
+    if (imgElement.getAttribute('data-retried') !== 'true' && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null') {
+        imgElement.setAttribute('data-retried', 'true');
         
+        // تكبير دقة الصورة حسب المكان الذي تُعرض فيه
+        if (fallbackType === 'card' && driveUrl.includes('sz=w200')) {
+            driveUrl = driveUrl.replace('sz=w200', 'sz=w800');
+        } else if (fallbackType === 'print' && driveUrl.includes('sz=w200')) {
+            driveUrl = driveUrl.replace('sz=w200', 'sz=w400');
+        }
+        
+        // المحاولة الثانية: تحميل الصورة من درايف
+        imgElement.src = driveUrl; 
+    } else {
+        // المحاولة الأخيرة: فشل درايف أيضاً، إظهار الأيقونة حسب نوع الواجهة
+        if (fallbackType === 'table') {
+            imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
+        } else if (fallbackType === 'card') {
+            imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
+        } else if (fallbackType === 'print') {
+            imgElement.outerHTML = 'صورة<br>الموظف';
+        }
+    }
+};
+
+// ================= دالة جلب وعرض مسؤولي المركز (بالتحديث اللحظي المباشر والذكي) =================
+function loadCenterAdmins() {
+    const userEmpId = sessionStorage.getItem("userEmpId") ? String(sessionStorage.getItem("userEmpId")).trim() : "";
+    
+    // مصفوفات لتخزين البيانات اللحظية
+    let officialAdmins = [];
+    let centerFramers = [];
+
+    // دالة مساعدة لتحديث الشريط العلوي بناءً على البيانات المتوفرة
+    const renderTopBar = async () => {
         let pedName = "غير معين";
         let admName = "غير معين";
         let loggedInRole = ""; 
 
-        // 1. البحث أولاً في قاعدة البيانات الخاصة بتعيينات المديرية (center_admins)
-        const adminsSnap = await db.collection("center_admins").where("center", "==", INSPECTOR_CENTER).get();
-        adminsSnap.forEach(doc => {
-            let data = doc.data();
-            let isCurrentUser = (doc.id === userEmpId);
+        // 1. فحص تعيينات المديرية (القاعدة الرسمية للحسابات)
+        officialAdmins.forEach(data => {
+            let safeDocId = extractCoreId(data.id);
+            let safeUserId = extractCoreId(userEmpId);
+            let isCurrentUser = (safeDocId === safeUserId);
             let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
 
-            if (data.jobTitle === "المسؤول البيداغوجي") { pedName = data.name + " " + youTag; }
-            if (data.jobTitle === "المسؤول الإداري") { admName = data.name + " " + youTag; }
+            // استخدام includes لتفادي أخطاء الهمزات والمسافات
+            let r = data.jobTitle || data.role || "";
+            if (r.includes("البيداغوجي")) { pedName = (data.name || "بدون اسم") + " " + youTag; }
+            if (r.includes("الإداري") || r.includes("الاداري")) { admName = (data.name || "بدون اسم") + " " + youTag; }
 
-            if (isCurrentUser) { currentUserRole = data.jobTitle; loggedInRole = data.jobTitle; }
+            if (isCurrentUser) { currentUserRole = r; loggedInRole = r; }
         });
 
-        // 2. 🌟 الميزة الذكية (الاحتياطية): إذا لم تقم المديرية بتعيين المسؤول، نبحث عنه في جدول المؤطرين الداخلي 🌟
-        if (pedName === "غير معين" || admName === "غير معين") {
-            const framersSnap = await db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).get();
+        // 2. الميزة الاحتياطية: البحث في جدول المؤطرين الداخلي إذا لم تعينهم المديرية بحسابات
+        for (let fData of centerFramers) {
+            let safeDocId = extractCoreId(fData.empId);
+            let safeUserId = extractCoreId(userEmpId);
+            let isCurrentUser = (safeDocId === safeUserId);
+            let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
+
+            let r = fData.role || "";
+
+            // التحقق من المسؤول الإداري (حتى لو كُتبت بدون همزة)
+            if ((admName === "غير معين" || admName === "غير معروف") && (r.includes("الإداري") || r.includes("الاداري"))) {
+                let name = await getFramerNameFromBase(fData.empId);
+                admName = name + " " + youTag;
+                if (isCurrentUser) { currentUserRole = r; loggedInRole = r; }
+            }
             
-            for (let doc of framersSnap.docs) {
-                let fData = doc.data();
-                
-                // التحقق من المسؤول الإداري
-                if (admName === "غير معين" && fData.role === "المسؤول الإداري") {
-                    let name = await getFramerNameFromBase(fData.empId);
-                    let isCurrentUser = (fData.empId === userEmpId);
-                    let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
-                    admName = name + " " + youTag;
-                    if (isCurrentUser) { currentUserRole = fData.role; loggedInRole = fData.role; }
-                }
-                
-                // التحقق من المسؤول البيداغوجي (في حال تم إضافته كمؤطر ولم تعينه المديرية)
-                if (pedName === "غير معين" && fData.role === "المسؤول البيداغوجي") {
-                    let name = await getFramerNameFromBase(fData.empId);
-                    let isCurrentUser = (fData.empId === userEmpId);
-                    let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
-                    pedName = name + " " + youTag;
-                    if (isCurrentUser) { currentUserRole = fData.role; loggedInRole = fData.role; }
-                }
+            // التحقق من المسؤول البيداغوجي
+            if ((pedName === "غير معين" || pedName === "غير معروف") && r.includes("البيداغوجي")) {
+                let name = await getFramerNameFromBase(fData.empId);
+                pedName = name + " " + youTag;
+                if (isCurrentUser) { currentUserRole = r; loggedInRole = r; }
             }
         }
 
-        // إبراز السطر الخاص بصاحب الحساب بلون أبيض ناصع، وجعل الآخر باهتاً قليلاً
-        let pedStyle = loggedInRole === "المسؤول البيداغوجي" ? "color:#fff;" : "color:#cbd5e1;";
-        let admStyle = loggedInRole === "المسؤول الإداري" ? "color:#fff;" : "color:#cbd5e1;";
+        // إعداد التصميم البصري للأسماء
+        let pedStyle = loggedInRole.includes("البيداغوجي") ? "color:#fff;" : "color:#cbd5e1;";
+        let admStyle = loggedInRole.includes("الإداري") ? "color:#fff;" : "color:#cbd5e1;";
 
-        // تجهيز أسطر HTML لكل مسؤول (مع منع التفاف النص ليتمدد المربع)
         let pedRowHtml = `
             <div style="font-size:13px; font-family:'Cairo'; ${pedStyle} white-space: nowrap;">
-                <i class="fa-solid fa-chalkboard-user" style="color:#0FBA50; width:20px;"></i> المسؤول البيداغوجي: <b style="${loggedInRole === 'المسؤول البيداغوجي' ? 'font-size:15px;' : 'font-size:14px;'}">${pedName}</b>
+                <i class="fa-solid fa-chalkboard-user" style="color:#0FBA50; width:20px;"></i> المسؤول البيداغوجي: <b style="${loggedInRole.includes('البيداغوجي') ? 'font-size:15px;' : 'font-size:14px;'}">${pedName}</b>
             </div>
         `;
         
         let admRowHtml = `
             <div style="font-size:13px; font-family:'Cairo'; ${admStyle} white-space: nowrap;">
-                <i class="fa-solid fa-user-tie" style="color:#ff9800; width:20px;"></i> المسؤول الإداري: <b style="${loggedInRole === 'المسؤول الإداري' ? 'font-size:15px;' : 'font-size:14px;'}">${admName}</b>
+                <i class="fa-solid fa-user-tie" style="color:#ff9800; width:20px;"></i> المسؤول الإداري: <b style="${loggedInRole.includes('الإداري') ? 'font-size:15px;' : 'font-size:14px;'}">${admName}</b>
             </div>
         `;
 
         // ترتيب الأسطر: صاحب الحساب يظهر في الأعلى دائماً
-        let finalRows = "";
-        if (loggedInRole === "المسؤول الإداري") {
-            finalRows = admRowHtml + pedRowHtml; // الإداري فوق
-        } else {
-            finalRows = pedRowHtml + admRowHtml; // البيداغوجي فوق (الافتراضي)
-        }
+        let finalRows = loggedInRole.includes("الإداري") ? (admRowHtml + pedRowHtml) : (pedRowHtml + admRowHtml);
 
-        // عرض الأسماء في الشريط العلوي مع تمدد تلقائي (width: max-content)
-        document.getElementById("welcomeName").innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:6px; background: rgba(0,0,0,0.25); padding: 8px 25px; border-radius: 12px; border: 1px dashed #62b0e8; text-align: right; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); width: max-content;">
-                ${finalRows}
-            </div>
-        `;
-    } catch (e) {
-        console.error("Error loading admins:", e);
-    }
+        const welcomeDiv = document.getElementById("welcomeName");
+        if(welcomeDiv) {
+            welcomeDiv.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:6px; background: rgba(0,0,0,0.25); padding: 8px 25px; border-radius: 12px; border: 1px dashed #62b0e8; text-align: right; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); width: max-content;">
+                    ${finalRows}
+                </div>
+            `;
+        }
+    };
+
+    // 🌟 السر هنا: استخدام onSnapshot ليتحدث الشريط العلوي فوراً عند أي إضافة أو تعديل 🌟
+    db.collection("center_admins").where("center", "==", INSPECTOR_CENTER).onSnapshot(snap => {
+        officialAdmins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderTopBar();
+    }, e => console.error("Error fetching official admins:", e));
+
+    db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).onSnapshot(snap => {
+        centerFramers = snap.docs.map(doc => doc.data());
+        renderTopBar();
+    }, e => console.error("Error fetching center framers:", e));
 }
 
-// ================= دالة مساعدة لجلب اسم المؤطر من قاعدة البيانات الرئيسية =================
+// ================= دالة مساعدة لجلب اسم المؤطر من قاعدة البيانات الرئيسية (محصنة) =================
 async function getFramerNameFromBase(empId) {
     if (!empId) return "غير معروف";
+    
+    // 🌟 استخراج الرقم الصافي (بدون أصفار) لتفادي أخطاء التطابق 🌟
+    let safeId = extractCoreId(empId); 
+    
     try {
-        let snap = await db.collection("employeescomnew").doc(String(empId)).get();
-        if (!snap.exists) snap = await db.collection("employeescomplus").doc(String(empId)).get();
+        // المحاولة 1: البحث بالرقم الصافي في قاعدة المتكونين
+        let snap = await db.collection("employeescomnew").doc(safeId).get();
+        if (!snap.exists) {
+            // المحاولة 2: البحث بالرقم الصافي في القاعدة الكلية
+            snap = await db.collection("employeescomplus").doc(safeId).get();
+        }
         if (snap.exists && snap.data().name) return snap.data().name;
-    } catch (e) { }
+
+        // المحاولة 3 (احتياطية): البحث بالرقم الخام كما أُدخل
+        let snapFallback = await db.collection("employeescomnew").doc(String(empId).trim()).get();
+        if (snapFallback.exists && snapFallback.data().name) return snapFallback.data().name;
+
+        let snapFallback2 = await db.collection("employeescomplus").doc(String(empId).trim()).get();
+        if (snapFallback2.exists && snapFallback2.data().name) return snapFallback2.data().name;
+
+    } catch (e) { 
+        console.error("خطأ في جلب اسم المسؤول:", e);
+    }
+    
     return "غير معروف";
 }
 
@@ -804,6 +861,7 @@ let centerData = [];
 let filteredData = [];
 let currentPage = 1;
 const rowsPerPage = 10;
+let selectedTrainees = new Set();
 
 function logout() {
     sessionStorage.clear();
@@ -871,13 +929,24 @@ function updateSpecText() {
     else { document.getElementById('spec-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`; }
 }
 
-// ================= جلب البيانات الخاصة بالمركز =================
-// ================= جلب البيانات والصور الخاصة بالمركز =================
-// ================= جلب البيانات والصور (بدون تجميد الشاشة) =================
-async function fetchData() {
-    document.getElementById("loader").style.display = "flex";
+// ================= جلب البيانات والصور (بسرعة عالية مع تحديث لحظي مستمر) =================
+// متغير للتحكم في شاشة التحميل (تأكد من تعريفه خارج الدالة إذا لم يكن موجوداً)
+let isFirstLoad = true; 
 
-    // 1. جلب الصور في الخلفية (بدون استخدام await لكي لا نوقف الشاشة)
+// ================= جلب البيانات والصور (مع مؤقت أمان لمنع تعليق شاشة التحميل) =================
+function fetchData() {
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "flex";
+
+    // ⏱️ مؤقت أمان: إخفاء شاشة التحميل إجبارياً بعد 4 ثوانٍ لمنع التعليق الدائم
+    let safetyTimer = setTimeout(() => {
+        if (loader && loader.style.display !== "none") {
+            loader.style.display = "none";
+            console.warn("تم إخفاء شاشة التحميل بواسطة مؤقت الأمان نظراً لتأخر الاتصال.");
+        }
+    }, 4000);
+
+    // 1. جلب الصور من درايف في الخلفية
     fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
         const responseText = await photoRes.text();
         if (responseText && responseText.includes("[")) {
@@ -892,56 +961,76 @@ async function fetchData() {
                     employeePhotosMap[coreJobId] = directUrl;
                 }
             });
-            // إعادة رسم الجداول بصمت لتظهر الصور بعد تحميلها
-            if(filteredData.length > 0) renderTable();
+            if(filteredData && filteredData.length > 0) renderTable();
         }
     }).catch(e => console.warn("تعذر جلب الصور:", e));
 
-    // 2. جلب بيانات الأساتذة فوراً من Firebase (الآن سيعمل هذا الجزء فوراً)
-    try {
-        const snapshot = await db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).get();
-        centerData = [];
-        let ranks = new Set();
+    // 2. الاتصال اللحظي المستمر بقاعدة المتكونين
+    db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).onSnapshot((snapshot) => {
+        // إلغاء مؤقت الأمان لأن البيانات وصلت بنجاح
+        clearTimeout(safetyTimer);
+        if (loader) loader.style.display = "none";
 
-        snapshot.forEach(doc => {
+        let ranks = new Set();
+        centerData = []; // إعادة تعبئة لتفادي التكرار
+
+        snapshot.forEach((doc) => {
             const data = doc.data();
             let item = {
-                docId: doc.id, empId: data.id || doc.id, photoUrl_fb: data.photoUrl_fb || null, name: data.name || "", gender: data.gnr || "",
-                dob: data.diz || "", rank: data.grade || "", specialty: data.maty || "", workplace: data.place || "",
-                address: data.adrs || "", daira: data.daira || "-", phone: data.phone || data.tel || "-", 
-                pob: data.pob || "-", center: data.center || "",
-                group: data.group || data.fawj || "-" 
+                docId: doc.id, 
+                empId: data.id || doc.id, 
+                photoUrl_fb: data.photoUrl_fb || null, 
+                name: data.name || "", 
+                gender: data.gnr || "", 
+                dob: data.diz || "", 
+                rank: data.grade || "", 
+                specialty: data.maty || "", 
+                workplace: data.place || "",
+                address: data.adrs || "", 
+                daira: data.daira || "-", 
+                phone: data.phone || data.tel || "-", 
+                pob: data.pob || "-", 
+                center: data.center || "", 
+                group: data.group || data.fawj || "-",
+                permissions: data.permissions || []
             };
 
             if (item.dob && typeof item.dob.toDate === 'function') {
-                let d = item.dob.toDate(); let day = ("0" + d.getDate()).slice(-2); let month = ("0" + (d.getMonth() + 1)).slice(-2); let year = d.getFullYear();
+                let d = item.dob.toDate(); 
+                let day = ("0" + d.getDate()).slice(-2); 
+                let month = ("0" + (d.getMonth() + 1)).slice(-2); 
+                let year = d.getFullYear();
                 item.dob = `${day}-${month}-${year}`; 
             } else if (typeof item.dob === 'string') {
                 item.dob = item.dob.replace(/\//g, '-');
             }
 
             centerData.push(item);
-            if(item.rank) ranks.add(item.rank);
+            if (item.rank && item.rank !== "-") ranks.add(item.rank);
         });
 
+        // تعبئة الفلاتر أول مرة
         const rankOptionsDiv = document.getElementById("rankOptions");
-        rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
-        ranks.forEach(val => { 
-            if(val.trim() !== "") { rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); }
-        });
+        if (rankOptionsDiv && isFirstLoad) {
+            rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
+            ranks.forEach(val => { 
+                rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); 
+            });
+        }
 
-        document.getElementById("loader").style.display = "none"; // إخفاء شاشة التحميل فوراً!
-        updateDynamicSpecs(); 
-
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        document.getElementById("loader").style.display = "none";
-        Swal.fire('خطأ', 'تعذر جلب البيانات من قاعدة البيانات', 'error');
-    }
+        isFirstLoad = false;
+        updateDynamicSpecs();
+        
+    }, (error) => {
+        clearTimeout(safetyTimer);
+        if (loader) loader.style.display = "none";
+        console.error("خطأ في جلب البيانات:", error);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات.', 'error');
+    });
 }
 
 // ================= الفلترة وعرض الجدول =================
-function applyFilters() {
+function applyFilters(isSilent = false) {
     const search = document.getElementById("searchInput").value.toLowerCase();
     const filterDaira = document.getElementById("filterDaira").value;
 
@@ -956,7 +1045,12 @@ function applyFilters() {
         return matchSearch && matchDaira && matchRank && matchSpec;
     });
 
-    currentPage = 1; 
+    if (!isSilent) {
+        currentPage = 1; 
+        selectedTrainees.clear(); // مسح التحديدات القديمة عند تفعيل فلتر جديد
+        if(document.getElementById("selectAll")) document.getElementById("selectAll").checked = false;
+    }
+    
     updateStats();
     renderTable();
 }
@@ -976,7 +1070,7 @@ function renderTable() {
     tbody.innerHTML = "";
 
     if(filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة</td></tr>`;
         renderPagination(0);
         return;
     }
@@ -991,15 +1085,27 @@ function renderTable() {
     paginatedData.forEach((item, index) => {
         const tr = document.createElement("tr");
         
-        // 🌟 تجهيز الصورة بناءً على المطابقة 🌟
+       // 🌟 تجهيز الصورة بنظام الإنقاذ الذكي 🌟
         const coreEmpId = extractCoreId(item.empId);
-        const photoUrl = item.photoUrl_fb ? item.photoUrl_fb : employeePhotosMap[coreEmpId];
+        const fbUrl = item.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
         
+        // تحديد الرابط الأولي (الأولوية لفايربيز/ImgBB إذا توفر)
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+        const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+        const refreshBtn = isImgBB 
+            ? `<button onclick="window.removeBrokenImage('${item.docId}', 'info')" style="position: absolute; bottom: -5px; right: -5px; z-index: 10; background: #dc3545; color: white; border: 2px solid white; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; font-size: 10px;" title="استعادة الصورة الأصلية"><i class="fa-solid fa-arrows-rotate"></i></button>`
+            : '';
+
         const photoHtml = `
-          <div class="profile-pic-container" style="cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
-              ${photoUrl 
-                  ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة الموظف" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' title=\\'تعذر تحميل الصورة\\'></i>'">` 
-                  : `<i class="fa-solid fa-user profile-pic-placeholder" title="الصورة غير متوفرة"></i>`}
+          <div style="position: relative; display: inline-block; width: 45px; height: 45px; margin: 0 auto 5px auto;">
+              <div class="profile-pic-container" style="margin: 0; width: 100%; height: 100%; cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
+                  ${initialUrl 
+                      ? `<img src="${initialUrl}" class="profile-pic-img" alt="صورة الموظف" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` 
+                      : `<i class="fa-solid fa-user profile-pic-placeholder" title="الصورة غير متوفرة"></i>`}
+              </div>
+              ${refreshBtn}
           </div>
         `;
 
@@ -1010,22 +1116,27 @@ function renderTable() {
             </div>
         `;
         
+        // 🌟 التحقق هل هذا المتكون محدد مسبقاً أم لا 🌟
+        const isChecked = selectedTrainees.has(item.docId) ? 'checked' : '';
+
         tr.innerHTML = `
-            <td style="text-align:center;">${start + index + 1}</td>
-            <td style="text-align:center;">
-                ${photoHtml} <!-- عرض الصورة فوق الرقم -->
-                <strong>${item.empId || '-'}</strong>
+            <td style="text-align:center; vertical-align: middle;">
+                <input type="checkbox" class="row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleSelect(this, '${item.docId}')" style="width:18px; height:18px; accent-color:#102a43; cursor:pointer;">
             </td>
-            <td>${item.name || '-'}</td>
-            <td style="text-align:center; white-space:nowrap;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
-            <td style="text-align:center;">${item.pob || '-'}</td>
-            <td style="font-weight:600; color:#1E68E8;">${item.daira || '-'}</td>
-            <td>${item.address || '-'}</td>
-            <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
-            <td>${rankPlaceHtml}</td>
-            <td style="font-weight:600; color:#555;">${item.specialty || '-'}</td>
-            
-			<td style="text-align:center;">
+            <td style="text-align:center; vertical-align: middle;">${start + index + 1}</td>
+            <td style="text-align:center; vertical-align: middle;">
+                ${photoHtml}
+                <strong style="display:block;">${item.empId || '-'}</strong>
+            </td>
+            <td style="vertical-align: middle;">${item.name || '-'}</td>
+            <td style="text-align:center; white-space:nowrap; vertical-align: middle;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
+            <td style="text-align:center; vertical-align: middle;">${item.pob || '-'}</td>
+            <td style="font-weight:600; color:#1E68E8; vertical-align: middle;">${item.daira || '-'}</td>
+            <td style="vertical-align: middle;">${item.address || '-'}</td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap; vertical-align: middle;">${item.phone || '-'}</td>
+            <td style="vertical-align: middle;">${rankPlaceHtml}</td>
+            <td style="font-weight:600; color:#555; vertical-align: middle;">${item.specialty || '-'}</td>
+            <td style="text-align:center; vertical-align: middle;">
                 <div class="action-btns" style="justify-content: center;">
                     <button class="btn-icon" style="background: #0FBA50;" onclick="printSingleIDCard('${item.docId}')" title="طباعة البطاقة الفردية"><i class="fa-solid fa-print"></i></button>
                     <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="البطاقة المهنية"><i class="fa-solid fa-address-card"></i></button>
@@ -1036,69 +1147,87 @@ function renderTable() {
         tbody.appendChild(tr);
     });
 
+    // تحديث حالة مربع "تحديد الكل" إذا كانت الصفحة الحالية كلها محددة
+    document.getElementById("selectAll").checked = (filteredData.length > 0 && selectedTrainees.size === filteredData.length);
     renderPagination(totalPages);
 }
 
-// ================= دالة عرض البطاقة المهنية =================
+// ================= دالة عرض البطاقة المهنية للمتكون (تصميم عمودي موحد) =================
 window.viewInfo = function(docId) {
     const data = centerData.find(d => d.docId === docId);
     if (!data) return;
 
-    // جلب الصورة واستخراج رابط عالي الدقة (w800 للوضوح العالي)
+    // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
     const coreEmpId = extractCoreId(data.empId);
-    let photoUrl = data.photoUrl_fb ? data.photoUrl_fb : employeePhotosMap[coreEmpId];
+    const fbUrl = data.photoUrl_fb;
+    let driveUrl = employeePhotosMap[coreEmpId];
     
-    if (photoUrl && photoUrl.includes('sz=w200')) {
-        photoUrl = photoUrl.replace('sz=w200', 'sz=w800');
+    let initialUrl = fbUrl ? fbUrl : driveUrl;
+    
+    // تحسين دقة الصورة قبل عرضها
+    if (initialUrl && initialUrl.includes('sz=w200')) {
+        initialUrl = initialUrl.replace('sz=w200', 'sz=w800');
     }
 
-    const imgHtml = photoUrl
-        ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\' style=\\'font-size:70px; color:#94a3b8;\\'></i>'">`
-        : `<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>`;
+    const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+    // كود الصورة (بدون الزر)
+    const imgTag = initialUrl
+        ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="window.handleImageFallback(this, '${driveUrl}', 'card')">`
+        : `<div style="display:flex; align-items:center; justify-content:center; height:100%;"><i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i></div>`;
+// زر التحديث العائم (يظهر فقط لروابط ImgBB)
+    const refreshBtn = isImgBB 
+        ? `<button onclick="window.removeBrokenImage('${docId}', 'info')" style="position: absolute; bottom: 5px; right: 5px; z-index: 20; background: #d90429; color: white; border: 3px solid white; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; transition: 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="حذف الصورة التالفة واسترجاع صورة درايف"><i class="fa-solid fa-arrows-rotate" style="font-size:16px;"></i></button>`
+        : '';
 
     const html = `
-    <div style="display: flex; flex-wrap: wrap; gap: 30px; align-items: center; text-align: right; font-family: 'Cairo', sans-serif; padding: 20px; background: #ffffff; border-radius: 20px;">
+    <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Cairo', sans-serif; padding: 30px 20px 20px; background: #ffffff; border-radius: 20px;">
         
-        <div style="flex-shrink: 0; position: relative; margin: 0 auto;">
-            <div style="width: 180px; height: 180px; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.25);">
-                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; display: flex; justify-content: center; align-items: center; overflow: hidden; border: 4px solid #fff;">
-                    ${imgHtml}
+        <!-- حاوية الصورة مع الزر العائم -->
+        <div style="position: relative; width: 170px; height: 170px; margin-bottom: 20px;">
+            <!-- الإطار الملون والصورة -->
+            <div style="width: 100%; height: 100%; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.25); box-sizing: border-box;">
+                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; overflow: hidden; border: 4px solid #fff; box-sizing: border-box;">
+                    ${imgTag}
                 </div>
             </div>
+            <!-- الزر العائم تم وضعه هنا ليكون فوق الإطار ولا يتم قصه -->
+            ${refreshBtn}
         </div>
 
-        <div style="flex-grow: 1; min-width: 250px;">
-            <h2 style="margin: 0 0 5px 0; font-size: 26px; font-weight: 900; color: #0f172a;">${data.name || '---'}</h2>
-            <h4 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 800; color: #0ea5e9;"><i class="fa-solid fa-briefcase" style="margin-left: 5px;"></i> ${data.rank || '---'}</h4>
+        <!-- الاسم والرتبة -->
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 900; color: #0f172a;">${data.name || '---'}</h2>
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: #0ea5e9;"><i class="fa-solid fa-briefcase" style="margin-left: 5px;"></i> ${data.rank || '---'}</h4>
+        </div>
+        
+        <!-- شبكة المعلومات (محاذاة لليمين) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; text-align: right;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.empId || '---'}</span>
+            </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
-                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.empId || '---'}</span>
-                </div>
-                
-                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الفوج الحالي</span>
-                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.group || 'غير محدد'}</span>
-                </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الفوج الحالي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.group || 'غير محدد'}</span>
+            </div>
 
-                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
-                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مؤسسة العمل (المكان)</span>
-                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${data.workplace || '---'}</span>
-                </div>
-                
-                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
-                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${data.phone || '---'}</span>
-                </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مؤسسة العمل (المكان)</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${data.workplace || '---'}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${data.phone || '---'}</span>
+            </div>
 
-                <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                    <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مادة التخصص</span>
-                    <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-book" style="color:#94a3b8; margin-left:5px;"></i> ${data.specialty || '---'}</span>
-                </div>
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مادة التخصص</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-book" style="color:#94a3b8; margin-left:5px;"></i> ${data.specialty || '---'}</span>
             </div>
         </div>
-
     </div>
     `;
 
@@ -1106,7 +1235,7 @@ window.viewInfo = function(docId) {
         html: html,
         showConfirmButton: false,
         showCloseButton: true,
-        width: '700px',
+        width: '600px',
         background: 'transparent',
         customClass: { popup: 'swal-modal-custom' }
     });
@@ -1607,38 +1736,56 @@ function printFilteredList3() {
 
 
 
-// ================= دالة طباعة البطاقات المحدثة (حل مشكلة الاختفاء والالتصاق) =================
-// ================= دالة طباعة البطاقات المحدثة (مع عرض الصور الشخصية) =================
-function printIDCards() {
-    if (filteredData.length === 0) { 
-        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعة بطاقاتها. تأكد من نتائج الفلترة.', 'warning'); 
+// ================= دالة طباعة البطاقات المحدثة (تدعم التحديد عبر مربعات Checkbox) =================
+window.printIDCards = function() {
+    // 🌟 1. تحديد من سيتم طباعة بطاقته 🌟
+    let dataToPrint = [];
+    
+    if (selectedTrainees.size > 0) {
+        // إذا قام المستخدم بتحديد مربعات، نطبع للمحددين فقط
+        dataToPrint = filteredData.filter(item => selectedTrainees.has(item.docId));
+    } else {
+        // إذا لم يحدد أحداً، نطبع كل القائمة المعروضة حالياً
+        dataToPrint = filteredData;
+    }
+
+    if (dataToPrint.length === 0) { 
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعة بطاقاتها. تأكد من نتائج الفلترة أو التحديد.', 'warning'); 
         return; 
     }
+
+    // إشعار للمستخدم بالعدد
+    Swal.fire({
+        toast: true, position: 'top-end', icon: 'info',
+        title: `جاري تجهيز ${dataToPrint.length} بطاقة للطباعة...`,
+        showConfirmButton: false, timer: 2000
+    });
 
     let printWindow = window.open('', '_blank');
     let pagesHtml = '';
     
     // تقسيم البيانات إلى مجموعات من 8 بطاقات
-    for (let i = 0; i < filteredData.length; i += 8) {
-        let pageData = filteredData.slice(i, i + 8);
+    for (let i = 0; i < dataToPrint.length; i += 8) {
+        let pageData = dataToPrint.slice(i, i + 8);
         pagesHtml += '<div class="page">';
         
         pageData.forEach(item => {
-            // حماية إضافية للرقم الوظيفي
             let empId = (item.empId && item.empId.trim() !== '') ? item.empId : '000000';
             
-            // 🌟 1. جلب الصورة الخاصة بالمتكون للمطابقة 🌟
+            // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
             const coreEmpId = extractCoreId(empId);
-            let photoUrl = item.photoUrl_fb ? item.photoUrl_fb : employeePhotosMap[coreEmpId];
+            const fbUrl = item.photoUrl_fb;
+            let driveUrl = employeePhotosMap[coreEmpId];
+            
+            let initialUrl = fbUrl ? fbUrl : driveUrl;
             
             // تحسين جودة الصورة للطباعة (w400)
-            if (photoUrl && photoUrl.includes('sz=w200')) {
-                photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
+            if (initialUrl && initialUrl.includes('sz=w200')) {
+                initialUrl = initialUrl.replace('sz=w200', 'sz=w400');
             }
 
-            // 🌟 2. تجهيز كود الصورة أو إبقاء المربع الفارغ 🌟
-            const photoContent = photoUrl 
-                ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.outerHTML='صورة<br>الموظف'"/>`
+            const photoContent = initialUrl 
+                ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="window.handleImageFallback(this, '${driveUrl}', 'print')"/>`
                 : `صورة<br>الموظف`;
 
             pagesHtml += `
@@ -1657,7 +1804,7 @@ function printIDCards() {
                         <div class="info-section">
                             <div class="info-row"><b>الاسم واللقب:</b> <span>${item.name || '-'}</span></div>
                             <div class="info-row"><b>الرتبة:</b> <span>${item.rank || '-'}</span></div>
-                           <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b>مكان العمل:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${item.workplace || '-'}</span></div></div>
+                            <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b>مكان العمل:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${item.workplace || '-'}</span></div></div>
                             <div class="info-row"><b>مادة التخصص:</b> <span>${item.specialty || '-'}</span></div>
                             <div class="info-row"><b>الفوج:</b> <span>${item.group || '-'}</span></div>
                             <div class="barcode-wrapper">
@@ -1666,7 +1813,6 @@ function printIDCards() {
                         </div>
                         
                         <div class="photo-section">
-                            <!-- 🌟 3. إدراج الصورة هنا وتعديل الحواف لعدم خروج الصورة 🌟 -->
                             <div class="photo-box" style="overflow: hidden; padding: 0;">
                                 ${photoContent}
                             </div>
@@ -1685,7 +1831,6 @@ function printIDCards() {
     <head>
         <meta charset="UTF-8">
         <title>طباعة بطاقات المتكونين</title>
-
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
         <!-- استدعاء مكتبة الباركود -->
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
@@ -1715,13 +1860,11 @@ function printIDCards() {
             .card{
                 border:2px solid #102a43;
                 border-radius:10px;
-                /* تعديل الحشوة السفلية إلى 8 بدل 18 لإعطاء مساحة للباركود */
                 padding:8px 10px 8px 10px; 
                 display:flex;
                 flex-direction:column;
                 background:#fff;
                 position:relative;
-                /* تغيير visible إلى hidden لمنع خروج أي عنصر خارج الإطار */
                 overflow:hidden; 
                 min-height:100%;
                 box-sizing:border-box;
@@ -1743,72 +1886,29 @@ function printIDCards() {
             
             .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
             
-           .info-section{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    justify-content:flex-start;
-}
-
+            .info-section{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
             .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
             .info-row b { color: #1E68E8; display: inline-block; min-width: 60px; font-weight: 800;}
             .info-row span { font-weight: 600; }
 
-             .barcode-wrapper{
-                margin-top: auto; /* لدفعه لأسفل المساحة المتاحة بشكل مرن */
-                margin-bottom: 4px; /* مسافة أمان صغيرة عن الحافة السفلية */
-                text-align:center;
-                display:flex;
-                justify-content:center;
-                align-items:center;
-            }
+            .barcode-wrapper{ margin-top: auto; margin-bottom: 4px; text-align:center; display:flex; justify-content:center; align-items:center; }
+            .barcode-wrapper svg { width: 100%; max-width: 115px; height: auto !important; display: block; margin: 0 auto; }
 
-            .barcode-wrapper svg { 
-                width: 100%; 
-                max-width: 115px; /* السر هنا: تصغير العرض الأقصى (كان 140) */
-                height: auto !important; 
-                display: block; 
-                margin: 0 auto; 
-            }
-
-            .photo-section{
-    width:25%;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:flex-start;
-    gap:6px;
-}
-            .photo-box { 
-                width: 85%; aspect-ratio: 3/4; border: 2px dashed #9cb4d8; 
-                border-radius: 6px; display: flex; align-items: center; 
-                justify-content: center; font-size: 10px; color: #9cb4d8; 
-                font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3;
-            }
-           .signature{
-    font-size:8px;
-    font-weight:800;
-    text-align:center;
-    color:#102a43;
-    line-height:1.2;
-    margin-top:0;
-    padding-bottom:0;
-}
+            .photo-section{ width:25%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; }
+            .photo-box { width: 85%; aspect-ratio: 3/4; border: 2px dashed #9cb4d8; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9cb4d8; font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3; }
+            .signature{ font-size:8px; font-weight:800; text-align:center; color:#102a43; line-height:1.2; margin-top:0; padding-bottom:0; }
         </style>
     </head>
     <body>
         ${pagesHtml}
         
         <script>
-            // دالة للتحقق من تحميل المكتبة لتفادي خطأ عدم ظهور الباركود
             function initBarcodes() {
                 if (typeof JsBarcode === 'undefined') {
-                    // إذا لم تكتمل المكتبة، انتظر 50 جزء من الثانية وأعد المحاولة
                     setTimeout(initBarcodes, 50);
                     return;
                 }
                 
-                // رسم الباركود
                 JsBarcode(".barcode").init({
                     format: "CODE128",
                     lineColor: "#000",
@@ -1822,25 +1922,19 @@ function printIDCards() {
                     font: "Cairo"
                 });
 
-             // كود التصغير التلقائي لنص مكان العمل فقط (مع الحفاظ على المستوى العمودي)
                 document.querySelectorAll('.shrink-workplace').forEach(function(el) {
-                    var availableWidth = el.parentElement.clientWidth; // المساحة المتاحة بجانب العنوان
-                    var textWidth = el.scrollWidth; // العرض الحقيقي للنص
-                    
+                    var availableWidth = el.parentElement.clientWidth;
+                    var textWidth = el.scrollWidth;
                     if (textWidth > availableWidth && availableWidth > 0) {
                         var scale = availableWidth / textWidth;
-                        // نطبق نسبة التصغير مع الاحتفاظ بالتوسيط العمودي
                         el.style.transform = 'translateY(-50%) scale(' + scale + ')';
                     }
                 });
                 
-                // فتح نافذة الطباعة بعد التأكد من الرسم
                 setTimeout(function() {
                     window.print();
                 }, 800);
             }
-
-            // تشغيل الدالة
             window.onload = initBarcodes;
         <\/script>
     </body>
@@ -1849,7 +1943,7 @@ function printIDCards() {
     
     printWindow.document.write(html);
     printWindow.document.close();
-}
+};
 
 function renderPagination(totalPages) {
     const container = document.getElementById("pagination-controls");
@@ -4104,7 +4198,74 @@ window.regenerateToken = function(oldDocId) {
     });
 };
 
+// ================= دالة زر استعادة الصورة المكسورة من ImgBB =================
+window.removeBrokenImage = async function(docId, cardType = 'info') {
+    Swal.fire({
+        title: 'استعادة الصورة من درايف',
+        text: 'هل تود حذف هذا الرابط التالف والاعتماد على الصورة الاحتياطية في قوقل درايف؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0FBA50',
+        confirmButtonText: 'نعم، استعادة',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التحديث اللحظي...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // 1. تحديد رقم الموظف الصحيح
+                let item = centerData.find(d => d.docId === docId);
+                let actualEmpId = item ? item.empId : docId;
 
+                // 2. مسح الرابط التالف من فايربيز
+                await db.collection("employeescomnew").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                await db.collection("employeescomplus").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                
+                // 3. تحديث المصفوفة المحلية للمتكونين وتحديث الجدول فوراً في مكانه
+                if (item) item.photoUrl_fb = null;
+                
+                if (typeof allData !== 'undefined') {
+                    let allItem = allData.find(d => d.docId === docId);
+                    if (allItem) allItem.photoUrl_fb = null;
+                }
+
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
+                
+                // 4. إعادة رسم الجدول دون تغيير الصفحة الحالية
+                if (typeof applyFilters === 'function') applyFilters(true);
+                
+                // 5. إعادة فتح البطاقة وعرض صورة درايف مباشرة
+                setTimeout(() => {
+                    if (typeof viewInfo === 'function') viewInfo(docId);
+                }, 400);
+
+            } catch(e) {
+                Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error');
+            }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            if (typeof viewInfo === 'function') viewInfo(docId);
+        }
+    });
+};
+
+// ================= دوال التحديد المتعدد (Checkboxes) =================
+function toggleSelectAll() {
+    const isChecked = document.getElementById("selectAll").checked;
+    if (isChecked) {
+        filteredData.forEach(item => selectedTrainees.add(item.docId));
+    } else {
+        selectedTrainees.clear();
+    }
+    document.querySelectorAll(".row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedTrainees.add(docId);
+    } else {
+        selectedTrainees.delete(docId);
+        document.getElementById("selectAll").checked = false;
+    }
+}
 </script>
 </body>
 </html>

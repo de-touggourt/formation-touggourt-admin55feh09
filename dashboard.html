@@ -396,31 +396,12 @@ footer{
   <h1>فضاء التكوين البيداغوجي توقرت</h1>
 </header>
 
-<section class="services">
-  <div class="service" onclick="openCenter(1)">
-    <i class="fa-solid fa-school"></i>
-    <h3>مركز التكوين<br>ثانوية عبد الرحمان الكواكبي</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(2)">
-    <i class="fa-solid fa-school"></i>
-     <h3>مركز التكوين<br>متوسطة دقعة الطاهر بن الزاوي</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(3)">
-    <i class="fa-solid fa-school"></i>
-     <h3>مركز التكوين<br>ثانوية البشير الإبراهيمي</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(4)">
-    <i class="fa-solid fa-school"></i>
-    <h3>مركز التكوين<br>متوسطة أحمد زبانة</h3>
-  </div>
-
-  <div class="service" onclick="openCenter(5)">
-    <i class="fa-solid fa-school"></i>
-    <h3>مركز التكوين<br>ثانوية لحسيني محمد</h3>
-  </div>
+<!-- قسم عرض المراكز ديناميكياً -->
+<section class="services" id="centers-container">
+    <div style="grid-column: 1/-1; padding: 50px;">
+        <div class="spinner" style="margin: auto;"></div>
+        <p style="color:#0FBA50; font-weight:bold; margin-top:15px; font-family:'Cairo';">جاري جلب المراكز المعتمدة...</p>
+    </div>
 </section>
 
 <footer>مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة © 2026</footer>
@@ -447,14 +428,22 @@ const db = firebase.firestore();
 // ==========================================
 let loggedInUser = null;
 let userDocId = null;
+let SITE_SETTINGS = null;
 
-// خريطة المراكز لربط الأزرار بأسماء المراكز في قاعدة البيانات
-const CENTER_MAP = {
-    1: "ثانوية عبد الرحمان الكواكبي",
-    2: "متوسطة دقعة الطاهر بن الزاوي",
-    3: "ثانوية البشير الإبراهيمي",
-    4: "متوسطة أحمد زبانة",
-    5: "ثانوية لحسيني محمد"
+// تعريف الأيقونات الثابتة للأطوار والتخصصات
+const ICONS = {
+    levels: {
+        'primary': { name: 'الطور الابتدائي', icon: 'fa-child-reaching' },
+        'middle': { name: 'الطور المتوسط', icon: 'fa-school' },
+        'secondary': { name: 'الطور الثانوي', icon: 'fa-user-graduate' }
+    },
+    specs: {
+        'arabic': { name: 'اللغة العربية', icon: 'fa-book-open' },
+        'french': { name: 'اللغة الفرنسية', icon: 'fa-language' },
+        'english': { name: 'اللغة الإنجليزية', icon: 'fa-font' },
+        'sport': { name: 'التربية البدنية والرياضة', icon: 'fa-person-running' },
+        'others': { name: 'باقي التخصصات', icon: 'fa-layer-group' }
+    }
 };
 
 // ==========================================
@@ -490,7 +479,6 @@ function startFadeOut() {
 window.onload = async function() {
     typeWriter();
     
-    // التحقق من الجلسة
     const empId = sessionStorage.getItem("userEmpId");
     if(!empId) {
         window.location.href = "index_2.html"; 
@@ -500,6 +488,7 @@ window.onload = async function() {
     if(empId === "ADMIN_ACCESS") {
         document.getElementById("loader").style.display = "none";
         loggedInUser = { center: "ADMIN" }; 
+        initSiteSettings(); // <--- بدء جلب المراكز للمدير
         return;
     }
 
@@ -526,6 +515,8 @@ window.onload = async function() {
 
         document.getElementById("loader").style.display = "none";
         checkAndFillMissingInfo();
+        
+        initSiteSettings(); // <--- بدء جلب المراكز للأستاذ
 
     } catch (error) {
         console.error("Error fetching data:", error);
@@ -669,8 +660,9 @@ function formatPhoneString(val) {
     return formatted;
 }
 
+
 // ==========================================
-// 🔗 ربط الأزرار والمراكز والدخول
+// 🔗 ربط الأزرار والمراكز (النظام الديناميكي الذكي)
 // ==========================================
 const swalConfig = {
     showConfirmButton: true,
@@ -680,158 +672,174 @@ const swalConfig = {
     scrollbarPadding: false
 };
 
-function openCenter(centerId) {
-  if (loggedInUser.center !== "ADMIN") {
-      const requiredCenterName = CENTER_MAP[centerId];
-      
-      if (!loggedInUser.center || loggedInUser.center.trim() === "" || loggedInUser.center === "-") {
-          Swal.fire({
-              icon: 'warning',
-              title: 'غير مصرح!',
-              text: 'لم يتم إدراجك في أي مركز تكوين حتى الآن. يرجى مراجعة إدارة التكوين والتفتيش.',
-              confirmButtonColor: '#ff9800'
-          });
-          return; 
-      }
-
-      if (loggedInUser.center !== requiredCenterName) {
-          Swal.fire({
-              icon: 'error',
-              title: 'ممنوع الدخول!',
-              html: `أنت تحاول الدخول لمركز غير مخصص لك.<br><br><b>مركزك المعتمد هو:</b> <span style="color:#0FBA50">${loggedInUser.center}</span>`,
-              confirmButtonColor: '#dc3545',
-              confirmButtonText: 'العودة'
-          });
-          return; 
-      }
-  }
-
-  let html = '<div class="icon-container">';
-  let popupTitle = '';
-
-  if (centerId === 1) {
-    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
-    html += `
-      <div class="icon-btn" onclick="openLink(1, 'arabic')">
-        <i class="fa-solid fa-book-open"></i> تخصص اللغة العربية
-      </div>
-      <div class="icon-btn" onclick="openLink(1, 'french')">
-       <i class="fa-solid fa-language"></i> تخصص اللغة الفرنسية
-      </div>`;
-  } 
-  else if (centerId === 2) {
-    popupTitle = 'أساتذة الطور الإبتدائي - اختر التخصص:';
-    html += `
-      <div class="icon-btn" onclick="openLink(2, 'english')">
-        <i class="fa-solid fa-font"></i> تخصص اللغة الإنجليزية
-      </div>
-      <div class="icon-btn" onclick="openLink(2, 'sport')">
-        <i class="fa-solid fa-person-running"></i> تخصص التربية البدنية والرياضة
-      </div>`;
-  } 
-  else if (centerId === 3) {
-      popupTitle = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
-      html += `
-        <div class="icon-btn" onclick="openLink(3, 'french')">
-            <i class="fa-solid fa-language"></i> اللغة الفرنسية
-        </div>
-        <div class="icon-btn" onclick="openLink(3, 'english')">
-            <i class="fa-solid fa-font"></i> اللغة الإنجليزية
-        </div>
-        <div class="icon-btn" onclick="openLink(3, 'sport')">
-            <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
-        </div>
-        <div class="icon-btn" onclick="openLink(3, 'others')">
-            <i class="fa-solid fa-layer-group"></i> باقي التخصصات
-        </div>`;
-  } 
-  else if (centerId === 4 || centerId === 5) {
-      popupTitle = 'اختر الطور:';
-      html += `
-        <div class="icon-btn" onclick="openSubMenu('primary', ${centerId})">
-          <i class="fa-solid fa-child-reaching"></i>
-          الطور الابتدائي
-        </div>
-        <div class="icon-btn" onclick="openSubMenu('middle_secondary', ${centerId})">
-          <i class="fa-solid fa-user-graduate"></i>
-          الطور المتوسط والثانوي
-        </div>`;
-  }
-
-  html += '</div>';
-
-  Swal.fire({
-    ...swalConfig, 
-    title: popupTitle,
-    html: html
-  });
-}
-
-function openSubMenu(level, parentId) {
-    let html = '<div class="icon-container">';
-    let title = '';
-
-    if (level === 'primary') {
-        title = 'أساتذة الطور الابتدائي - اختر التخصص:';
-        html += `
-            <div class="icon-btn" onclick="openLink(${parentId}, 'arabic', 'primary')">
-                <i class="fa-solid fa-book-open"></i> اللغة العربية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'primary')">
-                <i class="fa-solid fa-language"></i> اللغة الفرنسية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'primary')">
-                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'primary')">
-                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
-            </div>
-        `;
-    } else if (level === 'middle_secondary') {
-        title = 'أساتذة الطور المتوسط والثانوي - اختر التخصص:';
-        html += `
-            <div class="icon-btn" onclick="openLink(${parentId}, 'french', 'middle_secondary')">
-                <i class="fa-solid fa-language"></i> اللغة الفرنسية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'english', 'middle_secondary')">
-                <i class="fa-solid fa-font"></i> اللغة الإنجليزية
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'sport', 'middle_secondary')">
-                <i class="fa-solid fa-person-running"></i> التربية البدنية والرياضة
-            </div>
-            <div class="icon-btn" onclick="openLink(${parentId}, 'others', 'middle_secondary')">
-                <i class="fa-solid fa-layer-group"></i> باقي التخصصات
-            </div>
-        `;
-    }
-
-    html += '</div>';
-
-    Swal.fire({
-        ...swalConfig,
-        title: title,
-        html: html,
-        showDenyButton: true,
-        denyButtonText: 'عودة للخلف',
-        denyButtonColor: '#0FBA50',
-    }).then((result) => {
-        if (result.isDenied) {
-            openCenter(parentId);
+// دالة جلب الإعدادات المركزية
+function initSiteSettings() {
+    db.collection("site_settings").doc("main").onSnapshot((doc) => {
+        if (doc.exists) {
+            SITE_SETTINGS = doc.data();
+            renderCenters(); // بناء المراكز آلياً
+        } else {
+            Swal.fire('خطأ', 'لم يتم العثور على إعدادات الموقع المركزية.', 'error');
         }
     });
 }
 
-function openLink(centerId, type, level = null) {
-    if (!level) {
-        if (centerId === 1 || centerId === 2) {
-            level = 'primary';
-        } else if (centerId === 3) {
-            level = 'middle_secondary';
+// دالة رسم المراكز في الشاشة الرئيسية
+function renderCenters() {
+    const container = document.getElementById("centers-container");
+    container.innerHTML = "";
+    
+    const centers = SITE_SETTINGS.UI_NAMES.centers || {};
+    let hasCenters = false;
+
+    for (let cId in centers) {
+        hasCenters = true;
+        const cName = centers[cId];
+        container.innerHTML += `
+            <div class="service" onclick="openCenter('${cId}')">
+                <i class="fa-solid fa-school"></i>
+                <h3>مركز التكوين<br>${cName}</h3>
+            </div>
+        `;
+    }
+
+    if (!hasCenters) {
+        container.innerHTML = '<div style="grid-column: 1/-1; color: #dc2626; font-weight: bold; font-size: 18px;">لا توجد مراكز تكوين مبرمجة حالياً.</div>';
+    }
+}
+
+// دالة الدخول للمركز مع الحماية
+function openCenter(centerId) {
+    const requiredCenterName = SITE_SETTINGS.UI_NAMES.centers[centerId];
+    
+    // فحص الحماية للأساتذة (يُستثنى المدير ADMIN)
+    if (loggedInUser.center !== "ADMIN") {
+        if (!loggedInUser.center || loggedInUser.center.trim() === "" || loggedInUser.center === "-") {
+            Swal.fire({
+                icon: 'warning', title: 'غير مصرح!',
+                text: 'لم يتم إدراجك في أي مركز تكوين حتى الآن. يرجى مراجعة إدارة التكوين والتفتيش.',
+                confirmButtonColor: '#ff9800'
+            });
+            return; 
+        }
+
+        if (loggedInUser.center !== requiredCenterName) {
+            Swal.fire({
+                icon: 'error', title: 'ممنوع الدخول!',
+                html: `أنت تحاول الدخول لمركز غير مخصص لك.<br><br><b>مركزك المعتمد هو:</b> <span style="color:#0FBA50">${loggedInUser.center}</span>`,
+                confirmButtonColor: '#dc3545',
+                confirmButtonText: 'العودة'
+            });
+            return; 
         }
     }
+
+    // جلب الهيكلة الخاصة بالمركز من Firebase
+    const centerLinks = SITE_SETTINGS.dbLinks[centerId] || {};
+    const availableLevels = Object.keys(centerLinks);
+
+    if (availableLevels.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد أطوار أو تخصصات مبرمجة في هذا المركز حالياً.', 'info');
+        return;
+    }
+
+    // إذا كان المركز يحتوي على طور واحد فقط، تجاوزه وافتح التخصصات مباشرة
+    if (availableLevels.length === 1) {
+        showSpecsModal(centerId, availableLevels[0], false);
+    } else {
+        showLevelsModal(centerId, availableLevels);
+    }
+}
+
+// دالة عرض الأطوار
+function showLevelsModal(centerId, availableLevels) {
+    let html = '<div class="icon-container">';
+    
+    availableLevels.forEach(lvlId => {
+        let defaultIcon = 'fa-layer-group';
+        let defaultName = lvlId;
+        
+        if (ICONS.levels[lvlId]) {
+            defaultIcon = ICONS.levels[lvlId].icon;
+            defaultName = ICONS.levels[lvlId].name;
+        }
+        
+        let levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
+                        ? SITE_SETTINGS.UI_NAMES.levels[lvlId] 
+                        : defaultName;
+
+        html += `
+          <div class="icon-btn" onclick="showSpecsModal('${centerId}', '${lvlId}', true)">
+            <i class="fa-solid ${defaultIcon}"></i> ${levelName}
+          </div>`;
+    });
+    
+    html += '</div>';
+
+    Swal.fire({
+        ...swalConfig,
+        title: 'اختر الطور المستهدف:',
+        html: html
+    });
+}
+
+// دالة عرض التخصصات بناءً على الطور والمركز
+function showSpecsModal(centerId, lvlId, showBackButton) {
+    const specsData = SITE_SETTINGS.dbLinks[centerId][lvlId] || {};
+    const availableSpecs = Object.keys(specsData);
+
+    if (availableSpecs.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد تخصصات مبرمجة لهذا الطور.', 'info');
+        return;
+    }
+
+    let defaultName = lvlId;
+    if (ICONS.levels[lvlId]) defaultName = ICONS.levels[lvlId].name;
+    const levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
+                      ? SITE_SETTINGS.UI_NAMES.levels[lvlId] 
+                      : defaultName;
+
+    let html = '<div class="icon-container">';
+    
+    availableSpecs.forEach(spcId => {
+        let spcInfo = ICONS.specs[spcId] || { name: spcId, icon: 'fa-book' };
+        html += `
+          <div class="icon-btn" onclick="openLink('${centerId}', '${spcId}', '${lvlId}')">
+            <i class="fa-solid ${spcInfo.icon}"></i> ${spcInfo.name}
+          </div>`;
+    });
+    
+    html += '</div>';
+
+    let options = {
+        ...swalConfig,
+        title: `<div style="color: #0FBA50; font-size: 20px; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 10px;">
+                    <i class="fa-solid fa-layer-group"></i> ${levelName}
+                </div>
+                <div style="color: #475569; font-size: 16px;">يرجى اختيار التخصص المناسب:</div>`,
+        html: html
+    };
+
+    if (showBackButton) {
+        options.showDenyButton = true;
+        options.denyButtonText = '<i class="fa-solid fa-arrow-right"></i> تراجع للوراء';
+        options.denyButtonColor = '#0FBA50';
+    }
+
+    Swal.fire(options).then((result) => {
+        if (result.isDenied && showBackButton) {
+            const availableLevels = Object.keys(SITE_SETTINGS.dbLinks[centerId]);
+            showLevelsModal(centerId, availableLevels);
+        }
+    });
+}
+
+// دالة التوجيه النهائي لصفحة الدروس
+function openLink(centerId, type, level) {
     const targetUrl = `courses.html?c=${centerId}&l=${level}&s=${type}`;
     window.location.href = targetUrl;
 }
+
 </script>
 
 </body>
