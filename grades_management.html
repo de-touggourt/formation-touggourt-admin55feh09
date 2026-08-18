@@ -1,0 +1,2172 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام تسيير النقاط - فضاء التكوين</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  
+  <style>
+    * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+    body { margin: 0; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); color: #333; min-height: 100vh; display: flex; flex-direction: column; }
+    
+    /* === الهوية البصرية === */
+    .top-nav { background: #102a43; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .top-nav h2 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; color: #62b0e8; }
+    .top-nav h2 span { color: #fff; font-size: 16px; background: #243b53; padding: 4px 12px; border-radius: 20px; margin-right: 10px; border: 1px solid #334e68;}
+    .nav-btn { background: #1E68E8; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; display: flex; align-items: center; gap: 8px;}
+    .nav-btn:hover { background: #1557c0; }
+    .nav-btn.danger { background: #d90429; } .nav-btn.danger:hover { background: #ef233c; }
+    
+    .dashboard-container { padding: 20px; flex: 1; width: 100%; max-width: 100%; margin: 0 auto; }
+    
+    /* === البطاقات الإحصائية === */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .stat-card { background: white; padding: 15px 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; border-right: 4px solid #102a43; }
+    .stat-card.blue { border-right-color: #1E68E8; } .stat-card.green { border-right-color: #0FBA50; } .stat-card.red { border-right-color: #d90429; } .stat-card.orange { border-right-color: #ff9800; }
+    .stat-info h3 { margin: 0; font-size: 13px; color: #777; }
+    .stat-info p { margin: 5px 0 0; font-size: 24px; font-weight: 800; color: #333; }
+    .stat-icon { font-size: 30px; opacity: 0.8; }
+    
+    /* === الفلاتر === */
+    .filters-section { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+    .filters-header { width: 100%; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed #eee; padding-bottom: 15px; margin-bottom: 10px;}
+    .filter-group { flex: 1; min-width: 160px; display: flex; flex-direction: column; }
+    .filter-group label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px; }
+    .filter-group select, .filter-group input { padding: 8px 12px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; outline: none; transition: 0.3s; font-weight: bold; color: #102a43;}
+    .filter-group select:focus, .filter-group input:focus { border-color: #1E68E8; }
+
+    /* === الجدول الرئيسي المحسن === */
+    .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-height: 65vh;}
+    table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1200px; }
+    thead th { background: #102a43; color: white; padding: 12px 10px; text-align: center; font-size: 13px; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #0a1c2e;}
+    tbody td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; font-size: 13.5px; vertical-align: middle; }
+    tbody tr:hover { background: #f8fbff; }
+    
+    .compact-info { text-align: right; line-height: 1.4; display: inline-block; width: 100%; }
+    .c-main { font-weight: 800; color: #102a43; font-size: 14px; }
+    .c-sub { font-size: 12px; color: #666; font-weight: 600; }
+    
+    .badge { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; white-space: nowrap; display: inline-block; }
+    .b-success { background: #e8fbf0; color: #0FBA50; border: 1px solid #0FBA50; }
+    .b-danger { background: #ffeaea; color: #d90429; border: 1px solid #d90429; }
+    .b-warning { background: #fff4e5; color: #ff9800; border: 1px solid #ff9800; }
+    .b-neutral { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+
+    /* === نظام الصور === */
+    .pic-wrapper { display: flex; align-items: center; gap: 10px; justify-content: right; text-align: right;}
+    .pic-container { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 2px solid #cbd5e1; background: #f1f5f9; display: flex; justify-content: center; align-items: center; flex-shrink: 0;}
+    .pic-container img { width: 100%; height: 100%; object-fit: cover; }
+    
+    /* === واجهة حجز النقاط (Modal) === */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(16, 42, 67, 0.9); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+    .modal-content { background: #f0f4f8; width: 98%; height: 96%; border-radius: 15px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .modal-header { background: #1E68E8; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { margin: 0; font-size: 18px; }
+    .modal-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 10px; }
+    
+    /* التبويبات */
+    .tabs-header { display: flex; gap: 5px; background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+    .tab-btn { flex: 1; padding: 10px; border: none; background: #f1f5f9; color: #64748b; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; font-size: 15px;}
+    .tab-btn.active { background: #102a43; color: white; }
+    .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .tab-content.active { display: flex; }
+
+    /* حقول النقاط */
+    .grade-input { width: 65px; padding: 6px; text-align: center; font-weight: 800; border: 2px solid #cbd5e1; border-radius: 6px; outline: none; font-family: 'Cairo'; font-size: 14px; transition: 0.2s; direction: ltr;}
+    .grade-input:focus { border-color: #1E68E8; background: #eff6ff; transform: scale(1.05);}
+    .grade-input.error { border-color: #d90429; background: #ffeaea; animation: shake 0.3s; }
+    .grade-input:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+    
+    @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+
+    .btn-action { background: #27ae60; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; transition: 0.3s;}
+    .btn-action:hover { filter: brightness(1.1); }
+    .btn-action.print { background: #8e44ad; }
+    
+    #loader { display: flex; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; justify-content:center; align-items:center; flex-direction:column; }
+    .spinner { border: 5px solid #1E68E8; border-top: 5px solid transparent; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @media print { body * { visibility: hidden; } #print-section, #print-section * { visibility: visible; } #print-section { position: absolute; left: 0; top: 0; width: 100%; } }
+  </style>
+</head>
+<body>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <h3 style="color: #102a43; margin-top: 15px;" id="loader-text">جاري تحميل نظام النقاط...</h3>
+  </div>
+
+  <div class="top-nav">
+    <h2><i class="fa-solid fa-graduation-cap"></i> نظام تسيير نقاط المتكونين <span id="headerCenterName">المركز...</span></h2>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <div id="welcomeName" style="color: #cbd5e1; font-size: 14px; font-weight: bold; padding-left: 15px; border-left: 1px solid #334e68;"></div>
+      <button class="nav-btn" onclick="saveAllGrades()"><i class="fa-solid fa-cloud-arrow-up"></i> حفظ التعديلات</button>
+      <button class="nav-btn danger" onclick="window.location.href='inspector_dashboard.html'"><i class="fa-solid fa-arrow-right-from-bracket"></i> العودة للوحة</button>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    
+    <!-- البطاقات الإحصائية -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-info"><h3>إجمالي المتكونين</h3><p id="st-total">0</p></div>
+        <i class="fa-solid fa-users stat-icon" style="color: #102a43;"></i>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-info"><h3>تم الحجز</h3><p id="st-graded">0</p></div>
+        <i class="fa-solid fa-check-double stat-icon" style="color: #1E68E8;"></i>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-info"><h3>في الانتظار</h3><p id="st-pending">0</p></div>
+        <i class="fa-solid fa-hourglass-half stat-icon" style="color: #ff9800;"></i>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-info"><h3>الناجحون</h3><p id="st-passed">0</p></div>
+        <i class="fa-solid fa-trophy stat-icon" style="color: #0FBA50;"></i>
+      </div>
+	  <div class="stat-card purple">
+        <div class="stat-info"><h3>المؤجلون</h3><p id="st-postponed">0</p></div>
+        <i class="fa-solid fa-clock-rotate-left stat-icon" style="color: #8e44ad;"></i>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-info"><h3>الراسبون</h3><p id="st-failed">0</p></div>
+        <i class="fa-solid fa-circle-xmark stat-icon" style="color: #d90429;"></i>
+      </div>
+    </div>
+
+    <!-- الفلاتر -->
+    <div class="filters-section">
+     <div class="filters-header">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="nav-btn" style="background: #27ae60;" onclick="openGradesModal()"><i class="fa-solid fa-pen-to-square"></i> حجز النقاط (جماعي)</button>
+            <button class="nav-btn print" style="background: #8e44ad;" onclick="triggerPrintMinutes()"><i class="fa-solid fa-file-signature"></i> المحضر النهائي</button>
+            <button class="nav-btn" style="background: #34495e;" onclick="printBulkTranscripts()"><i class="fa-solid fa-print"></i> طباعة الكشوف</button>
+            <button class="nav-btn" style="background: #e67e22;" onclick="printBulkDoubleTranscripts()"><i class="fa-solid fa-copy"></i> كشوف مزدوجة (نسختين)</button>
+            <button class="nav-btn" style="background: #C2185B;" onclick="promptPrintBulkCertificates()"><i class="fa-solid fa-certificate"></i> شهادات النجاح (للناجحين)</button>
+		</div>
+        <span class="badge b-neutral" style="font-size: 14px;">عدد النتائج: <span id="st-filtered-count">0</span></span>
+      </div>
+      
+      <div class="filter-group">
+        <label>البحث بالاسم أو الرقم</label>
+        <input type="text" id="f-search" placeholder="ابحث هنا..." oninput="applyFilters()">
+      </div>
+      <div class="filter-group">
+        <label>الرتبة</label>
+        <select id="f-rank" onchange="updateFilterDependencies('rank')"><option value="الكل">الكل</option></select>
+      </div>
+      <div class="filter-group">
+        <label>التخصص</label>
+        <select id="f-spec" onchange="updateFilterDependencies('spec')"><option value="الكل">الكل</option></select>
+      </div>
+      <div class="filter-group">
+        <label>الفوج</label>
+        <select id="f-group" onchange="applyFilters()"><option value="الكل">الكل</option></select>
+      </div>
+      <div class="filter-group">
+        <label>القرار النهائي</label>
+        <select id="f-decision" onchange="applyFilters()">
+          <option value="الكل">الكل</option>
+          <option value="ناجح">ناجح</option>
+          <option value="راسب">راسب</option>
+          <option value="مؤجل">مؤجل</option>
+          <option value="غير محدد">لم تحدد النتيجة</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- الجدول الرئيسي -->
+    <div class="table-responsive">
+      <table id="mainTable">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th style="width: 220px;">المتكون (الرقم والاسم)</th>
+            <th>تاريخ ومكان الميلاد</th>
+            <th>المسار المهني (الرتبة والتخصص)</th>
+            <th style="width: 80px;">م. التقويم</th>
+            <th style="width: 80px;">ن. التقرير</th>
+            <th style="width: 80px; color: #1E68E8;">ع. الامتحان (60)</th>
+            <th style="width: 80px;">المعدل العام</th>
+            <th style="width: 80px;">القرار</th>
+            <th style="width: 100px; white-space: nowrap;">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="mainTableBody">
+          <!-- Data goes here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= واجهة حجز النقاط الكبيرة ================= -->
+  <div class="modal-overlay" id="gradesModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-pen-to-square"></i> شاشة حجز النقاط المتقدمة</h2>
+        <div style="display: flex; gap:10px;">
+            <button class="nav-btn" style="background:#0FBA50; padding: 5px 15px;" onclick="saveAllGrades(true)"><i class="fa-solid fa-check"></i> حفظ وإغلاق</button>
+            <button class="nav-btn danger" style="padding: 5px 15px;" onclick="closeGradesModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      
+      <div class="modal-body">
+          <div style="display: flex; gap: 10px; margin-bottom: 10px; background: white; padding: 10px; border-radius: 10px;">
+              <input type="text" id="m-search" placeholder="بحث..." class="grade-input" style="width: 150px; text-align: right; direction: rtl;" oninput="syncModalFilters()">
+              <select id="m-rank" class="grade-input" style="width: 150px; text-align: right; direction: rtl;" onchange="syncModalFilters('rank')"><option value="الكل">الرتبة (الكل)</option></select>
+              <select id="m-spec" class="grade-input" style="width: 150px; text-align: right; direction: rtl;" onchange="syncModalFilters('spec')"><option value="الكل">التخصص (الكل)</option></select>
+              <select id="m-group" class="grade-input" style="width: 120px; text-align: right; direction: rtl;" onchange="syncModalFilters()"><option value="الكل">الفوج (الكل)</option></select>
+              <span style="margin-right:auto; align-self:center; font-size:13px; color:#e67e22; font-weight:bold;"><i class="fa-solid fa-keyboard"></i> استخدم الأسهم (↑ ↓ → ←) و Enter للتنقل السريع</span>
+          </div>
+
+          <div class="tabs-header">
+              <button class="tab-btn active" onclick="switchTab('evalTab')"><i class="fa-solid fa-tasks"></i> نقاط التقويم المستمر وتقرير النهاية</button>
+              <button class="tab-btn" onclick="switchTab('examTab')"><i class="fa-solid fa-file-pen"></i> نقاط المقاييس (الاختبارات)</button>
+          </div>
+
+          <!-- تبويب التقويم -->
+          <div id="evalTab" class="tab-content active">
+              <div class="table-responsive" style="max-height: 100%;">
+                <table id="evalTable">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>الرقم الوظيفي</th>
+                            <th>الاسم واللقب</th>
+                            <th>الفوج</th>
+                            <th style="background:#2c3e50;">الدورة الأولى<br>(20)</th>
+                            <th style="background:#2c3e50;">الدورة الثانية<br>(20)</th>
+                            <th style="background:#2c3e50;">الدورة الثالثة<br>(20)</th>
+                            <th style="background:#8e44ad;">معدل التقويم<br>(20)</th>
+                            <th style="background:#d35400;">نقطة تقرير النهاية<br>(20)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="evalTableBody"></tbody>
+                </table>
+              </div>
+          </div>
+
+          <!-- تبويب الاختبارات -->
+          <div id="examTab" class="tab-content">
+              <div class="table-responsive" style="max-height: 100%;">
+                <table id="examTable">
+                    <thead id="examTableHead">
+                        <!-- Dynamic Headers based on specialty -->
+                    </thead>
+                    <tbody id="examTableBody"></tbody>
+                </table>
+              </div>
+          </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="print-section" style="display:none;"></div>
+  
+  <!-- ================= واجهة حجز النقاط الفردية السريعة ================= -->
+  <div class="modal-overlay" id="singleEditModal">
+    <div class="modal-content" style="width: 850px; height: auto; max-height: 90vh;">
+      <div class="modal-header" style="background: #f39c12;">
+        <h2><i class="fa-solid fa-user-pen"></i> حجز وتعديل نقاط المتكون: <span id="se-trainee-name" style="font-weight: 900;"></span></h2>
+        <button class="nav-btn danger" style="padding: 5px 15px;" onclick="closeSingleEditModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <div class="modal-body" style="overflow-y: auto; padding: 20px; background: #f8fbff;">
+          <input type="hidden" id="se-empId">
+          
+          <!-- القسم الأول: التقويم والتقرير -->
+          <h3 style="border-bottom: 2px solid #f39c12; padding-bottom: 5px; color: #102a43; font-size: 16px;"><i class="fa-solid fa-list-check"></i> 1. التقويم المستمر وتقرير النهاية</h3>
+          <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+              <div>
+                  <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px;">الدورة 1</label>
+                  <input type="text" id="se-p1" class="grade-input" oninput="calcSingleModalAverages()">
+              </div>
+              <div>
+                  <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px;">الدورة 2</label>
+                  <input type="text" id="se-p2" class="grade-input" oninput="calcSingleModalAverages()">
+              </div>
+              <div>
+                  <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px;">الدورة 3</label>
+                  <input type="text" id="se-p3" class="grade-input" oninput="calcSingleModalAverages()">
+              </div>
+              <div style="border-right: 2px dashed #ccc; padding-right: 15px; margin-right: 5px;">
+                  <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #8e44ad;">معدل التقويم</label>
+                  <input type="text" id="se-eval-avg" class="grade-input" disabled style="background: #f4f0fa; color: #8e44ad;">
+              </div>
+              <div style="border-right: 2px dashed #ccc; padding-right: 15px; margin-right: 5px;">
+                  <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #d35400;">نقطة التقرير</label>
+                  <input type="text" id="se-rep" class="grade-input" style="border-color: #d35400;">
+              </div>
+          </div>
+
+          <!-- القسم الثاني: الاختبارات -->
+          <h3 style="border-bottom: 2px solid #1E68E8; padding-bottom: 5px; color: #102a43; font-size: 16px;"><i class="fa-solid fa-file-pen"></i> 2. نقاط المقاييس (الاختبارات)</h3>
+          <div id="se-exams-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+              <!-- ستُضاف الحقول هنا برمجياً -->
+          </div>
+          
+          <div style="background: #eaf0fc; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 15px;">
+              <span style="color: #1E68E8;">علامة الامتحان النهائي (معدل المقاييس على 20):</span>
+              <input type="text" id="se-exam-avg" disabled class="grade-input" style="width: 80px; background: #fff; color: #1E68E8; font-size: 16px;">
+          </div>
+		  
+		  <!-- شريط المعدل العام والقرار النهائي -->
+          <div style="background: #e2e8f0; padding: 15px; border-radius: 8px; margin-top: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 15px; border: 2px solid #cbd5e1;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="color: #102a43;">المعدل العام:</span>
+                  <input type="text" id="se-gen-avg" disabled class="grade-input" style="width: 80px; background: #fff; color: #102a43; font-size: 16px;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="color: #102a43;">القرار النهائي:</span>
+                  <select id="se-decision" class="grade-input" style="width: 120px; font-size: 14px; font-weight: 900; cursor: pointer;" onchange="this.style.color = (this.value === 'مؤجل') ? '#ff9800' : '#64748b';">
+                      <!-- الخيارات ستضاف برمجياً للحماية -->
+                  </select>
+              </div>
+          </div>
+		  
+		  <!-- حقل الملاحظة -->
+          <div style="background: white; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #e2e8f0;">
+              <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #102a43;"><i class="fa-solid fa-comment-dots"></i> الملاحظة:</label>
+              <input type="text" id="se-remarks" class="grade-input" style="width: 100%; text-align: right; font-weight: 600; border-color: #cbd5e1;" placeholder="اكتب ملاحظة حول المتكون (اختياري)...">
+          </div>
+
+          <div style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
+              <button class="nav-btn danger" onclick="closeSingleEditModal()"><i class="fa-solid fa-times"></i> إلغاء</button>
+              <button class="nav-btn" style="background:#0FBA50;" onclick="saveSingleEdit()"><i class="fa-solid fa-save"></i> حفظ نقطة المتكون</button>
+          </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ============================================================================
+// 1. إعدادات النظام وقاعدة البيانات والمقاييس (TRAINING_SUBJECTS_CONFIG)
+// ============================================================================
+const TRAINING_SUBJECTS_CONFIG = {
+    "default_primary": {
+        "subjects": [
+            { id: "s1", name: "علوم التربية وعلم النفس", coef: 1, max: 20 },
+            { id: "s2", name: "تقنيات تسيير القسم", coef: 1, max: 20 },
+            { id: "s3", name: "الوساطة المدرسية", coef: 1, max: 20 },
+            { id: "s4", name: "تعليمية مادة التخصص وطرق التدريس", coef: 2, max: 20, printMax: 40 },
+            { id: "s5", name: "التقييم والمعالجة البيداغوجية", coef: 2, max: 20, printMax: 40 },
+            { id: "s6", name: "النظام التربوي الجزائري والمناهج التعليمية", coef: 1, max: 20 },
+            { id: "s7", name: "أخلاقيات وأدبيات المهنة", coef: 1, max: 20 },
+            { id: "s8", name: "هندسة التكوين والبيداغوجيا", coef: 1, max: 20 },
+            { id: "s9", name: "التشريع المدرسي", coef: 1, max: 20 },
+            { id: "s10", name: "الإعلام الآلي وتكنولوجيا الإعلام والاتصال", coef: 1, max: 20 },
+            { id: "s11", name: "الشفافية والوقاية من الفساد", coef: 1, max: 20 }
+        ],
+        "pass_mark": 10
+    }
+};
+
+// ================= Firebase Configuration =================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ================= Session & Core Variables =================
+let INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+let CURRENT_USER_ROLE = "";
+let CURRENT_ADMIN_NAME = ""; 
+let TRAINING_YEAR = "2025-2026"; 
+
+let centerTrainees = []; 
+let gradesData = {}; 
+let mergedData = []; 
+let filteredData = []; 
+
+let employeePhotosMap = {}; 
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec";
+
+let hasUnsavedChanges = false;
+let isSaving = false;
+
+window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let str = String(val).trim().toUpperCase();
+    let digitsOnly = str.replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, "");
+    return core === "" ? digitsOnly : core;
+}
+
+window.handleImageFallback = function(imgElement, driveUrl) {
+    if (imgElement.getAttribute('data-retried') !== 'true' && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null') {
+        imgElement.setAttribute('data-retried', 'true');
+        imgElement.src = driveUrl; 
+    } else {
+        imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:20px; color:#94a3b8;"></i>';
+    }
+};
+
+// ================= Initialization =================
+window.onload = function() {
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    if (!isLoggedIn || !INSPECTOR_CENTER) {
+        window.location.href = "index.html";
+        return;
+    }
+    document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
+
+    db.collection("site_settings").doc("main").get().then(doc => {
+        if (doc.exists && doc.data().DRIVE_SETTINGS && doc.data().DRIVE_SETTINGS.academicYear) {
+            TRAINING_YEAR = doc.data().DRIVE_SETTINGS.academicYear;
+        }
+    }).catch(e => console.log("تعذر جلب السنة التكوينية"));
+
+    checkPermissions();
+    fetchPhotos();
+    fetchData();
+};
+
+function checkPermissions() {
+    let userEmpId = sessionStorage.getItem("userEmpId");
+    db.collection("center_admins").where("center", "==", INSPECTOR_CENTER).get().then(snap => {
+        snap.forEach(doc => {
+            let data = doc.data();
+            if(extractCoreId(data.id) === extractCoreId(userEmpId)) {
+                CURRENT_USER_ROLE = data.jobTitle || data.role || "";
+                CURRENT_ADMIN_NAME = data.name || ""; 
+                document.getElementById("welcomeName").innerText = CURRENT_USER_ROLE + " | " + CURRENT_ADMIN_NAME;
+            }
+        });
+    });
+}
+
+function fetchPhotos() {
+    fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (res) => {
+        const text = await res.text();
+        if (text && text.includes("[")) {
+            JSON.parse(text).forEach(item => {
+                if(item.jobId && item.photoUrl) {
+                    let directUrl = item.photoUrl;
+                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
+                    employeePhotosMap[extractCoreId(item.jobId)] = directUrl;
+                }
+            });
+            if(mergedData.length > 0) renderMainTable();
+        }
+    }).catch(e => console.warn("تعذر جلب الصور:", e));
+}
+
+// ================= Data Loading & Merging =================
+function fetchData() {
+    const loader = document.getElementById("loader");
+    
+    db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).onSnapshot((empSnap) => {
+        centerTrainees = [];
+        empSnap.forEach(doc => {
+            let data = doc.data();
+            centerTrainees.push({
+                docId: doc.id,
+                empId: data.id || doc.id,
+                name: data.name || "",
+                photoUrl_fb: data.photoUrl_fb || null,
+                rank: data.grade || "-",
+                specialty: data.maty || "-",
+                workplace: data.place || "-",
+                group: data.group || data.fawj || "-",
+                dob: formatDob(data.diz),
+                pob: data.pob || "-",
+                gender: data.gnr || "-"
+            });
+        });
+        
+        fetchGrades();
+    }, e => showError("خطأ في جلب المتكونين"));
+}
+
+function fetchGrades() {
+    db.collection("training_grades").where("center", "==", INSPECTOR_CENTER).onSnapshot((gradeSnap) => {
+        gradesData = {};
+        gradeSnap.forEach(doc => {
+            gradesData[doc.id] = doc.data();
+        });
+        
+        buildMergedData();
+        
+        const loader = document.getElementById("loader");
+        if(loader) loader.style.display = "none";
+    }, e => showError("خطأ في جلب النقاط"));
+}
+
+
+function formatDob(dobData) {
+    if(!dobData) return "-";
+
+    // 1) إذا كان Firestore Timestamp
+    if (typeof dobData.toDate === 'function') {
+        let d = dobData.toDate();
+        let day = ("0" + d.getDate()).slice(-2);
+        let month = ("0" + (d.getMonth() + 1)).slice(-2);
+        let year = d.getFullYear();
+        // إرجاع التاريخ بترتيب سنة/شهر/يوم
+        return `${year}/${month}/${day}`; 
+    }
+
+    // 2) إذا كان نصاً (string) بأي صيغة فاصل (/ أو -)
+    let str = String(dobData).trim();
+    let parts = str.split(/[\/\-]/).map(p => p.trim());
+
+    if (parts.length === 3) {
+        let p0 = parts[0], p1 = parts[1], p2 = parts[2];
+
+        // الحالة: سنة-شهر-يوم (مثال: 1990-05-15) -> نوحد الفواصل فقط لـ YYYY/MM/DD
+        if (p0.length === 4) {
+            let year = p0, month = ("0"+p1).slice(-2), day = ("0"+p2).slice(-2);
+            return `${year}/${month}/${day}`;
+        }
+
+        // الحالة: يوم-شهر-سنة (مثال: 15-05-1990) -> نعكس الترتيب لـ YYYY/MM/DD
+        if (p2.length === 4) {
+            let day = ("0"+p0).slice(-2), month = ("0"+p1).slice(-2), year = p2;
+            return `${year}/${month}/${day}`;
+        }
+    }
+
+    // احتياطي: إن لم تُعرف الصيغة، أعد النص كما هو مع توحيد الفاصل ( / )
+    return str.replace(/-/g, '/');
+}
+
+function buildMergedData() {
+    mergedData = centerTrainees.map(trainee => {
+        let gradeRecord = gradesData[trainee.empId] || {
+            evaluation: { p1: "", p2: "", p3: "", avg: "" },
+            exams: {},
+            finalExamGrade: "",
+            reportScore: "",
+            generalAverage: "",
+            decision: "غير محدد",
+			remarks: ""
+        };
+        return { ...trainee, grades: gradeRecord };
+    });
+    
+    // --- التعديل الجديد: إجبار النظام على إعادة الحساب لتجاهل النقاط الخاطئة المخزنة ---
+    mergedData.forEach(item => {
+        recalculateAll(item.empId, false); 
+    });
+    // ---------------------------------------------------------------------
+
+    populateFilters();
+    applyFilters();
+}
+
+// ================= Filters Logic =================
+function populateFilters() {
+    let ranks = new Set(), specs = new Set(), groups = new Set();
+    mergedData.forEach(i => {
+        if(i.rank !== "-") ranks.add(i.rank);
+        if(i.specialty !== "-") specs.add(i.specialty);
+        if(i.group !== "-") groups.add(i.group);
+    });
+
+    const buildOptions = (set, id) => {
+        const el = document.getElementById(id);
+        const mEl = document.getElementById('m-' + id.split('-')[1]);
+        let opts = `<option value="الكل">الكل</option>`;
+        Array.from(set).sort().forEach(v => opts += `<option value="${v}">${v}</option>`);
+        if(el) el.innerHTML = opts;
+        if(mEl) mEl.innerHTML = opts;
+    };
+
+    buildOptions(ranks, 'f-rank');
+    buildOptions(specs, 'f-spec');
+    buildOptions(groups, 'f-group');
+}
+
+function updateFilterDependencies(changed) {
+    const rankF = document.getElementById("f-rank").value;
+    const specF = document.getElementById("f-spec").value;
+    
+    let validSpecs = new Set(), validGroups = new Set();
+    
+    mergedData.forEach(item => {
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchS = specF === "الكل" || item.specialty === specF;
+        
+        if (matchR && item.specialty !== "-") validSpecs.add(item.specialty);
+        if (matchR && matchS && item.group !== "-") validGroups.add(item.group);
+    });
+
+    if (changed === 'rank') {
+        const specEl = document.getElementById('f-spec');
+        const currSpec = specEl.value;
+        specEl.innerHTML = `<option value="الكل">الكل</option>` + Array.from(validSpecs).sort().map(v => `<option value="${v}">${v}</option>`).join('');
+        if(validSpecs.has(currSpec)) specEl.value = currSpec; else specEl.value = "الكل";
+    }
+
+    const grpEl = document.getElementById('f-group');
+    const currGrp = grpEl.value;
+    grpEl.innerHTML = `<option value="الكل">الكل</option>` + Array.from(validGroups).sort().map(v => `<option value="${v}">${v}</option>`).join('');
+    if(validGroups.has(currGrp)) grpEl.value = currGrp; else grpEl.value = "الكل";
+
+    applyFilters();
+}
+
+function applyFilters() {
+    const search = document.getElementById("f-search").value.toLowerCase();
+    const rank = document.getElementById("f-rank").value;
+    const spec = document.getElementById("f-spec").value;
+    const group = document.getElementById("f-group").value;
+    const decision = document.getElementById("f-decision").value;
+
+    filteredData = mergedData.filter(item => {
+        let matchS = (item.name.toLowerCase().includes(search) || item.empId.toLowerCase().includes(search));
+        let matchR = rank === "الكل" || item.rank === rank;
+        let matchSp = spec === "الكل" || item.specialty === spec;
+        let matchG = group === "الكل" || item.group === group;
+        let matchD = decision === "الكل" || item.grades.decision === decision;
+        return matchS && matchR && matchSp && matchG && matchD;
+    });
+
+    updateStats();
+    renderMainTable();
+    
+    if(document.getElementById('gradesModal').style.display === 'flex') {
+        renderModalTables();
+    }
+}
+
+function syncModalFilters(source = null) {
+    document.getElementById("f-search").value = document.getElementById("m-search").value;
+    document.getElementById("f-rank").value = document.getElementById("m-rank").value;
+    if(source === 'rank') updateFilterDependencies('rank');
+    document.getElementById("f-spec").value = document.getElementById("m-spec").value;
+    if(source === 'spec') updateFilterDependencies('spec');
+    document.getElementById("f-group").value = document.getElementById("m-group").value;
+    
+    applyFilters();
+}
+
+// ================= UI Rendering =================
+function updateStats() {
+    document.getElementById("st-total").innerText = centerTrainees.length;
+    document.getElementById("st-filtered-count").innerText = filteredData.length;
+    
+    let graded = 0, passed = 0, failed = 0, postponed = 0;
+    mergedData.forEach(item => {
+        if(item.grades.decision && item.grades.decision !== "غير محدد") graded++;
+        if(item.grades.decision === "ناجح") passed++;
+        if(item.grades.decision === "راسب") failed++;
+        if(item.grades.decision === "مؤجل") postponed++;
+    });
+    
+    document.getElementById("st-graded").innerText = graded;
+    document.getElementById("st-pending").innerText = centerTrainees.length - graded;
+    document.getElementById("st-passed").innerText = passed;
+    document.getElementById("st-failed").innerText = failed;
+}
+
+function renderMainTable() {
+    const tbody = document.getElementById("mainTableBody");
+    tbody.innerHTML = "";
+
+    if (filteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="padding:30px; font-weight:bold; color:#777;">لا توجد بيانات مطابقة للفلتر</td></tr>`;
+        return;
+    }
+
+    filteredData.forEach((item, index) => {
+        const coreEmpId = extractCoreId(item.empId);
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = item.photoUrl_fb || driveUrl;
+        
+        const photoHtml = `
+            <div class="pic-wrapper">
+                <div class="pic-container">
+                    ${initialUrl ? `<img src="${initialUrl}" onerror="window.handleImageFallback(this, '${driveUrl}')">` : `<i class="fa-solid fa-user" style="color:#94a3b8; font-size:20px;"></i>`}
+                </div>
+                <div>
+                    <span class="c-main">${item.name}</span><br>
+                    <span class="c-sub" dir="ltr" style="font-family:monospace;">${item.empId}</span>
+                </div>
+            </div>
+        `;
+
+        const pathHtml = `
+            <div class="compact-info">
+                <span class="c-main">${item.rank}</span> <span style="color:#1E68E8;">(${item.specialty})</span><br>
+                <span class="c-sub"><i class="fa-solid fa-school" style="color:#94a3b8;"></i> ${item.workplace} | <b>${item.group}</b></span>
+            </div>
+        `;
+        
+        const dobHtml = `
+            <div class="compact-info" style="text-align:center;">
+                <span class="c-main" dir="ltr">${item.dob}</span><br>
+                <span class="c-sub">${item.pob}</span>
+            </div>
+        `;
+
+        let decClass = "b-neutral";
+        if(item.grades.decision === "ناجح") decClass = "b-success";
+        else if(item.grades.decision === "راسب") decClass = "b-danger";
+        else if(item.grades.decision === "مؤجل") decClass = "b-warning";
+
+       // ----------- حساب علامة الامتحان من 60 (بضرب المعدل على 20 في 3) -----------
+        let exam60 = '-';
+        if (item.grades.finalExamGrade && item.grades.finalExamGrade !== '') {
+            exam60 = (parseFloat(item.grades.finalExamGrade) * 3).toFixed(2);
+        }
+        // ----------------------------------------------------------------------------
+
+        let tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${photoHtml}</td>
+            <td>${dobHtml}</td>
+            <td>${pathHtml}</td>
+            <td style="font-weight:bold; color:#8e44ad;">${item.grades.evaluation.avg || '-'}</td>
+            <td style="font-weight:bold; color:#d35400;">${item.grades.reportScore || '-'}</td>
+            <td style="font-weight:900; font-size:15px; color:#1E68E8;">${exam60}</td> <!-- ع. الامتحان (60) -->
+            <td style="font-weight:900; font-size:15px;">${item.grades.generalAverage || '-'}</td>
+            <td><span class="badge ${decClass}">${item.grades.decision}</span></td>
+            <td>
+                <div style="display: flex; gap: 5px; justify-content: center;">
+                    <button class="btn-action" style="background: #f39c12; color: white;" onclick="openSingleEditModal('${item.empId}')" title="تعديل النقاط">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="btn-action print" onclick="printSingleTranscript('${item.empId}')" ${item.grades.decision === 'غير محدد' ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} title="كشف النقاط">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </button>
+					<button class="btn-action" style="background: #C2185B; color: white;" onclick="promptPrintSingleCertificate('${item.empId}')" ${item.grades.decision === 'ناجح' ? '' : 'disabled style="opacity:0.5; cursor:not-allowed;"'} title="شهادة النجاح">
+                        <i class="fa-solid fa-certificate"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// ================= Grades Modal & Entry Logic =================
+function openGradesModal() {
+    if(centerTrainees.length === 0) return Swal.fire('تنبيه', 'لا يوجد متكونين في المركز.', 'warning');
+    
+    document.getElementById("m-search").value = document.getElementById("f-search").value;
+    document.getElementById("m-rank").value = document.getElementById("f-rank").value;
+    document.getElementById("m-spec").value = document.getElementById("f-spec").value;
+    document.getElementById("m-group").value = document.getElementById("f-group").value;
+
+    document.getElementById('gradesModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    hasUnsavedChanges = false;
+    
+    renderModalTables();
+}
+
+function closeGradesModal() {
+    if (hasUnsavedChanges) {
+        Swal.fire({
+            title: 'توجد تعديلات غير محفوظة!',
+            text: 'هل أنت متأكد أنك تريد الإغلاق وفقدان البيانات؟',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'نعم، أغلق',
+            cancelButtonText: 'تراجع',
+            confirmButtonColor: '#d90429'
+        }).then(res => {
+            if(res.isConfirmed) {
+                document.getElementById('gradesModal').style.display = 'none';
+                document.body.style.overflow = 'auto';
+                hasUnsavedChanges = false;
+                fetchData(); 
+            }
+        });
+    } else {
+        document.getElementById('gradesModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+}
+
+function renderModalTables() {
+    const evalBody = document.getElementById("evalTableBody");
+    const examHead = document.getElementById("examTableHead");
+    const examBody = document.getElementById("examTableBody");
+    
+    evalBody.innerHTML = "";
+    examBody.innerHTML = "";
+    
+    let config = TRAINING_SUBJECTS_CONFIG["default_primary"]; 
+    
+    // بناء رأس جدول الاختبارات ولا يوجد فيه عمود "المعدل العام"
+    let eHeadHtml = `<tr><th style="width:40px;">#</th><th>الرقم</th><th>الاسم واللقب</th><th>الفوج</th>`;
+    config.subjects.forEach(sub => {
+        eHeadHtml += `<th style="font-size:11px;" title="${sub.name}">${sub.name.substring(0, 15)}...<br><span style="color:#f39c12">(${sub.max})</span></th>`;
+    });
+    eHeadHtml += `<th style="background:#1E68E8;">علامة الامتحان النهائي<br><span style="font-size: 12px; color: #e2e8f0;">(20)</span></th></tr>`;
+    examHead.innerHTML = eHeadHtml;
+
+    filteredData.forEach((item, index) => {
+        // --- تبويب التقويم ---
+        let ev = item.grades.evaluation;
+        let rep = item.grades.reportScore;
+        let tr1 = document.createElement("tr");
+        tr1.innerHTML = `
+            <td>${index+1}</td>
+            <td dir="ltr" style="font-weight:bold;">${item.empId}</td>
+            <td style="font-weight:bold;">${item.name}</td>
+            <td>${item.group}</td>
+            <td><input type="text" class="grade-input eval-input" data-emp="${item.empId}" data-field="p1" data-row="${index}" data-col="0" value="${ev.p1}" onchange="handleInput(this)" onkeydown="handleGradeKeyNavigation(event)"></td>
+            <td><input type="text" class="grade-input eval-input" data-emp="${item.empId}" data-field="p2" data-row="${index}" data-col="1" value="${ev.p2}" onchange="handleInput(this)" onkeydown="handleGradeKeyNavigation(event)"></td>
+            <td><input type="text" class="grade-input eval-input" data-emp="${item.empId}" data-field="p3" data-row="${index}" data-col="2" value="${ev.p3}" onchange="handleInput(this)" onkeydown="handleGradeKeyNavigation(event)"></td>
+            <td><input type="text" class="grade-input" id="avg_${item.empId}" value="${ev.avg}" disabled style="background:#f4f0fa; color:#8e44ad;"></td>
+            <td><input type="text" class="grade-input" data-emp="${item.empId}" data-field="reportScore" data-row="${index}" data-col="3" value="${rep}" onchange="handleInput(this)" onkeydown="handleGradeKeyNavigation(event)" style="border-color:#d35400;"></td>
+        `;
+        evalBody.appendChild(tr1);
+
+        // --- تبويب الاختبارات ---
+        let ex = item.grades.exams || {};
+        let tr2 = document.createElement("tr");
+        let exRowHtml = `
+            <td>${index+1}</td>
+            <td dir="ltr" style="font-weight:bold;">${item.empId}</td>
+            <td style="font-weight:bold;">${item.name}</td>
+            <td>${item.group}</td>
+        `;
+        
+        let colIdx = 4; 
+        config.subjects.forEach(sub => {
+            let val = ex[sub.id] !== undefined ? ex[sub.id] : "";
+            exRowHtml += `<td><input type="text" class="grade-input exam-input" data-emp="${item.empId}" data-field="ex_${sub.id}" data-max="${sub.max}" data-row="${index}" data-col="${colIdx++}" value="${val}" onchange="handleInput(this)" onkeydown="handleGradeKeyNavigation(event)"></td>`;
+        });
+        
+        let examAvgDisplay = item.grades.finalExamGrade || "";
+        exRowHtml += `
+            <td><input type="text" class="grade-input" id="exAvg_${item.empId}" value="${examAvgDisplay}" disabled style="background:#eaf0fc; color:#1E68E8; width:80px;"></td>
+        `;
+        tr2.innerHTML = exRowHtml;
+        examBody.appendChild(tr2);
+    });
+}
+
+// ================= Validation & Calculation Engine =================
+function handleInput(element) {
+    hasUnsavedChanges = true;
+    element.classList.remove('error');
+    
+    let rawValue = element.value.trim();
+    if (rawValue === "") {
+        saveLocalState(element, "");
+        recalculateAll(element.dataset.emp);
+        return;
+    }
+
+    rawValue = rawValue.replace(',', '.');
+    
+    // الأرقام والفاصلة بنقطتين عشريتين كحد أقصى
+    if (!/^\d+(\.\d{1,2})?$/.test(rawValue)) {
+        markError(element);
+        return;
+    }
+
+    let numVal = parseFloat(rawValue);
+    let maxAllowed = parseFloat(element.dataset.max || 20); 
+
+    if (numVal < 0 || numVal > maxAllowed) {
+        markError(element);
+        return;
+    }
+
+    let formattedVal = numVal.toString();
+    if(formattedVal.indexOf('.') !== -1) {
+        formattedVal = parseFloat(numVal.toFixed(2)).toString();
+    }
+    
+    element.value = formattedVal;
+    saveLocalState(element, formattedVal);
+    recalculateAll(element.dataset.emp);
+}
+
+function markError(element) {
+    element.classList.add('error');
+    element.value = ""; 
+    Swal.fire({ toast: true, position: 'top', icon: 'error', title: 'قيمة غير صحيحة', showConfirmButton: false, timer: 2000 });
+}
+
+function saveLocalState(element, val) {
+    let empId = element.dataset.emp;
+    let field = element.dataset.field;
+    
+    let item = mergedData.find(d => d.empId === empId);
+    if(!item) return;
+
+    if (field.startsWith("p")) {
+        item.grades.evaluation[field] = val;
+    } else if (field === "reportScore") {
+        item.grades.reportScore = val;
+    } else if (field.startsWith("ex_")) {
+        let subId = field.split("_")[1];
+        if(!item.grades.exams) item.grades.exams = {};
+        item.grades.exams[subId] = val;
+    }
+}
+
+function calculateExamAverage(examsObj, config) {
+    let exSum = 0; 
+    let totalCoef = 0;
+    let exComplete = true;
+    
+    config.subjects.forEach(sub => {
+        let val = examsObj[sub.id];
+        if(val === "" || val === undefined) {
+            exComplete = false;
+        } else {
+            let rawVal = parseFloat(val);
+            // تُضرب العلامة في المعامل (2 لتعليمية المادة والتقويم، و1 للبقية)
+            exSum += (rawVal * sub.coef);
+            totalCoef += sub.coef; // مجموع المعاملات سيكون 13 في حالة default_primary
+        }
+    });
+    
+    if(!exComplete || totalCoef === 0) return "";
+    
+    // المجموع مقسوم على 13 يعطينا المعدل على 20
+    return (exSum / totalCoef).toFixed(2);
+}
+
+// أضفنا shouldRender = true هنا
+function recalculateAll(empId, shouldRender = true) {
+    let item = mergedData.find(d => d.empId === empId);
+    if(!item) return;
+    
+    let config = TRAINING_SUBJECTS_CONFIG["default_primary"];
+    
+    // 1. حساب معدل التقويم
+    let ev = item.grades.evaluation;
+    let evCount = 0; let evSum = 0;
+    ['p1', 'p2', 'p3'].forEach(p => { if(ev[p] !== "") { evSum += parseFloat(ev[p]); evCount++; }});
+    ev.avg = evCount === 3 ? (evSum / 3).toFixed(2) : ""; 
+    
+    const avgInput = document.getElementById(`avg_${empId}`);
+    if(avgInput) avgInput.value = ev.avg;
+
+    // 2. حساب علامة الامتحان النهائي
+    let examAvgFinal = calculateExamAverage(item.grades.exams, config);
+    item.grades.finalExamGrade = examAvgFinal;
+    
+    const exAvgInput = document.getElementById(`exAvg_${empId}`);
+    if(exAvgInput) exAvgInput.value = examAvgFinal;
+	
+    // 3. حساب المعدل العام
+    let rep = item.grades.reportScore;
+    if (ev.avg !== "" && examAvgFinal !== "" && rep !== "") {
+        let totalPoints = (parseFloat(examAvgFinal) * 3) + parseFloat(rep) + (parseFloat(ev.avg) * 2);
+        item.grades.generalAverage = (totalPoints / 6).toFixed(2);
+        
+        let genAvgNum = parseFloat(item.grades.generalAverage);
+        if (genAvgNum >= config.pass_mark) item.grades.decision = "ناجح";
+        else item.grades.decision = "راسب";
+    } else {
+        item.grades.generalAverage = "";
+        
+        // التعديل: المحافظة على القرار إذا تم تحديده كـ "مؤجل" يدوياً
+        if (item.grades.decision !== "مؤجل") {
+            item.grades.decision = "غير محدد";
+        }
+    }
+}
+
+// ================= Keyboard Navigation =================
+function handleGradeKeyNavigation(e) {
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) return;
+    
+    let currentInput = e.target;
+    let row = parseInt(currentInput.dataset.row);
+    let col = parseInt(currentInput.dataset.col);
+    
+    let targetRow = row, targetCol = col;
+
+    if (e.key === 'ArrowUp') targetRow--;
+    if (e.key === 'ArrowDown' || e.key === 'Enter') targetRow++;
+    if (e.key === 'ArrowRight') targetCol--; 
+    if (e.key === 'ArrowLeft') targetCol++;  
+
+    let selector = `input[data-row="${targetRow}"][data-col="${targetCol}"]`;
+    let targetInput = document.querySelector(selector);
+    
+    if (targetInput) {
+        e.preventDefault();
+        targetInput.focus();
+        targetInput.select();
+    }
+}
+
+// ================= Firebase Saving =================
+async function saveAllGrades(closeAfter = false) {
+    if(isSaving) return;
+    
+    if(document.querySelector('.grade-input.error')) {
+        return Swal.fire('خطأ', 'يرجى تصحيح الخانات المحددة باللون الأحمر قبل الحفظ.', 'error');
+    }
+
+    Swal.fire({ title: 'جاري الحفظ في القاعدة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    isSaving = true;
+
+    try {
+        const batch = db.batch();
+        let timestamp = firebase.firestore.FieldValue.serverTimestamp();
+        
+        filteredData.forEach(item => {
+            let docRef = db.collection("training_grades").doc(item.empId);
+            batch.set(docRef, {
+                center: INSPECTOR_CENTER,
+                empId: item.empId,
+                traineeName: item.name,
+                rank: item.rank,
+                specialty: item.specialty,
+                group: item.group,
+                evaluation: item.grades.evaluation,
+                exams: item.grades.exams,
+                finalExamGrade: item.grades.finalExamGrade || "",
+                reportScore: item.grades.reportScore,
+                generalAverage: item.grades.generalAverage,
+                decision: item.grades.decision,
+				remarks: item.grades.remarks || "",
+                updatedAt: timestamp,
+                updatedBy: CURRENT_USER_ROLE
+            }, { merge: true });
+        });
+
+        await batch.commit();
+        hasUnsavedChanges = false;
+        isSaving = false;
+        
+        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم الحفظ بنجاح!', showConfirmButton: false, timer: 2000});
+        renderMainTable(); 
+        updateStats();
+
+        if(closeAfter) {
+            document.getElementById('gradesModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+    } catch(error) {
+        isSaving = false;
+        console.error("Save Error:", error);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بالإنترنت أثناء الحفظ.', 'error');
+    }
+}
+
+// ================= Printing Engine =================
+
+// دالة آلية لجلب الأساتذة المؤطرين من مجموعة center_framers واختيار 2 منهم
+async function triggerPrintMinutes() {
+    if (filteredData.length === 0) return Swal.fire('تنبيه', 'لا توجد بيانات للطباعة', 'warning');
+
+    // 1. إظهار شاشة تحميل أثناء جلب الأساتذة من القاعدة
+    Swal.fire({ title: 'جاري جلب قائمة المؤطرين...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    let trainersList = [];
+    try {
+        // استهداف مجموعة center_framers بدلاً من trainers
+        const snap = await db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).get();
+        snap.forEach(doc => {
+            let data = doc.data();
+            // نفترض أن حقل الاسم محفوظ تحت اسم "name" داخل الوثيقة
+            if(data.name) {
+                trainersList.push(data.name); 
+            }
+        });
+    } catch (e) {
+        console.error("خطأ في جلب المؤطرين:", e);
+    }
+
+    Swal.close();
+
+    // 2. إذا لم يتم العثور على أي مؤطر في القاعدة (نظام الطوارئ / إدخال يدوي)
+    if (trainersList.length === 0) {
+        const { value: trainersText } = await Swal.fire({
+            title: '<i class="fa-solid fa-users-gear" style="color:#8e44ad;"></i> إعداد المحضر',
+            html: `
+                <div style="text-align: right; font-size: 14px; font-weight: bold; margin-bottom: 10px;">
+                    <span style="color: #d90429;">لم يتم العثور على مؤطرين مسجلين في هذا المركز.</span><br>
+                    الرجاء إدخال أسماء أستاذين (2) يدوياً للإمضاء:
+                </div>
+            `,
+            input: 'textarea',
+            inputPlaceholder: 'مثال:\nالأستاذ: أحمد بن علي\nالأستاذة: فاطمة الزهراء',
+            inputAttributes: {
+                'aria-label': 'أسماء المؤطرين'
+            },
+            showCancelButton: true,
+            confirmButtonText: 'متابعة وطباعة <i class="fa-solid fa-print"></i>',
+            cancelButtonText: 'إلغاء',
+            confirmButtonColor: '#8e44ad',
+            cancelButtonColor: '#d90429',
+            customClass: {
+                input: 'grade-input'
+            }
+        });
+
+        if (trainersText !== undefined) {
+            let manualList = trainersText.split('\n').map(name => name.trim()).filter(name => name !== '');
+            printResultsMinutes(manualList);
+        }
+        return;
+    }
+
+    // 3. إذا تم العثور على مؤطرين، نقوم بإنشاء قائمة خيارات (Checkboxes)
+    let checkboxesHtml = '<div style="text-align: right; max-height: 250px; overflow-y: auto; padding: 15px; border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fbff;">';
+    trainersList.forEach((name, i) => {
+        checkboxesHtml += `
+            <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="tr_${i}" class="trainer-checkbox" value="${name}" onchange="limitCheckboxSelection(this)" style="width: 18px; height: 18px; cursor: pointer;">
+                <label for="tr_${i}" style="font-size: 15px; font-weight: 800; cursor: pointer; color: #102a43;">${name}</label>
+            </div>
+        `;
+    });
+    checkboxesHtml += '</div>';
+
+    // 4. عرض النافذة الذكية واشتراط اختيار 2 فقط
+    const { value: selectedTrainers } = await Swal.fire({
+        title: '<i class="fa-solid fa-users-gear" style="color:#8e44ad;"></i> اختيار المؤطرين',
+        html: `
+            <div style="text-align: right; font-size: 14px; font-weight: bold; margin-bottom: 10px;">
+                الرجاء تحديد <span style="color: #d90429;">أستاذين (2) بالضبط</span> للإمضاء على المحضر:
+            </div>
+            ${checkboxesHtml}
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'متابعة وطباعة <i class="fa-solid fa-print"></i>',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#8e44ad',
+        cancelButtonColor: '#d90429',
+        preConfirm: () => {
+            const checked = document.querySelectorAll('.trainer-checkbox:checked');
+            if (checked.length !== 2) {
+                Swal.showValidationMessage('يجب عليك اختيار أستاذين (2) بالضبط لإتمام العملية.');
+                return false;
+            }
+            return Array.from(checked).map(cb => cb.value);
+        }
+    });
+
+    if (selectedTrainers) {
+        // إرسال قائمة الأساتذة المختارة إلى دالة الطباعة
+        printResultsMinutes(selectedTrainers);
+    }
+}
+
+// دالة مساعدة لمنع المستخدم من اختيار أكثر من 2 مؤطرين
+window.limitCheckboxSelection = function(checkbox) {
+    const checkedBoxes = document.querySelectorAll('.trainer-checkbox:checked');
+    if (checkedBoxes.length > 2) {
+        checkbox.checked = false; // إلغاء التحديد فوراً
+        Swal.fire({
+            toast: true,
+            position: 'top',
+            icon: 'warning',
+            title: 'لا يمكنك اختيار أكثر من أستاذين (2)',
+            showConfirmButton: false,
+            timer: 2000
+        });
+    }
+}
+
+
+// 1. محضر النتائج النهائي (محدث مع تنسيقات التوقيعات والأسماء)
+function printResultsMinutes(trainersList = []) {
+    // --- حساب الإحصائيات برمجياً ---
+    let total = filteredData.length;
+    let passed = filteredData.filter(i => i.grades.decision === 'ناجح').length;
+    let failed = filteredData.filter(i => i.grades.decision === 'راسب').length;
+    let postponed = filteredData.filter(i => i.grades.decision === 'مؤجل').length;
+
+    let printWindow = window.open('', '_blank');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>محضر النتائج النهائية</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; font-size: 11px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            
+            .header-flex { display: flex; justify-content: space-between; font-weight: 800; font-size: 15px; margin-bottom: 5px; line-height: 1.5; }
+            .title { text-align: center; font-size: 24px; font-weight: 900; margin: 10px 0 15px 0; text-decoration: underline; }
+            
+            .stats-bar { 
+                display: flex; justify-content: space-around; font-weight: 900; font-size: 14px; 
+                margin-bottom: 15px; border: 2px solid #000; padding: 6px; border-radius: 8px; background: #f8fbff !important; 
+            }
+
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: auto; }
+            th, td { border: 1px solid #000; padding: 4px; text-align: center; vertical-align: middle; }
+            
+            th { background: #eee !important; font-weight: 800; font-size: 11px; white-space: nowrap; }
+            td { font-weight: 600; font-size: 11px; line-height: 1.3;}
+            
+            .nowrap { white-space: nowrap; }
+            .bold-num { font-weight: 800; font-size: 12px; }
+            .td-name { font-weight: 800; font-size: 12px; }
+            
+            .footer-grid {
+                display: grid;
+                grid-template-columns: 1.2fr 1fr 1fr 1fr;
+                gap: 15px;
+                margin-top: 30px;
+                font-weight: 900;
+                font-size: 15px;
+            }
+            .trainers-list {
+                margin-top: 10px;
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 1.8;
+            }
+        </style>
+    </head>
+    <body>
+        <div style="text-align: center; font-weight: 900; font-size: 16px; margin-bottom: 15px;">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة المستخدمين والتفتيش</div>
+            <div style="text-align: center;">مركز التكوين: ${INSPECTOR_CENTER}<br>السنة التكوينية: ${TRAINING_YEAR}</div>
+        </div>
+        
+        <div class="title">محضر النتائج النهائية للمتكونين</div>
+
+        <div class="stats-bar">
+            <span>إجمالي المتكونين: ${total}</span>
+            <span>الناجحون: ${passed}</span>
+            <span>الراسبون: ${failed}</span>
+            <span>المؤجلون: ${postponed}</span>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 3%;">الرقم</th>
+                    <th style="width: 17%;">الاسم واللقب</th>
+                    <th style="width: 11%;">الميلاد</th>
+                    <th style="width: 12%;">الرتبة</th>
+                    <th style="width: 12%;">التخصص</th>
+                    <th style="width: 13%;">مكان العمل</th>
+                    <th style="width: 5%;">م.التقويم</th>
+                    <th style="width: 5%;">ن.التقرير</th>
+                    <th style="width: 6%;">الامتحان<br>(60)</th>
+                    <th style="width: 5%;">المعدل<br>العام</th>
+                    <th style="width: 5%;">القرار</th>
+                    <th style="width: 6%;">الملاحظة</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    filteredData.forEach((item, i) => {
+        let exam60Print = item.grades.finalExamGrade ? (parseFloat(item.grades.finalExamGrade) * 3).toFixed(2) : '-';
+        html += `
+            <tr>
+                <td>${i+1}</td>
+                <td class="td-name">${item.name}</td>
+                <td class="nowrap">${item.dob}<br>بـ ${item.pob}</td>
+                <td>${item.rank}</td>
+                <td>${item.specialty}</td>
+                <td>${item.workplace}</td>
+                <td class="bold-num">${item.grades.evaluation.avg || '-'}</td>
+                <td class="bold-num">${item.grades.reportScore || '-'}</td>
+                <td class="bold-num" style="color:#102a43;">${exam60Print}</td>
+                <td class="bold-num">${item.grades.generalAverage || '-'}</td>
+                <td class="nowrap" style="font-weight: 900; font-size: 12px;">${item.grades.decision}</td>
+                <td style="font-size: 10px;">${item.grades.remarks || ''}</td>
+            </tr>
+        `;
+    });
+
+    let today = new Date();
+    let printDate = `${today.getFullYear()}/${("0"+(today.getMonth()+1)).slice(-2)}/${("0"+today.getDate()).slice(-2)}`;
+
+    // تجهيز قائمة المؤطرين للطباعة (بدون نقاط الإمضاء)
+    let trainersHTML = '';
+    if (trainersList.length > 0) {
+        trainersList.forEach(trainer => {
+            // أضفنا style="margin-bottom: 15px;" لزيادة التباعد
+            trainersHTML += `<div style="margin-bottom: 15px;">- ${trainer}</div>`;
+        });
+    } else {
+        trainersHTML = '<br><br>'; 
+    }
+
+    html += `
+            </tbody>
+        </table>
+        
+        <div style="text-align: left; font-weight: bold; margin-bottom: 20px;">توقرت في: ${printDate}</div>
+        
+        <!-- التعديل: قسم التوقيعات الموزع على 4 أعمدة -->
+        <div class="footer-grid">
+            <div style="text-align: right;">
+                <div>الأساتذة المؤطرون:</div> <!-- التعديل: حذف التسطير -->
+                <div class="trainers-list">
+                    ${trainersHTML}
+                </div>
+            </div>
+            <div style="text-align: center;">
+                المسؤول البيداغوجي<br>
+                <span style="font-size: 12px; font-weight: 700; color: #333; margin-top: 5px; display: inline-block;">${CURRENT_ADMIN_NAME}</span>
+            </div>
+            <div style="text-align: center;">
+                مدير التربية<br>
+                <span style="font-size: 12px; font-weight: 700; color: #333; margin-top: 5px; display: inline-block;">بوعزيز صالح</span>
+            </div>
+            <div style="text-align: center;">مدير المعهد</div>
+        </div>
+        
+        <script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+
+// ================= Printing Engine (المحرك الشامل لطباعة الكشوف) =================
+
+// دالة مساعدة (Helper) لرسم هيكل كشف النقاط (تُستخدم في جميع أنواع الطباعة)
+function getTranscriptContent(item, config, isDouble = false) {
+    let subjectsHtml = '';
+    config.subjects.forEach(sub => {
+        let rawScore = parseFloat(item.grades.exams[sub.id] || 0);
+        let printedMax = sub.printMax || sub.max;
+        let printedScore = printedMax === 40 ? rawScore * 2 : rawScore;
+        
+        // تنسيق الأرقام بفاصلة (مثال: 19,00)
+        let formattedScore = printedScore.toFixed(2).replace('.', ',');
+
+        subjectsHtml += `
+            <tr>
+                <td class="sub-name">${sub.name}</td>
+                <td class="score-col">
+                    <div class="score-wrapper">
+                        <span class="max-mark">${printedMax}/</span>
+                        <span class="actual-score">${formattedScore}</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    let examAvgMark = parseFloat(item.grades.finalExamGrade || 0);
+    let evalAvg = parseFloat(item.grades.evaluation.avg || 0);
+    let repScore = parseFloat(item.grades.reportScore || 0);
+    let genAvg = parseFloat(item.grades.generalAverage || 0);
+
+    let today = new Date();
+    let printDate = `${("0"+today.getDate()).slice(-2)}/${("0"+(today.getMonth()+1)).slice(-2)}/${today.getFullYear()}`;
+
+    // تحديد صنف إضافي إذا كنا في وضع الطباعة المزدوجة لتطبيق تنسيقات مصغرة
+    let containerClass = isDouble ? "transcript-container double-mode" : "transcript-container";
+
+    return `
+    <div class="${containerClass}">
+        <div class="republic-header">
+            الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية
+        </div>
+        
+        <div class="header-flex">
+            <div class="h-right">
+                مديرية التربية لولاية توقرت<br>
+                مصلحة المستخدمين والتفتيش<br>
+                ${INSPECTOR_CENTER}
+            </div>
+            <div class="h-left">
+                مركز التكوين البيداغوجي<br>
+                التحضيري أثناء فترة التربص<br>
+                لفائدة أساتذة التعليم ${item.rank.includes('ابتدائي') ? 'الابتدائي' : (item.rank.includes('متوسط') ? 'المتوسط' : 'الثانوي')}<br>
+                <div class="training-year">${TRAINING_YEAR}</div>
+            </div>
+        </div>
+        
+        <div class="title-box-container">
+            <div class="title-box">كشف التقييم</div>
+        </div>
+        
+        <div class="info-section">
+            <div class="info-row">
+                <div style="width: 45%;">اللقب والاسم : <span class="info-data">${item.name}</span></div>
+                <div style="width: 30%;">تاريخ الميلاد : <span class="info-data" dir="rtl">${item.dob}</span></div>
+                <div style="width: 25%; text-align: left;">التخصص : <span class="info-data">${item.specialty}</span></div>
+            </div>
+            <div style="margin-top: 6px;">مكان العمل : <span class="info-data">${item.workplace}</span></div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 70%;">المقاييس ومعطيات التقييم</th>
+                    <th style="width: 30%;">النقطة</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${subjectsHtml}
+                <tr class="tr-summary first-summary">
+                    <td class="sub-name">علامة الامتحان النهائي (المعامل 3)</td>
+                    <td class="score-col">
+                        <div class="score-wrapper">
+                            <span class="max-mark">60/</span>
+                            <span class="actual-score">${(examAvgMark * 3).toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="tr-summary">
+                    <td class="sub-name">علامة تقرير نهاية التكوين (المعامل 1)</td>
+                    <td class="score-col">
+                        <div class="score-wrapper">
+                            <span class="max-mark">20/</span>
+                            <span class="actual-score">${repScore.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="tr-summary">
+                    <td class="sub-name">معدل المراقبة البيداغوجية المستمرة (المعامل 2)</td>
+                    <td class="score-col">
+                        <div class="score-wrapper">
+                            <span class="max-mark">40/</span>
+                            <span class="actual-score">${(evalAvg * 2).toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="tr-final">
+                    <td class="sub-name">المعدل العام</td>
+                    <td class="score-col">
+                        <div class="score-wrapper">
+                            <span class="max-mark text-black">20/</span>
+                            <span class="actual-score text-black larger-score">${genAvg.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="footer-section">
+            <div class="copies-list">
+                <div>نسخة للمعني(ة)</div>
+                <div>نسخة للملف المالي</div>
+                <div>نسخة للملف الاداري</div>
+                <div>نسخة للحافظة</div>
+            </div>
+            <div class="signature-box">
+                <div class="date-text">حرر بـ توقرت في : ${printDate}</div>
+                <div class="admin-title">المسؤول البيداغوجي</div>
+                <div class="admin-name">${CURRENT_ADMIN_NAME}</div>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+// ================= الستايل الموحد والذكي للطباعة =================
+const basePrintStyles = `
+    body { font-family: 'Cairo', sans-serif; color: #000; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; direction: rtl;}
+    
+    .transcript-container { display: flex; flex-direction: column; width: 100%; box-sizing: border-box; }
+    
+    .republic-header { text-align: center; font-weight: 900; line-height: 1.3; margin-bottom: 10px; font-size: 14px; }
+    
+    .header-flex { display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; line-height: 1.3; margin-bottom: 8px; }
+    .h-right { text-align: right; }
+    .h-left { text-align: center; }
+    .training-year { margin-top: 3px; font-size: 13px; font-weight: 900; }
+    
+    .title-box-container { text-align: center; margin: 10px 0; }
+    .title-box { display: inline-block; background: #e2e8f0 !important; border: 2px solid #000; padding: 3px 50px; font-size: 17px; font-weight: 900; box-shadow: 2px 2px 0 #000; }
+    
+    .info-section { font-weight: 800; font-size: 12px; margin-bottom: 12px; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .info-data { font-weight: 900; }
+    
+    /* التعديل: تكبير السطور في الجدول الرئيسي بزيادة الحشوة (Padding) */
+    table { width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 10px; }
+    th, td { border: 1px solid #000; padding: 6px 8px !important; line-height: 1.4 !important; }
+    th { background: #e2e8f0 !important; font-size: 13px; font-weight: 900; border-bottom: 2px solid #000; text-align: center; }
+    
+    .sub-name { text-align: right; font-weight: 800; font-size: 12px; }
+    .score-col { text-align: center; }
+    .score-wrapper { display: flex; justify-content: center; gap: 8px; direction: ltr; }
+    
+    .max-mark { display: inline-block; width: 30px; text-align: left; font-weight: 600; font-size: 11px; color: #555; }
+    .actual-score { display: inline-block; width: 45px; text-align: left; font-weight: 900; font-size: 13px; }
+    
+    .tr-summary { background: #f8fafc !important; }
+    .tr-summary .sub-name { font-weight: 900; }
+    .first-summary { border-top: 2px solid #000; }
+    
+    .tr-final { background: #e2e8f0 !important; border-top: 3px solid #000; }
+    .tr-final .sub-name { text-align: center; font-size: 15px; font-weight: 900; }
+    .text-black { color: #000 !important; font-weight: 900; }
+    .larger-score { font-size: 16px !important; }
+    
+    .footer-section { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 8px; }
+    .copies-list { display: flex; flex-direction: column; gap: 1px; text-align: right; font-size: 10px; font-weight: 700; line-height: 1.4; }
+    .signature-box { text-align: center; padding-left: 30px; }
+    .date-text { font-size: 11px; font-weight: 800; margin-bottom: 5px; }
+    .admin-title { font-size: 12px; font-weight: 800; }
+    .admin-name { font-size: 13px; font-weight: 900; margin-top: 10px; }
+
+    /* =========================================================
+       تصميم النسخة المزدوجة (ورقة أفقية)
+       ========================================================= */
+    .double-page-wrapper {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        height: 96vh; 
+        page-break-after: always;
+        box-sizing: border-box;
+        padding: 0 2mm; /* تم تقليصها هنا لأن الهامش يتم التحكم به عبر @page */
+        align-items: flex-start; 
+    }
+    .double-page-wrapper:last-child { page-break-after: auto; }
+    
+    .double-mode.transcript-container {
+        width: 48%; 
+        padding: 0 2px;
+    }
+    
+    .double-mode .republic-header { font-size: 11px; margin-bottom: 3px; line-height: 1.2; }
+    .double-mode .header-flex { font-size: 10px; margin-bottom: 2px; line-height: 1.2; }
+    .double-mode .training-year { font-size: 11px; margin-top: 1px; }
+    .double-mode .title-box-container { margin: 3px 0; }
+    .double-mode .title-box { font-size: 13px; padding: 1px 20px; }
+    .double-mode .info-section { font-size: 10px; margin-bottom: 4px; }
+    .double-mode .info-row { margin-bottom: 2px; }
+    
+    /* التعديل: زيادة عرض وارتفاع السطور قليلا في النسخة المزدوجة (21px) */
+    .double-mode table { margin-bottom: 4px; border-width: 1px; }
+    .double-mode th, .double-mode td { border-width: 1px; padding: 2px 4px !important; height: 21px !important; line-height: 1.2 !important; }
+    .double-mode th { font-size: 10px; }
+    .double-mode td { font-size: 9.5px; }
+    .double-mode .sub-name { font-size: 10px; }
+    .double-mode .max-mark { font-size: 8.5px; width: 22px; }
+    .double-mode .actual-score { font-size: 10.5px; width: 35px; }
+    .double-mode .score-wrapper { gap: 4px; }
+    
+    .double-mode .tr-final .sub-name { font-size: 11.5px; }
+    .double-mode .larger-score { font-size: 12px !important; }
+    .double-mode .footer-section { margin-top: 4px; }
+    .double-mode .copies-list { font-size: 8px; gap: 0px; line-height: 1.2; }
+    .double-mode .date-text { font-size: 9.5px; margin-bottom: 1px; }
+    .double-mode .admin-title { font-size: 9.5px; }
+    .double-mode .admin-name { font-size: 10.5px; margin-top: 5px; }
+`;
+
+// 1. طباعة كشف فردي واحد (A4 عمودي)
+window.printSingleTranscript = function(empId) {
+    let item = mergedData.find(d => d.empId === empId);
+    if (!item) return;
+    if (item.grades.decision === "غير محدد") return Swal.fire('تنبيه', 'يجب إكمال حجز النقاط لطباعة الكشف', 'warning');
+
+    let printWindow = window.open('', '_blank');
+    let config = TRAINING_SUBJECTS_CONFIG["default_primary"];
+    let html = `
+    <html lang="ar" dir="rtl"><head><title>كشف التقييم - ${item.name}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* التعديل: الهامش 1 سم بالضبط من كل الاتجاهات */
+        @page { size: A4 portrait; margin: 10mm; }
+        ${basePrintStyles}
+        .page-wrapper { padding: 0; }
+    </style></head><body>
+    <div class="page-wrapper">
+        ${getTranscriptContent(item, config, false)}
+    </div>
+    <script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script>
+    </body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// 2. طباعة الكشوف كلها دفعة واحدة (A4 عمودي)
+window.printBulkTranscripts = function() {
+    let validData = filteredData.filter(d => d.grades.decision !== "غير محدد");
+    if (validData.length === 0) return Swal.fire('تنبيه', 'لا توجد كشوف صالحة للطباعة بناءً على الفلتر الحالي.', 'warning');
+
+    let printWindow = window.open('', '_blank');
+    let config = TRAINING_SUBJECTS_CONFIG["default_primary"];
+    let html = `
+    <html lang="ar" dir="rtl"><head><title>طباعة الكشوف (جماعي)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* التعديل: الهامش 1 سم بالضبط من كل الاتجاهات */
+        @page { size: A4 portrait; margin: 10mm; }
+        ${basePrintStyles}
+        .page-wrapper { padding: 0; page-break-after: always; }
+        .page-wrapper:last-child { page-break-after: auto; }
+    </style></head><body>`;
+    
+    validData.forEach(item => { 
+        html += `<div class="page-wrapper">${getTranscriptContent(item, config, false)}</div>`; 
+    });
+    
+    html += `<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// 3. طباعة الكشوف المزدوجة (نسختين لكل متكون في صفحة أفقية واحدة)
+window.printBulkDoubleTranscripts = function() {
+    let validData = filteredData.filter(d => d.grades.decision !== "غير محدد");
+    if (validData.length === 0) return Swal.fire('تنبيه', 'لا توجد كشوف صالحة للطباعة.', 'warning');
+
+    let printWindow = window.open('', '_blank');
+    let config = TRAINING_SUBJECTS_CONFIG["default_primary"];
+    let html = `
+    <html lang="ar" dir="rtl"><head><title>طباعة كشوف مزدوجة</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* التعديل: الهامش العلوي 1 سم (10mm) وباقي الاتجاهات 5mm لضمان المساحة */
+        @page { size: A4 landscape; margin: 10mm 5mm 5mm 5mm; }
+        ${basePrintStyles}
+    </style></head><body>`;
+    
+    validData.forEach(item => { 
+        let content = getTranscriptContent(item, config, true);
+        html += `<div class="double-page-wrapper">${content}${content}</div>`;
+    });
+    
+    html += `<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+function showError(msg) {
+    console.error(msg);
+    Swal.fire({toast: true, position: 'top', icon: 'error', title: msg, showConfirmButton: false, timer: 3000});
+}
+
+// ================= دوال واجهة التعديل الفردي =================
+function openSingleEditModal(empId) {
+    let item = mergedData.find(d => d.empId === empId);
+    if (!item) return;
+
+    document.getElementById('se-empId').value = empId;
+    document.getElementById('se-trainee-name').innerText = `${item.name} | ${item.specialty}`;
+
+    // تعبئة نقاط التقويم والتقرير
+    document.getElementById('se-p1').value = item.grades.evaluation.p1 || '';
+    document.getElementById('se-p2').value = item.grades.evaluation.p2 || '';
+    document.getElementById('se-p3').value = item.grades.evaluation.p3 || '';
+    document.getElementById('se-rep').value = item.grades.reportScore || '';
+    document.getElementById('se-remarks').value = item.grades.remarks || '';
+    // توليد وتعبئة حقول الاختبارات بناءً على الإعدادات
+    let examsHtml = '';
+    let config = TRAINING_SUBJECTS_CONFIG["default_primary"];
+    config.subjects.forEach(sub => {
+        let val = (item.grades.exams && item.grades.exams[sub.id] !== undefined) ? item.grades.exams[sub.id] : '';
+        examsHtml += `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <label style="font-size: 13px; font-weight: bold; width: 75%;">${sub.name} <span style="color:#f39c12">(${sub.max})</span></label>
+                <input type="text" class="grade-input se-exam-input" data-sub="${sub.id}" data-coef="${sub.coef}" value="${val}" oninput="calcSingleModalAverages()">
+            </div>
+        `;
+    });
+    document.getElementById('se-exams-container').innerHTML = examsHtml;
+
+    // حساب المعدلات الأولية وعرض النافذة
+    calcSingleModalAverages(item.grades.decision);
+    document.getElementById('singleEditModal').style.display = 'flex';
+}
+
+function closeSingleEditModal() {
+    document.getElementById('singleEditModal').style.display = 'none';
+}
+
+function calcSingleModalAverages(initDecision) {
+    // حساب معدل التقويم اللحظي
+    let p1 = document.getElementById('se-p1').value.replace(',', '.');
+    let p2 = document.getElementById('se-p2').value.replace(',', '.');
+    let p3 = document.getElementById('se-p3').value.replace(',', '.');
+    
+    let evCount = 0; let evSum = 0;
+    if(p1 && !isNaN(p1)) { evSum += parseFloat(p1); evCount++; }
+    if(p2 && !isNaN(p2)) { evSum += parseFloat(p2); evCount++; }
+    if(p3 && !isNaN(p3)) { evSum += parseFloat(p3); evCount++; }
+    
+    let evAvg = evCount === 3 ? (evSum / 3).toFixed(2) : "";
+    document.getElementById('se-eval-avg').value = evAvg;
+
+    // حساب معدل الاختبارات اللحظي
+    let exSum = 0;
+    let totalCoef = 0;
+    let exComplete = true;
+    let examInputs = document.querySelectorAll('.se-exam-input');
+    
+    examInputs.forEach(input => {
+        let val = input.value.replace(',', '.');
+        let coef = parseFloat(input.dataset.coef);
+        if (val === "" || isNaN(val)) {
+            exComplete = false;
+        } else {
+            exSum += (parseFloat(val) * coef);
+            totalCoef += coef;
+        }
+    });
+
+    let exAvg = (exComplete && totalCoef > 0) ? (exSum / totalCoef).toFixed(2) : "";
+    document.getElementById('se-exam-avg').value = exAvg;
+
+    // ========================================================
+    // التعديل الجديد: حساب المعدل العام والقرار وحماية الاختيار
+    // ========================================================
+    let repVal = document.getElementById('se-rep').value.replace(',', '.');
+    let repNum = parseFloat(repVal);
+    let repValid = (repVal !== "" && !isNaN(repNum));
+
+    let genAvgInput = document.getElementById('se-gen-avg');
+    let decSelect = document.getElementById('se-decision');
+    
+    // استرجاع القرار الحالي لمعرفة إن كان المتكون "مؤجل" مسبقاً
+    let previousSelection = typeof initDecision === 'string' ? initDecision : decSelect.value;
+
+    if (evCount === 3 && exComplete && repValid) {
+        // حساب المعدل العام
+        let totalPoints = (parseFloat(exAvg) * 3) + repNum + (parseFloat(evAvg) * 2);
+        let genAvg = (totalPoints / 6).toFixed(2);
+        genAvgInput.value = genAvg;
+        
+        // فرض القواعد الصارمة للناجح والراسب
+        if (parseFloat(genAvg) >= 10) {
+            decSelect.innerHTML = `<option value="ناجح">ناجح</option>`;
+            decSelect.style.color = "#0FBA50";
+            decSelect.style.borderColor = "#0FBA50";
+        } else {
+            decSelect.innerHTML = `<option value="راسب">راسب</option>`;
+            decSelect.style.color = "#d90429";
+            decSelect.style.borderColor = "#d90429";
+        }
+    } else {
+        // في حال وجود نقاط ناقصة أو غيابات
+        genAvgInput.value = "";
+        decSelect.innerHTML = `
+            <option value="غير محدد">غير محدد</option>
+            <option value="مؤجل">مؤجل</option>
+        `;
+        decSelect.value = (previousSelection === "مؤجل") ? "مؤجل" : "غير محدد";
+        decSelect.style.color = (decSelect.value === "مؤجل") ? "#ff9800" : "#64748b";
+        decSelect.style.borderColor = "#cbd5e1";
+    }
+}
+
+function saveSingleEdit() {
+    let empId = document.getElementById('se-empId').value;
+    let item = mergedData.find(d => d.empId === empId);
+    if(!item) return;
+
+    // التحقق من صحة جميع النقاط (بين 0 و 20)
+   let allInputs = [...document.querySelectorAll('#singleEditModal .grade-input:not(:disabled):not(#se-decision):not(#se-remarks)')];
+    let hasError = false;
+
+    allInputs.forEach(input => {
+        let val = input.value.replace(',', '.');
+        if (val !== "") {
+            let num = parseFloat(val);
+            if (isNaN(num) || num < 0 || num > 20) {
+                input.classList.add('error');
+                hasError = true;
+            } else {
+                input.classList.remove('error');
+                input.value = num;
+            }
+        }
+    });
+
+    if (hasError) {
+        Swal.fire('خطأ', 'توجد قيم غير صحيحة (يجب أن تكون الأرقام بين 0 و 20).', 'error');
+        return;
+    }
+
+    // تحديث المتغير المحلي
+    item.grades.evaluation.p1 = document.getElementById('se-p1').value;
+    item.grades.evaluation.p2 = document.getElementById('se-p2').value;
+    item.grades.evaluation.p3 = document.getElementById('se-p3').value;
+    item.grades.reportScore = document.getElementById('se-rep').value;
+
+    document.querySelectorAll('.se-exam-input').forEach(input => {
+        let subId = input.dataset.sub;
+        if (!item.grades.exams) item.grades.exams = {};
+        item.grades.exams[subId] = input.value;
+    });
+	
+	// جلب القرار من القائمة المنسدلة
+    item.grades.decision = document.getElementById('se-decision').value;
+    item.grades.remarks = document.getElementById('se-remarks').value; 
+    
+	
+    // إعادة الحساب الشاملة لتحديث المعدل العام والقرار والجدول الرئيسي
+    recalculateAll(empId, true);
+
+    // الحفظ التلقائي في قاعدة البيانات (Firebase) لهذا المتكون فقط
+    Swal.fire({ title: 'جاري حفظ التعديلات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    db.collection("training_grades").doc(empId).set({
+        center: INSPECTOR_CENTER,
+        empId: item.empId,
+        traineeName: item.name,
+        rank: item.rank,
+        specialty: item.specialty,
+        group: item.group,
+        evaluation: item.grades.evaluation,
+        exams: item.grades.exams,
+        finalExamGrade: item.grades.finalExamGrade || "",
+        reportScore: item.grades.reportScore,
+        generalAverage: item.grades.generalAverage,
+        decision: item.grades.decision,
+		remarks: item.grades.remarks || "",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: CURRENT_USER_ROLE
+    }, { merge: true }).then(() => {
+        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم التحديث بنجاح!', showConfirmButton: false, timer: 2000});
+        closeSingleEditModal();
+    }).catch(e => {
+        console.error(e);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بالإنترنت أثناء الحفظ.', 'error');
+    });
+}
+
+// ============================================================================
+// نظام طباعة شهادات النجاح (إصلاح اتجاه التواريخ LTR داخل النص العربي)
+// ============================================================================
+
+// 1. الدالة المساعدة لرسم قالب الشهادة
+function getCertificateHTML(item, certData) {
+    // تجميع تاريخ التحرير ليصبح (سنة/شهر/يوم)
+    let printDate = `${certData.issueYear}/${certData.issueMonth}/${certData.issueDay}`;
+    
+    // الاحتفاظ بتاريخ الميلاد كما هو بالنسق الجديد (سنة/شهر/يوم)
+    let dobClean = item.dob || '-';
+    
+    // تجميع تاريخ المحضر ليصبح (سنة/شهر/يوم)
+    let minutesDate = `${certData.year}/${certData.month}/${certData.day}`;
+
+    return `
+    <div class="cert-wrapper">
+        <div class="cert-outer-border">
+            <div class="cert-inner-border">
+                
+                <!-- القسم العلوي -->
+                <div>
+                    <div class="cert-header">
+                        الجمهورية الجزائرية الديمقراطية الشعبية<br>
+                        وزارة التربية الوطنية
+                    </div>
+
+                    <div class="cert-subheader">
+                        <div style="text-align: right;">${certData.institute}</div>
+                        <div style="text-align: left;">${certData.directorate}</div>
+                    </div>
+
+                    <div class="cert-title">شهادة نجاح</div>
+                </div>
+
+                <!-- القسم الأوسط (النص) -->
+                <div class="cert-body">
+                    إن مدير المعهد الوطني لتكوين موظفي قطاع التربية الوطنية ورقلة ،<br>
+                    - بمقتضى الأمر رقم 06 - 03 المؤرخ في 19 جمادى الثانية عام 1427 الموافق 15 يوليو سنة 2006، المتضمن القانون الاساسي العام للوظيفة العمومية، المتمم،<br>
+                    - وبمقتضى المرسوم التنفيذي رقم 25 - 54 المؤرخ في 21 رجب عام 1446 الموافق 21 جانفي سنة 2025، والمتضمن القانون الأساسي الخاص بالموظفين المنتمين للأسلاك الخاصة بالتربية الوطنية،<br>
+                    - وبمقتضى القرار المؤرخ في 9 ذي القعدة عام 1436 الموافق 24 غشت سنة 2015، يحدد كيفيات تنظيم التكوين البيداغوجي التحضيري أثناء التربص التجريبي لموظفي التعليم ومدته وكذا محتوى برامجه،<br>
+                    - وبناءاً على رسالة المنشور رقم 2025/355 المؤرخة في 2025/11/23 ، المتعلقة بتنظيم التكوين البيداغوجي التحضيري أثناء التربص التجريبي والتكوين المسبق للتعيين للأساتذة المتعاقدين المدمجين بعنوان سنة 2025 ،<br>
+                    وبناءاً على محضر لجنة نهاية التكوين بتاريخ: <span class="cert-highlight" dir="ltr" style="display:inline-block;">${minutesDate}</span> ،<br>
+                    
+                    <div style="text-align: center; font-size: 24px; font-weight: 900; color: #C2185B; margin: 8px 0; text-decoration: underline; text-underline-offset: 6px;">يــــــــشهـــــــــــــــــــــد :</div>
+                    
+                    <div style="display: flex; justify-content: flex-start; gap: 30px; align-items: center; margin-bottom: 5px;">
+                        <div>أن السيّد(ة): <span class="cert-highlight" style="font-size: 16px;">${item.name}</span></div>
+                        <div>المولود (ة) في: <span class="cert-highlight" style="font-size: 16px; display:inline-block;" dir="ltr">${dobClean}</span> بـ: <span class="cert-highlight" style="font-size: 16px;">${item.pob}</span></div>
+                    </div>
+                    
+                    <div style="margin-bottom: 8px;">قد تابع(ت) بنجاح دورة التكوين البيداغوجي التحضيري أثناء التربص التجريبي، رتبة <span class="cert-highlight">${item.rank}</span> ، مادة <span class="cert-highlight">${item.specialty}</span></div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1; text-align: right;">دفعة : <span class="cert-highlight" dir="ltr" style="display:inline-block;">${TRAINING_YEAR}</span></div>
+                        <div style="flex: 1; text-align: center;">حرر بـ : <span class="cert-highlight">${certData.issuePlace}</span> في : <span class="cert-highlight" dir="ltr" style="display:inline-block;">${printDate}</span></div>
+                        <div style="flex: 1; text-align: left; color: #000;">تحت رقم : ........................</div>
+                    </div>
+                </div>
+
+                <!-- القسم السفلي (الإمضاءات) -->
+                <div class="cert-footer">
+                    <div style="text-align: right; width: 50%;">إمضاء مدير التربية</div>
+                    <div style="text-align: left; width: 50%;">إمضاء مدير المعهد</div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+// 2. الستايل المخصص للشهادة (CSS)
+const certificateStyles = `
+    @page { size: A4 landscape; margin: 0; }
+    body { font-family: 'Cairo', sans-serif; margin: 0; padding: 0; background: #fff; direction: rtl; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    
+    .cert-wrapper { 
+        width: 297mm; 
+        height: 210mm; 
+        padding: 10mm; 
+        box-sizing: border-box; 
+        page-break-inside: avoid;
+        page-break-after: always;
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
+    }
+    .cert-wrapper:last-child { page-break-after: auto; }
+    
+    .cert-outer-border {
+        width: 100%; height: 100%;
+        border: 4px solid #C2185B;
+        padding: 4px; box-sizing: border-box;
+    }
+    
+    .cert-inner-border {
+        width: 100%; height: 100%;
+        border: 2px solid #C2185B;
+        padding: 15px 30px; box-sizing: border-box;
+        display: flex; flex-direction: column;
+        justify-content: space-between; 
+    }
+
+    .cert-header { text-align: center; font-weight: 700; font-size: 14px; line-height: 1.4; margin-bottom: 8px; }
+    .cert-subheader { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; }
+    
+    .cert-title { 
+        text-align: center; 
+        font-family: 'Cairo', sans-serif; 
+        font-size: 45px; 
+        font-weight: 900; 
+        color: #C2185B; 
+        margin: 5px 0 10px 0; 
+        text-shadow: 1px 1px 2px rgba(194, 24, 91, 0.2); 
+    }
+    
+    .cert-body { font-size: 14.5px; font-weight: 700; line-height: 1.6; text-align: right; color: #000; }
+    
+    .cert-highlight { color: #C2185B; font-weight: 900; }
+    
+    .cert-footer { 
+        display: flex; justify-content: space-between; 
+        font-weight: 700; 
+        font-size: 16px; 
+        padding: 0 120px; 
+        margin-bottom: 75px; 
+    }
+`;
+
+// 3. نافذة إعداد بيانات الشهادة (مع حفظ الحقول تلقائياً)
+async function askForCertData() {
+    let savedInstitute = localStorage.getItem('cert_institute') || "المعهد الوطني لتكوين موظفي قطاع التربية ورقلة";
+    let savedDirectorate = localStorage.getItem('cert_directorate') || "مديرية التربية لولاية توقرت";
+    
+    let today = new Date();
+    
+    // قيم المحضر
+    let savedDay = localStorage.getItem('cert_day') || ("0" + today.getDate()).slice(-2);
+    let savedMonth = localStorage.getItem('cert_month') || ("0" + (today.getMonth()+1)).slice(-2);
+    let savedYear = localStorage.getItem('cert_year') || today.getFullYear().toString();
+
+    // قيم التحرير (مكان وتاريخ)
+    let savedIssuePlace = localStorage.getItem('cert_issue_place') || "ورقلة";
+    let savedIssueDay = localStorage.getItem('cert_issue_day') || ("0" + today.getDate()).slice(-2);
+    let savedIssueMonth = localStorage.getItem('cert_issue_month') || ("0" + (today.getMonth()+1)).slice(-2);
+    let savedIssueYear = localStorage.getItem('cert_issue_year') || today.getFullYear().toString();
+
+    // توليد خيارات القوائم للمحضر
+    let daysHtml1 = ''; for(let i=1; i<=31; i++) { let v = i<10?'0'+i:i; daysHtml1 += `<option value="${v}" ${v==savedDay?'selected':''}>${v}</option>`; }
+    let monthsHtml1 = ''; for(let i=1; i<=12; i++) { let v = i<10?'0'+i:i; monthsHtml1 += `<option value="${v}" ${v==savedMonth?'selected':''}>${v}</option>`; }
+    let yearsHtml1 = ''; for(let i=2024; i<=2030; i++) { yearsHtml1 += `<option value="${i}" ${i==savedYear?'selected':''}>${i}</option>`; }
+
+    // توليد خيارات القوائم للتحرير
+    let daysHtml2 = ''; for(let i=1; i<=31; i++) { let v = i<10?'0'+i:i; daysHtml2 += `<option value="${v}" ${v==savedIssueDay?'selected':''}>${v}</option>`; }
+    let monthsHtml2 = ''; for(let i=1; i<=12; i++) { let v = i<10?'0'+i:i; monthsHtml2 += `<option value="${v}" ${v==savedIssueMonth?'selected':''}>${v}</option>`; }
+    let yearsHtml2 = ''; for(let i=2024; i<=2030; i++) { yearsHtml2 += `<option value="${i}" ${i==savedIssueYear?'selected':''}>${i}</option>`; }
+
+    const { value: formValues } = await Swal.fire({
+        title: '<i class="fa-solid fa-file-signature" style="color:#C2185B;"></i> إعداد بيانات الشهادة',
+        html: `
+            <div style="font-family:'Cairo'; font-weight:bold; font-size:14px; text-align:right;">
+                <label style="color:#102a43; display:block; margin-bottom:5px;">المعهد الوطني:</label>
+                <input type="text" id="cert-institute" class="grade-input" style="width:100%; margin-bottom:15px; text-align:right;" value="${savedInstitute}">
+                
+                <label style="color:#102a43; display:block; margin-bottom:5px;">مديرية التربية:</label>
+                <input type="text" id="cert-directorate" class="grade-input" style="width:100%; margin-bottom:15px; text-align:right;" value="${savedDirectorate}">
+                
+                <label style="color:#102a43; display:block; margin-bottom:5px;">تاريخ محضر لجنة نهاية التكوين:</label>
+                <div style="display:flex; gap:10px; direction:rtl; margin-bottom:15px; text-align:center;">
+                    <div style="flex:1;">
+                        <label style="font-size:12px; color:#555; display:block; margin-bottom:3px;">اليوم</label>
+                        <select id="cert-day" class="grade-input" style="width:100%; cursor:pointer; text-align:center; padding:10px;">${daysHtml1}</select>
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px; color:#555; display:block; margin-bottom:3px;">الشهر</label>
+                        <select id="cert-month" class="grade-input" style="width:100%; cursor:pointer; text-align:center; padding:10px;">${monthsHtml1}</select>
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px; color:#555; display:block; margin-bottom:3px;">السنة</label>
+                        <select id="cert-year" class="grade-input" style="width:100%; cursor:pointer; text-align:center; padding:10px;">${yearsHtml1}</select>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; direction:rtl; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="color:#102a43; display:block; margin-bottom:5px;">حرر بـ (المكان):</label>
+                        <input type="text" id="cert-issue-place" class="grade-input" style="width:100%; text-align:right;" value="${savedIssuePlace}">
+                    </div>
+                </div>
+
+                <label style="color:#102a43; display:block; margin-bottom:5px;">في (تاريخ التحرير):</label>
+                <div style="display:flex; gap:10px; direction:rtl; margin-bottom:15px; text-align:center;">
+                    <div style="flex:1;">
+                        <label style="font-size:12px; color:#555; display:block; margin-bottom:3px;">اليوم</label>
+                        <select id="cert-issue-day" class="grade-input" style="width:100%; cursor:pointer; text-align:center; padding:10px;">${daysHtml2}</select>
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px; color:#555; display:block; margin-bottom:3px;">الشهر</label>
+                        <select id="cert-issue-month" class="grade-input" style="width:100%; cursor:pointer; text-align:center; padding:10px;">${monthsHtml2}</select>
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px; color:#555; display:block; margin-bottom:3px;">السنة</label>
+                        <select id="cert-issue-year" class="grade-input" style="width:100%; cursor:pointer; text-align:center; padding:10px;">${yearsHtml2}</select>
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ وطباعة', cancelButtonText: 'إلغاء', confirmButtonColor: '#C2185B',
+        preConfirm: () => {
+            let inst = document.getElementById('cert-institute').value.trim();
+            let dir = document.getElementById('cert-directorate').value.trim();
+            
+            let d = document.getElementById('cert-day').value;
+            let m = document.getElementById('cert-month').value;
+            let y = document.getElementById('cert-year').value;
+            
+            let issuePlace = document.getElementById('cert-issue-place').value.trim();
+            let iday = document.getElementById('cert-issue-day').value;
+            let imonth = document.getElementById('cert-issue-month').value;
+            let iyear = document.getElementById('cert-issue-year').value;
+
+            if (!inst || !dir || !issuePlace) { 
+                Swal.showValidationMessage('يجب تعبئة جميع الحقول النصية!'); 
+                return false; 
+            }
+            
+            localStorage.setItem('cert_institute', inst);
+            localStorage.setItem('cert_directorate', dir);
+            
+            localStorage.setItem('cert_day', d);
+            localStorage.setItem('cert_month', m);
+            localStorage.setItem('cert_year', y);
+            
+            localStorage.setItem('cert_issue_place', issuePlace);
+            localStorage.setItem('cert_issue_day', iday);
+            localStorage.setItem('cert_issue_month', imonth);
+            localStorage.setItem('cert_issue_year', iyear);
+            
+            return { 
+                institute: inst, directorate: dir, 
+                day: d, month: m, year: y, 
+                issuePlace: issuePlace, 
+                issueDay: iday, issueMonth: imonth, issueYear: iyear 
+            };
+        }
+    });
+
+    return formValues;
+}
+
+// 4. دالة طباعة الشهادة الفردية
+window.promptPrintSingleCertificate = async function(empId) {
+    let item = mergedData.find(d => d.empId === empId);
+    if (!item) return;
+
+    let certData = await askForCertData();
+    if (!certData) return;
+
+    let printWindow = window.open('', '_blank');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>شهادة نجاح - ${item.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
+        <style>${certificateStyles}</style>
+    </head>
+    <body>
+        ${getCertificateHTML(item, certData)}
+        <script>window.onload=function(){setTimeout(function(){window.print();window.close();},800);}<\/script>
+    </body>
+    </html>`;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// 5. دالة الطباعة الجماعية (للناجحين فقط من الفلتر الحالي)
+window.promptPrintBulkCertificates = async function() {
+    let passedTrainees = filteredData.filter(d => d.grades.decision === "ناجح");
+
+    if (passedTrainees.length === 0) {
+        return Swal.fire('تنبيه', 'لا يوجد متكونين ناجحين في نتائج الفلترة الحالية لطباعة شهاداتهم.', 'warning');
+    }
+
+    let certData = await askForCertData();
+    if (!certData) return;
+
+    let printWindow = window.open('', '_blank');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>شهادات النجاح - جماعي</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
+        <style>${certificateStyles}</style>
+    </head>
+    <body>`;
+
+    passedTrainees.forEach(item => {
+        html += getCertificateHTML(item, certData);
+    });
+
+    html += `
+        <script>window.onload=function(){setTimeout(function(){window.print();window.close();},1000);}<\/script>
+    </body>
+    </html>`;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+</script>
+</body>
+</html>

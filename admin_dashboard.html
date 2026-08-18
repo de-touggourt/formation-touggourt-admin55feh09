@@ -594,6 +594,9 @@
             <button class="btn-print" style="background: #1E68E8;" onclick="adminPrintFramers()">
                 <i class="fa-solid fa-print"></i> طباعة القائمة الحالية
             </button>
+			<button class="btn-print" style="background: #8e44ad;" onclick="openFramerSettingsModal()">
+                <i class="fa-solid fa-gears"></i> إعدادات التأطير
+            </button>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; width: 300px;">
             <input type="text" id="adminFramerSearch" placeholder="بحث بالاسم أو الرقم..." oninput="renderAdminFramersTableData()" class="crud-input" style="margin:0;">
@@ -703,8 +706,7 @@
             <option value="غير محدد">غير محدد</option>
         </select>
         
-        <input type="text" id="statSearch" class="crud-input" placeholder="بحث (اسم، رقم)..." style="flex: 1; min-width: 150px; margin: 0; padding: 8px;" oninput="
-		ndanceStats()">
+        <input type="text" id="statSearch" class="crud-input" placeholder="بحث (اسم، رقم)..." style="flex: 1; min-width: 150px; margin: 0; padding: 8px;" oninput="renderAdminAttendanceStats()">
     </div>
 
     <!-- أزرار الإجراءات السريعة -->
@@ -823,12 +825,14 @@ async function initSiteSettings() {
         const docSnap = await docRef.get();
         
         // الهيكل الافتراضي لدورة واحدة (لسهولة التكرار)
+        
         const defaultSessionVol = {
             presidents: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             bursars: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             admins: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             teachers: { count: 0, days: 0, hoursPerDay: 0, total: 0 }, 
             guards: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
+            extraHours: { total: 0 }, // 🌟 إضافة الساعات الإضافية هنا
             globalTotal: 0
         };
 
@@ -852,7 +856,8 @@ async function initSiteSettings() {
                     s2: JSON.parse(JSON.stringify(defaultSessionVol)),
                     s3: JSON.parse(JSON.stringify(defaultSessionVol)),
                     isLocked: false
-                }
+                },
+				CENTER_PERMISSIONS: {}
             };
             await docRef.set(initialData);
             SITE_SETTINGS = initialData;
@@ -876,6 +881,13 @@ async function initSiteSettings() {
                         isLocked: false
                     };
                 }
+				
+				if (!SITE_SETTINGS.CENTER_PERMISSIONS) {
+                     SITE_SETTINGS.CENTER_PERMISSIONS = {};
+                       for (let key in SITE_SETTINGS.UI_NAMES.centers) {
+                      SITE_SETTINGS.CENTER_PERMISSIONS[key] = { canAddFramer: true, canDeleteFramer: true };
+                    }
+                } 
 
                 // 🌟 حماية لإضافة التواريخ للنسخ القديمة 🌟
                 if (!SITE_SETTINGS.SESSION_DATES) {
@@ -1196,16 +1208,38 @@ function renderCentersTab() {
 
         if(!hierarchyHtml) hierarchyHtml = '<div style="padding:15px; text-align:center; color:#94a3b8; font-size:13px; font-weight:bold;">لم يتم تعيين أطوار وتخصصات</div>';
 
-        html += `
-        <div class="center-box">
-            <div style="position:absolute; top:15px; left:15px; display:flex; gap:6px;">
-                <button onclick="openEditCenterModal('${key}')" style="background:#eff6ff; color:#1E68E8; border:1px solid #bfdbfe; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="تعديل المركز"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="deleteCenter('${key}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="حذف المركز نهائياً"><i class="fa-solid fa-trash"></i></button>
+        // استبدل الجزء الذي يبني html للبطاقة بهذا الكود المحدث:
+let perms = SITE_SETTINGS.CENTER_PERMISSIONS[key] || { canAddFramer: true, canDeleteFramer: true };
+
+html += `
+<div class="center-box">
+    <div style="position:absolute; top:15px; left:15px; display:flex; gap:6px;">
+        <button onclick="openEditCenterModal('${key}')" style="background:#eff6ff; color:#1E68E8; border:1px solid #bfdbfe; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="تعديل المركز"><i class="fa-solid fa-pen"></i></button>
+        <button onclick="deleteCenter('${key}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="حذف المركز نهائياً"><i class="fa-solid fa-trash"></i></button>
+    </div>
+    <h4>${centerName}</h4>
+    <div class="center-hierarchy">${hierarchyHtml}</div>
+    
+    <!-- 🌟 الأزرار الجديدة للتحكم في صلاحيات المؤطرين 🌟 -->
+    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e1; display:flex; gap: 10px; justify-content: space-between; background: #f8fafc; padding: 10px; border-radius: 8px;">
+        <label style="font-size:12px; font-weight:bold; color:#102a43; display:flex; align-items:center; gap:5px; cursor:pointer;">
+            إضافة مؤطر
+            <div class="switch" style="transform: scale(0.8); margin-right:5px;">
+                <input type="checkbox" onchange="toggleCenterPermission('${key}', 'canAddFramer', this.checked)" ${perms.canAddFramer ? 'checked' : ''}>
+                <span class="slider"></span>
             </div>
-            <h4>${centerName}</h4>
-            <div class="center-hierarchy">${hierarchyHtml}</div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:15px; text-align:left;">المعرف المرجعي: ${key}</div>
-        </div>`;
+        </label>
+        <label style="font-size:12px; font-weight:bold; color:#102a43; display:flex; align-items:center; gap:5px; cursor:pointer;">
+            حذف مؤطر
+            <div class="switch" style="transform: scale(0.8); margin-right:5px;">
+                <input type="checkbox" onchange="toggleCenterPermission('${key}', 'canDeleteFramer', this.checked)" ${perms.canDeleteFramer ? 'checked' : ''}>
+                <span class="slider"></span>
+            </div>
+        </label>
+    </div>
+
+    <div style="font-size:12px; color:#94a3b8; margin-top:10px; text-align:left;">المعرف المرجعي: ${key}</div>
+</div>`;
     }
     html += `</div></div>`;
     body.innerHTML = html;
@@ -1352,6 +1386,8 @@ window.createNewCenterStruct = async function(data) {
             }
         });
     }
+     	// أضف هذا السطر قبل await saveSettingsToFirestore(false);
+     SITE_SETTINGS.CENTER_PERMISSIONS[newKey] = { canAddFramer: true, canDeleteFramer: true };
 
     await saveSettingsToFirestore(false); // حفظ صامت
 if (SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) {
@@ -1419,6 +1455,15 @@ window.deleteCenter = async function(key) {
             await saveSettingsToFirestore(true, 'تم حذف المركز');
         }
     });
+}
+
+// دالة لتحديث صلاحيات المراكز لحظياً
+window.toggleCenterPermission = async function(centerKey, permType, isChecked) {
+    if(!SITE_SETTINGS.CENTER_PERMISSIONS[centerKey]) {
+        SITE_SETTINGS.CENTER_PERMISSIONS[centerKey] = { canAddFramer: true, canDeleteFramer: true };
+    }
+    SITE_SETTINGS.CENTER_PERMISSIONS[centerKey][permType] = isChecked;
+    await saveSettingsToFirestore(false); // حفظ صامت لتجنب إزعاج المستخدم
 }
 
 // =========================================================================
@@ -2137,9 +2182,22 @@ function fetchData() {
                 let day = ("0" + d.getDate()).slice(-2);
                 let month = ("0" + (d.getMonth() + 1)).slice(-2);
                 let year = d.getFullYear();
-                item.dob = `${day}-${month}-${year}`; 
+                // تم عكس الترتيب ليصبح (سنة/شهر/يوم)
+                item.dob = `${year}/${month}/${day}`; 
             } else if (typeof item.dob === 'string') {
-                item.dob = item.dob.replace(/\//g, '-');
+                // تقسيم التاريخ النصي بناءً على الفواصل (- أو /)
+                let parts = item.dob.split(/[-/]/);
+                if (parts.length === 3) {
+                    // إذا كان الجزء الأخير هو السنة (4 أرقام)، نقوم بقلب الترتيب
+                    if (parts[2].length === 4) {
+                        item.dob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        // إذا كان الترتيب صحيحاً بالفعل، نوحد الفواصل فقط
+                        item.dob = `${parts[0]}/${parts[1]}/${parts[2]}`;
+                    }
+                } else {
+                    item.dob = item.dob.replace(/-/g, '/');
+                }
             }
 
             if (change.type === "added") {
@@ -2458,7 +2516,7 @@ function printFilteredList() {
     
     let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
 
-    let printWindow = window.open('', '', 'width=1000,height=700');
+    let printWindow = window.open('', '_blank');
     
     let html = `
     <html lang="ar" dir="rtl">
@@ -3912,7 +3970,7 @@ function printGroupsList() {
     if (!hasData) { Swal.fire('تنبيه', 'لا توجد بيانات أفواج لطباعتها في نتائج الفلترة الحالية.', 'warning'); return; }
 
     let sortedGroupNames = Object.keys(grpsData).sort();
-    let printWindow = window.open('', '', 'width=1000,height=700');
+    let printWindow = window.open('', '_blank');
     let html = `
     <html lang="ar" dir="rtl">
     <head>
@@ -4095,7 +4153,7 @@ window.printDetailedStatsPoster = function() {
     let centerFilterValue = document.getElementById("filterCenter") ? document.getElementById("filterCenter").value : "الكل";
     let centerText = (centerFilterValue === "الكل") ? "جميع المراكز المعتمدة بالولاية" : centerFilterValue;
 
-    let printWindow = window.open('', '', 'width=1000,height=800');
+    let printWindow = window.open('', '_blank');
     
     let html = `
     <html lang="ar" dir="rtl">
@@ -4768,7 +4826,7 @@ window.adminPrintFramers = function() {
     let sessionName = currentAdminFramerSession === 'all' ? 'جميع الدورات' : (currentAdminFramerSession === 's1' ? 'الدورة الأولى' : (currentAdminFramerSession === 's2' ? 'الدورة الثانية' : 'الدورة الثالثة'));
     let titleStr = `قائمة المؤطرين (${currentAdminFramerCenter}) - ${sessionName}`;
 
-    let printWindow = window.open('', '', 'width=1000,height=800');
+    let printWindow = window.open('', '_blank');
     let rowsHtml = '';
     
     // ترتيب القائمة حسب المراكز ثم الأسماء
@@ -4835,6 +4893,82 @@ window.adminPrintFramers = function() {
     `;
     printWindow.document.write(html);
     printWindow.document.close();
+};
+
+// ================= دالة نافذة إعدادات صلاحيات التأطير (محدثة ومحسنة) =================
+window.openFramerSettingsModal = function() {
+    if (!SITE_SETTINGS || !SITE_SETTINGS.UI_NAMES || !SITE_SETTINGS.UI_NAMES.centers) {
+        return Swal.fire('تنبيه', 'لم يتم تحميل بيانات المراكز بعد.', 'warning');
+    }
+
+    let html = `
+    <!-- تنسيقات خاصة بأزرار التفعيل المخصصة لهذه النافذة -->
+    <style>
+        .custom-toggle { position: relative; display: inline-block; width: 60px; height: 30px; margin: 0; }
+        .custom-toggle input { opacity: 0; width: 0; height: 0; }
+        /* اللون الأحمر في حالة الإغلاق */
+        .custom-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #dc3545; transition: .4s; border-radius: 34px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);}
+        .custom-slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);}
+        /* اللون الأخضر في حالة الفتح */
+        .custom-toggle input:checked + .custom-slider { background-color: #0FBA50; }
+        .custom-toggle input:checked + .custom-slider:before { transform: translateX(30px); }
+    </style>
+
+    <div style="text-align: right; font-family: 'Cairo'; max-height: 65vh; overflow-y: auto; overflow-x: hidden; padding-left: 5px;">
+        
+        <!-- ترويسة القائمة -->
+        <div style="background: #102a43; color: white; display: flex; padding: 15px; border-radius: 10px 10px 0 0; font-weight: bold; font-size: 17px; align-items: center;">
+            <div style="flex: 2.5; padding-right: 10px;">اسم المركز</div>
+            <div style="flex: 1; text-align: center;">إضافة مؤطر</div>
+            <div style="flex: 1; text-align: center;">حذف مؤطر</div>
+        </div>
+
+        <!-- جسم القائمة -->
+        <div style="border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 10px 10px; background: #fff;">
+    `;
+
+    for (let key in SITE_SETTINGS.UI_NAMES.centers) {
+        let centerName = SITE_SETTINGS.UI_NAMES.centers[key];
+        let perms = SITE_SETTINGS.CENTER_PERMISSIONS[key] || { canAddFramer: true, canDeleteFramer: true };
+
+        html += `
+            <div style="display: flex; padding: 15px; border-bottom: 1px solid #e2e8f0; align-items: center; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">
+                <div style="flex: 2.5; font-weight: bold; color: #1E68E8; font-size: 17px; padding-right: 10px;">
+                    <i class="fa-solid fa-school" style="color: #94a3b8; margin-left: 8px;"></i> ${centerName}
+                </div>
+                <div style="flex: 1; text-align: center;">
+                    <label class="custom-toggle">
+                        <input type="checkbox" onchange="toggleCenterPermission('${key}', 'canAddFramer', this.checked)" ${perms.canAddFramer ? 'checked' : ''}>
+                        <span class="custom-slider"></span>
+                    </label>
+                </div>
+                <div style="flex: 1; text-align: center;">
+                    <label class="custom-toggle">
+                        <input type="checkbox" onchange="toggleCenterPermission('${key}', 'canDeleteFramer', this.checked)" ${perms.canDeleteFramer ? 'checked' : ''}>
+                        <span class="custom-slider"></span>
+                    </label>
+                </div>
+            </div>
+        `;
+    }
+
+    html += `
+        </div>
+        
+        <div style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; margin-top: 15px; font-size: 14px; font-weight: bold;">
+            <i class="fa-solid fa-circle-info"></i> تنويه: التغييرات التي تقوم بها تُحفظ وتُطبق في نفس اللحظة على لوحات رؤساء المراكز.
+        </div>
+    </div>
+    `;
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-gears" style="color: #8e44ad;"></i> إعدادات صلاحيات التأطير',
+        html: html,
+        width: '650px', // تم تصغير العرض ليقترب النص من الأزرار وتصبح متناسقة
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
+    });
 };
 
 // =========================================================================
@@ -4955,6 +5089,10 @@ window.renderHourlyVolumeUI = function() {
     if (!hv[`s${currentHourlySession}`].guards) {
         hv[`s${currentHourlySession}`].guards = { count: 0, days: 0, hoursPerDay: 0, total: 0 };
     }
+	
+	if (!hv[`s${currentHourlySession}`].extraHours) {
+        hv[`s${currentHourlySession}`].extraHours = { total: 0 };
+    }
     
     const sData = hv[`s${currentHourlySession}`];
 
@@ -5052,6 +5190,18 @@ window.renderHourlyVolumeUI = function() {
                             <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_teach_hours" class="crud-input" value="${sData.teachers.hoursPerDay}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; ${lockedStyle}"></td>
                             <td style="padding: 12px; border: 1px solid #cbd5e1;"><input type="number" id="hv_teach_total" class="crud-input" value="${sData.teachers.total}" readonly style="text-align:center; background:#e8fbf0; color:#0FBA50; font-weight:bold; border-color:#0FBA50;"></td>
                         </tr>
+						
+						<!-- 🌟 الساعات الإضافية (إدخال المجموع فقط) 🌟 -->
+                        <tr>
+                            <td style="text-align:right; font-weight:bold; color:#1e293b; padding: 12px; border: 1px solid #cbd5e1;"><i class="fa-solid fa-clock" style="color:#ff9800; margin-left: 8px;"></i>الساعات الإضافية</td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1; background: #f8fafc;"><input type="text" class="crud-input" value="-" disabled style="text-align:center; background:#e2e8f0; color:#94a3b8; font-weight:bold; cursor:not-allowed; border:none;"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1; background: #f8fafc;"><input type="text" class="crud-input" value="-" disabled style="text-align:center; background:#e2e8f0; color:#94a3b8; font-weight:bold; cursor:not-allowed; border:none;"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1; background: #f8fafc;"><input type="text" class="crud-input" value="-" disabled style="text-align:center; background:#e2e8f0; color:#94a3b8; font-weight:bold; cursor:not-allowed; border:none;"></td>
+                            <td style="padding: 12px; border: 1px solid #cbd5e1;">
+                                <input type="number" id="hv_extra_total" class="crud-input" value="${sData.extraHours.total}" oninput="calcHourlyVolume()" min="0" ${locked} style="text-align:center; font-weight:bold; color:#ff9800; border-color:#ff9800; ${lockedStyle}">
+                            </td>
+                        </tr>
+						
                     </tbody>
                 </table>
                 
@@ -5101,7 +5251,10 @@ window.updateSessionDataInMemory = function(s) {
     let t_h = parseFloat(document.getElementById('hv_teach_hours').value) || 0;
     let t_t = t_d * t_h;
 
-    let g_total = p_t + b_t + a_t + g_t + t_t;
+    
+    let e_t = parseFloat(document.getElementById('hv_extra_total').value) || 0;
+
+    let g_total = p_t + b_t + a_t + g_t + t_t + e_t;
 
     SITE_SETTINGS.HOURLY_VOLUME[`s${s}`] = {
         presidents: { count: p_c, days: p_d, hoursPerDay: p_h, total: p_t },
@@ -5109,6 +5262,7 @@ window.updateSessionDataInMemory = function(s) {
         admins: { count: a_c, days: a_d, hoursPerDay: a_h, total: a_t },
         guards: { count: g_c, days: g_d, hoursPerDay: g_h, total: g_t },
         teachers: { count: 0, days: t_d, hoursPerDay: t_h, total: t_t },
+        extraHours: { total: e_t }, // 🌟 حفظها في الذاكرة
         globalTotal: g_total
     };
 };
@@ -5144,7 +5298,11 @@ window.calcHourlyVolume = function() {
     let t_t = t_d * t_h; 
     document.getElementById('hv_teach_total').value = t_t;
 
-    let globalTotal = p_t + b_t + a_t + g_t + t_t;
+    
+    let e_t = parseFloat(document.getElementById('hv_extra_total').value) || 0;
+
+    
+    let globalTotal = p_t + b_t + a_t + g_t + t_t + e_t;
     document.getElementById('hv_global_total').innerText = globalTotal;
 
     updateSessionDataInMemory(currentHourlySession);
@@ -5206,7 +5364,7 @@ window.printHourlyVolume = function(mode) {
         });
     }
 
-    let printWindow = window.open('', '', 'width=1000,height=800');
+    let printWindow = window.open('', '_blank');
     
     let html = `
     <html lang="ar" dir="rtl">
@@ -5292,6 +5450,13 @@ window.printHourlyVolume = function(mode) {
                         <td>${d.teachers.days}</td>
                         <td>${d.teachers.hoursPerDay}</td>
                         <td>${d.teachers.total}</td>
+                    </tr>
+					<tr>
+                        <td class="cat-name">الساعات الإضافية</td>
+                        <td style="background:#eee;">-</td>
+                        <td style="background:#eee;">-</td>
+                        <td style="background:#eee;">-</td>
+                        <td style="font-weight:bold; color:#ff9800;">${d.extraHours ? d.extraHours.total : 0}</td>
                     </tr>
                     <tr class="total-row">
                         <td colspan="4" style="text-align: left; padding-left: 20px;">الإجمالي العام لساعات الدورة (${session.id}):</td>
@@ -5951,7 +6116,7 @@ window.printAdminAttHistory = function(empId, name) {
         </tr>`;
     });
 
-    let printWindow = window.open('', '', 'width=800,height=900');
+    let printWindow = window.open('', '_blank');
     let html = `
     <html lang="ar" dir="rtl">
     <head>
@@ -5998,55 +6163,97 @@ window.printAdminAttHistory = function(empId, name) {
     printWindow.document.close();
 };
 
-// ================= دالة الطباعة الشاملة =================
+// ================= دالة الطباعة الشاملة (بخط موحد ومقاسات منسقة) =================
 window.printAdminAttStats = function() {
     if(statProcessedRecords.length === 0) return Swal.fire('تنبيه', 'لا توجد بيانات للطباعة', 'info');
     
-    let printWindow = window.open('', '', 'width=1200,height=800');
+    let printWindow = window.open('', '_blank');
     let catF = document.getElementById('statCatFilter').value;
     let isTrainees = catF === 'trainees';
     let titleStr = "التقرير الشامل للحضور - " + (isTrainees ? "المتكونون" : "المؤطرون");
 
     let rowsHtml = '';
     statProcessedRecords.forEach((r, idx) => {
-        let extraCol = isTrainees ? `<td>${r.specialty}</td><td>${r.group}</td>` : `<td colspan="2">${r.role}</td>`;
+        // تم إزالة الألوان والخط العريض ليكون موحداً مثل التخصص
+        let extraCol = isTrainees 
+            ? `<td style="text-align:right;">${r.specialty}</td><td style="text-align:center;">${r.group}</td>` 
+            : `<td colspan="2" style="text-align:center;">${r.role}</td>`;
+            
         rowsHtml += `<tr>
             <td style="text-align:center;">${idx + 1}</td>
-            <td style="text-align:center; font-family:monospace;">${r.empId}</td>
-            <td style="text-align:right;"><b>${r.name}</b></td>
+            <td style="text-align:right;">${r.name}</td>
             <td style="text-align:center;">${r.center}</td>
             ${extraCol}
             <td style="text-align:center; direction:ltr;">${r.date}</td>
-            <td style="text-align:center; font-weight:bold;">${r.status} <span style="font-size:11px;">(${r.time})</span></td>
+            <td style="text-align:center;">${r.status} (${r.time})</td>
         </tr>`;
     });
 
-    let extraTh = isTrainees ? `<th>التخصص</th><th>الفوج</th>` : `<th colspan="2">الوظيفة بالمركز</th>`;
+    let extraTh = isTrainees 
+        ? `<th style="width:15%;">التخصص</th><th style="width:10%;">الفوج</th>` 
+        : `<th colspan="2" style="width:25%;">الوظيفة بالمركز</th>`;
 
     let html = `
     <html lang="ar" dir="rtl">
-    <head><meta charset="UTF-8"><title>${titleStr}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Cairo', sans-serif; padding: 20px; font-size: 13px; }
-        .header { text-align: center; font-weight: 700; font-size: 15px; margin-bottom: 10px; }
-        .title { text-align: center; font-size: 20px; font-weight: 900; margin-bottom: 20px; text-decoration: underline; }
-        .sub-titles { text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; color: #333; background: #f9f9f9; padding: 8px 15px; border-radius: 5px; border: 1px dashed #ccc; display: table; margin: 0 auto 20px auto;}
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #000; padding: 8px; text-align: right; }
-        th { background: #eee; text-align: center; font-weight: bold; }
-        @media print { th { background-color: #eee !important; -webkit-print-color-adjust: exact; } .sub-titles {background: transparent; border:none;} }
-    </style></head>
+    <head>
+        <meta charset="UTF-8">
+        <title>${titleStr}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            
+            body { font-family: 'Cairo', sans-serif; padding: 20px; font-size: 14px; background: #fff; color:#000; }
+            .header { text-align: center; font-weight: 700; font-size: 15px; margin-bottom: 10px; line-height: 1.5; }
+            .title { text-align: center; font-size: 22px; font-weight: 900; margin-bottom: 20px; text-decoration: underline; color: #102a43; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 20px; font-weight: bold; color: #333; background: #f8fafc; padding: 8px 15px; border-radius: 8px; border: 1px dashed #cbd5e1; display: inline-block; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th, td { border: 1px solid #000; padding: 12px 8px; text-align: right; }
+            
+            /* ترويسة الجدول تبقى بخط عريض لتمييزها */
+            th { background: #f1f5f9; text-align: center; font-weight: 900; font-size: 15px; color: #102a43; }
+            
+            /* توحيد خط بيانات الجدول بالكامل */
+            td { font-size: 14px; font-weight: normal; color: #000; }
+            
+            tbody tr:nth-child(even) { background-color: #fafafa; }
+            
+            @media print { 
+                th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } 
+                .sub-titles { background: transparent; border: none; padding: 0; } 
+                body { padding: 0; }
+            }
+        </style>
+    </head>
     <body>
         <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية<br>مديرية التربية لولاية توقرت</div>
         <div class="title">${titleStr}</div>
-        ${window.currentStatSessionText ? `<div class="sub-titles">الفترة الزمنية: ${window.currentStatSessionText}</div>` : ''}
+        <div style="text-align:center;">
+            ${window.currentStatSessionText ? `<div class="sub-titles">الفترة الزمنية المحددة: ${window.currentStatSessionText}</div>` : ''}
+        </div>
+        
         <table>
-            <thead><tr><th style="width:4%;">#</th><th style="width:10%;">الرقم</th><th style="width:20%;">الاسم</th><th style="width:15%;">المركز</th>${extraTh}<th style="width:15%;">التاريخ</th><th style="width:12%;">الوضعية</th></tr></thead>
+            <thead>
+                <tr>
+                    <th style="width:4%;">#</th>
+                    <th style="width:23%;">الاسم واللقب</th>
+                    <th style="width:20%;">المركز</th>
+                    ${extraTh}
+                    <th style="width:14%;">التاريخ</th>
+                    <th style="width:14%;">الوضعية والتوقيت</th>
+                </tr>
+            </thead>
             <tbody>${rowsHtml}</tbody>
         </table>
+        
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; padding: 0 40px;">
+            <div>رئيس مصلحة التكوين والتفتيش</div>
+            <div>مدير التربية</div>
+        </div>
+        
         <script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script>
-    </body></html>`;
+    </body>
+    </html>`;
     
     printWindow.document.write(html);
     printWindow.document.close();

@@ -154,7 +154,7 @@
     
     <!-- شريط الأدوات والفلاتر المشترك -->
     <div class="att-filters">
-        <button class="btn-action-main" style="background: #0FBA50;" onclick="promptAddFramer()">
+        <button class="btn-action-main" id="btnAddFramerMain" style="background: #0FBA50;" onclick="promptAddFramer()">
             <i class="fa-solid fa-user-plus"></i> إضافة مؤطر
         </button>
         <button class="btn-action-main" style="background: #34495e;" onclick="printCurrentTabList()">
@@ -392,6 +392,9 @@ let currentFramerPage = 1;
 const framersPerPage = 10;
 let isFirstFramerLoad = true;
 
+let canCenterAddFramer = true;
+let canCenterDeleteFramer = true;
+
 let isShiftMode = false; 
 let currentShiftData = []; 
 let targetHoursData = { s1: 300, s2: 300, s3: 600 }; 
@@ -496,12 +499,65 @@ async function initializeSystem() {
     }
 
     // 🌟 الجديد: جلب إعدادات الموقع (الحجم الساعي) من المديرية 🌟
-    try {
-        const stDoc = await db.collection("site_settings").doc("main").get();
-        if (stDoc.exists && stDoc.data().HOURLY_VOLUME) {
-            globalHourlySettings = stDoc.data().HOURLY_VOLUME;
+    // استبدل كود جلب إعدادات المديرية (try...catch) بهذا الكود المطور:
+// 🌟 جلب الإعدادات والصلاحيات بنظام التحديث اللحظي (Real-time) 🌟
+    db.collection("site_settings").doc("main").onSnapshot((stDoc) => {
+        if (stDoc.exists) {
+            let settingsData = stDoc.data();
+            
+            // 1. تحديث الحجم الساعي
+            if (settingsData.HOURLY_VOLUME) {
+                globalHourlySettings = settingsData.HOURLY_VOLUME;
+                // إذا كنا في واجهة تسيير الدوام، نعيد رسم الجدول اللحظي
+                if (typeof isShiftMode !== 'undefined' && isShiftMode && typeof renderShiftsTable === 'function') {
+                    renderShiftsTable();
+                }
+            }
+
+            // 2. البحث عن المفتاح الخاص بالمركز الحالي
+            let currentCenterKey = null;
+            if (settingsData.UI_NAMES && settingsData.UI_NAMES.centers) {
+                for (let k in settingsData.UI_NAMES.centers) {
+                    if (settingsData.UI_NAMES.centers[k] === INSPECTOR_CENTER) {
+                        currentCenterKey = k;
+                        break;
+                    }
+                }
+            }
+            
+            // حفظ حالة الحذف القديمة لمعرفة هل تغيرت أم لا
+            let oldDeletePerm = canCenterDeleteFramer;
+
+            // 3. تحديث الصلاحيات الخاصة بالمركز
+            if (currentCenterKey && settingsData.CENTER_PERMISSIONS && settingsData.CENTER_PERMISSIONS[currentCenterKey]) {
+                canCenterAddFramer = settingsData.CENTER_PERMISSIONS[currentCenterKey].canAddFramer !== false;
+                canCenterDeleteFramer = settingsData.CENTER_PERMISSIONS[currentCenterKey].canDeleteFramer !== false;
+            }
+
+            // 4. التحديث اللحظي لزر "إضافة مؤطر" في الواجهة
+            const btnAdd = document.getElementById("btnAddFramerMain");
+            if (btnAdd) {
+                if (!canCenterAddFramer) {
+                    btnAdd.style.opacity = "0.5";
+                    btnAdd.style.cursor = "not-allowed";
+                    btnAdd.title = "تم تعطيل هذه الصلاحية من طرف المديرية";
+                } else {
+                    btnAdd.style.opacity = "1";
+                    btnAdd.style.cursor = "pointer";
+                    btnAdd.title = "إضافة مؤطر جديد";
+                }
+            }
+
+            // 5. التحديث اللحظي لجدول المؤطرين (لإخفاء/إظهار أزرار الحذف)
+            if (oldDeletePerm !== canCenterDeleteFramer) {
+                if (typeof filterFramersTable === 'function') {
+                    filterFramersTable();
+                }
+            }
         }
-    } catch(e) { console.warn("تعذر جلب إعدادات المديرية:", e); }
+    }, (error) => {
+        console.warn("تعذر الاستماع لإعدادات المديرية اللحظية:", error);
+    });
 
     fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
         const responseText = await photoRes.text();
@@ -830,7 +886,8 @@ function renderFramersTable(data) {
         `;
 
         const ccpDisplay = f.ccp ? `<div style="line-height:1.4;"><span style="letter-spacing:1px; font-weight:bold; font-size:14px;">${f.ccp}</span><br><span style="font-size:11px; color:#777;">المفتاح: <b style="color:#1E68E8;">${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}</b></span></div>` : '---';
-        const deleteBtn = f.isProtected ? '' : `<button onclick="window.deleteFramer('${f.docId}')" class="btn-action" style="background:#dc3545;" title="حذف"><i class="fa-solid fa-trash"></i> حذف</button>`;
+// إخفاء زر الحذف كلياً إذا كانت الصلاحية معطلة
+const deleteBtn = (f.isProtected || !canCenterDeleteFramer) ? '' : `<button onclick="window.deleteFramer('${f.docId}')" class="btn-action" style="background:#dc3545;" title="حذف"><i class="fa-solid fa-trash"></i> حذف</button>`;
 
         const s1Badge = `<span class="session-badge ${f.s1 ? 'active' : ''}"><i class="fa-solid ${f.s1 ? 'fa-check' : 'fa-minus'}"></i></span>`;
         const s2Badge = `<span class="session-badge ${f.s2 ? 'active' : ''}"><i class="fa-solid ${f.s2 ? 'fa-check' : 'fa-minus'}"></i></span>`;
@@ -1079,6 +1136,11 @@ function getCenterGroups(selectedSpec = null) {
     return Array.from(groups).sort();
 }
 window.promptAddFramer = function() {
+
+if(!canCenterAddFramer) {
+        return Swal.fire('صلاحيات مقيدة', 'عذراً، لقد تم إيقاف صلاحية إضافة مؤطرين جدد في مركزك من طرف المديرية.', 'error');
+    }
+	
     Swal.fire({
         title: 'إضافة مؤطر جديد',
         text: 'أدخل الرقم الوظيفي للبحث عن الموظف في القاعدة الرئيسية:',
@@ -1678,6 +1740,11 @@ window.editFramer = function(docId) {
 
 
 window.deleteFramer = function(docId) {
+
+if(!canCenterDeleteFramer) {
+        return Swal.fire('صلاحيات مقيدة', 'عذراً، لقد تم إيقاف صلاحية حذف المؤطرين في مركزك من طرف المديرية.', 'error');
+    }
+	
     Swal.fire({
         title: 'تأكيد الحذف', text: 'هل أنت متأكد من إزالة هذا المؤطر من المركز؟', icon: 'warning',
         showCancelButton: true, confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء', confirmButtonColor: '#d90429'

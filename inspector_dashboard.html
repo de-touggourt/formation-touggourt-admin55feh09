@@ -243,6 +243,10 @@
       <button class="logout-btn" style="background: #e67e22;" onclick="checkAndOpenFramers()">
         <i class="fa-solid fa-user-tie"></i> تسيير التأطير
       </button>
+	  
+	  <button class="logout-btn" style="background: #27ae60;" onclick="window.location.href='grades_management.html'">
+        <i class="fa-solid fa-graduation-cap"></i> تسيير النقاط
+      </button>
 
       <button class="logout-btn" onclick="logout()">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج
@@ -996,13 +1000,26 @@ function fetchData() {
             };
 
             if (item.dob && typeof item.dob.toDate === 'function') {
-                let d = item.dob.toDate(); 
-                let day = ("0" + d.getDate()).slice(-2); 
-                let month = ("0" + (d.getMonth() + 1)).slice(-2); 
+                let d = item.dob.toDate();
+                let day = ("0" + d.getDate()).slice(-2);
+                let month = ("0" + (d.getMonth() + 1)).slice(-2);
                 let year = d.getFullYear();
-                item.dob = `${day}-${month}-${year}`; 
+                // تم عكس الترتيب ليصبح (سنة/شهر/يوم)
+                item.dob = `${year}/${month}/${day}`; 
             } else if (typeof item.dob === 'string') {
-                item.dob = item.dob.replace(/\//g, '-');
+                // تقسيم التاريخ النصي بناءً على الفواصل (- أو /)
+                let parts = item.dob.split(/[-/]/);
+                if (parts.length === 3) {
+                    // إذا كان الجزء الأخير هو السنة (4 أرقام)، نقوم بقلب الترتيب
+                    if (parts[2].length === 4) {
+                        item.dob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        // إذا كان الترتيب صحيحاً بالفعل، نوحد الفواصل فقط
+                        item.dob = `${parts[0]}/${parts[1]}/${parts[2]}`;
+                    }
+                } else {
+                    item.dob = item.dob.replace(/-/g, '/');
+                }
             }
 
             centerData.push(item);
