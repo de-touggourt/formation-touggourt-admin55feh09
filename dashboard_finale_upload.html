@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>فضاء التكوين البيداغوجي توقرت - إدارة الملفات</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
@@ -15,140 +15,147 @@
 
 <style>
 /* ============================================================
-   1. تنسيقات الجسم الأساسية
+   1. الإعدادات الأساسية والخلفية العصرية
    ============================================================ */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body { font-family:'Cairo',sans-serif; margin:0; background:linear-gradient(135deg,#e3f2fd,#bbdefb); text-align:center; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; padding: 0; }
+html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
 
-/* شريط الأخبار */
-.news-ticker-container { background-color: #0d47a1; color: #fff; width: 100%; min-height: 50px; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1000; box-shadow: 0 4px 8px rgba(0,0,0,0.3); padding: 10px 15px; }
-.typewriter-text { font-size: 17px; font-weight: 700; display: inline-block; opacity: 1; transition: opacity 1s ease-in-out; text-shadow: 0 2px 4px rgba(0,0,0,0.3); white-space: normal; overflow: visible; text-overflow: clip; max-width: 95%; line-height: 1.4; text-align: center; }
+body::before {
+  content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: #f4f7f6;
+  background-image: radial-gradient(#1E68E8 0.5px, transparent 0.5px), radial-gradient(#1E68E8 0.5px, #f4f7f6 0.5px);
+  background-size: 20px 20px; background-position: 0 0, 10px 10px; opacity: 0.1;
+  z-index: -1;
+}
+
+body { 
+    font-family:'Cairo',sans-serif; margin:0; text-align:center; 
+    min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; 
+}
+
+/* شريط التمرير */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: #e2e8f0; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+body.swal2-shown { overflow-y: auto !important; padding-right: 0 !important; }
+
+/* شريط الأخبار العلوي */
+.news-ticker-container { 
+    background-color: #0d47a1; color: #fff; width: 100%; min-height: 40px; 
+    display: flex; align-items: center; justify-content: center; position: relative; 
+    z-index: 20; padding: 5px 15px; font-size: 14px; font-weight: 600; 
+}
+.typewriter-text { display: inline-block; transition: opacity 0.5s; }
 .typewriter-text.fade-out { opacity: 0; }
 
-/* الشعار */
-.logo-container { position: relative; display: inline-block; width: 160px; height: 160px; margin-bottom: 0px; transition: transform 0.3s ease; }
-.logo-container img { width: 130px; height: 130px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; z-index: 2; animation: pulseLogo 2.5s ease-in-out infinite; }
-.logo-ring { position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; border-radius: 50%; border: 3px dashed #fff; background: transparent; transform: translate(-50%, -50%); animation: rotateRing 10s linear infinite; z-index: 1; }
-@keyframes rotateRing { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-@keyframes pulseLogo { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } }
+/* الهيدر العصري بتدرج أزرق فاخر */
+header { 
+    background: linear-gradient(135deg, #1E68E8 0%, #0d47a1 100%);
+    position: relative; padding: 40px 20px 70px 20px; 
+    border-bottom-left-radius: 40px; border-bottom-right-radius: 40px; 
+    box-shadow: 0 10px 30px rgba(30, 104, 232, 0.2); 
+    z-index: 10; display: flex; flex-direction: column; align-items: center; 
+}
 
-/* الهيدر وزر الرجوع */
-header { background:#1E68E8; color:#fff; padding:30px 15px; border-bottom-left-radius:25px; border-bottom-right-radius:25px; box-shadow:0 4px 10px rgba(0,0,0,.2); width: 100%; position: relative; }
-header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 10px; line-height: 1.5; }
-.btn-back { position: absolute; top: 20px; right: 20px; background: #fff; color: #1E68E8; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; z-index: 10; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.3s; }
-.btn-back:hover { background: #f0f7ff; transform: translateY(-2px); }
+header h1 { margin: 15px 0 5px 0; font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+header p { margin: 0; font-size: 15px; color: #bbdefb; font-weight: 600; }
 
-/* الخدمات (المراكز) */
-.services { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:25px; padding:40px 20px; max-width:1000px; margin:auto; justify-content: center; flex: 1; width: 100%; }
-.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; border: 2px solid transparent;}
-.service:hover { transform:translateY(-8px) scale(1.05); box-shadow:0 8px 20px rgba(30,104,232,.2); border: 2px solid #1E68E8; }
-.service:active { transform:scale(0.98); }
-.service i { font-size:55px; color:#1E68E8; margin-bottom:15px; transition: 0.3s;}
-.service:hover i { transform: scale(1.1); }
-.service h3 { color:#1557c0; font-size: 1.1rem; margin: 0; line-height: 1.6; }
+/* زر الرجوع للوحة التحكم */
+.btn-back { 
+    position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.2); 
+    backdrop-filter: blur(10px); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); 
+    padding: 8px 16px; border-radius: 25px; cursor: pointer; font-weight: 700; font-family: 'Cairo'; 
+    z-index: 30; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+    transition: 0.3s; font-size: 13px; 
+}
+.btn-back:hover { background: #fff; color: #1E68E8; transform: translateY(-2px); }
 
-/* الأيقونات المنبثقة (نظام مرن للتوسيط الجمالي) */
-.icon-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; width: 100%; padding: 15px 10px; }
-.icon-btn { flex: 0 1 160px; min-width: 140px; height: 140px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; border: 2px solid #1E68E8; background: #f0f7ff; color: #000; cursor: pointer; transition: .3s; text-align: center; padding: 10px; font-size: 0.95rem; }
-.icon-btn i { font-size: 35px; margin-bottom: 12px; color: #1E68E8; transition: 0.3s; }
-.icon-btn:hover, .icon-btn:active { background: #1E68E8; color: #fff; transform: scale(1.05); box-shadow: 0 8px 15px rgba(30,104,232,0.3); }
-.icon-btn:hover i, .icon-btn:active i { color: #fff; }
+/* خدمات المراكز (شبكة البطاقات المتداخلة Overlapping) */
+.services { 
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+    gap: 25px; padding: 0 20px 40px 20px; max-width: 1100px; width: 100%; 
+    margin: -35px auto 0; /* التداخل لرفع البطاقات فوق الهيدر */
+    z-index: 20; position: relative; flex: 1; 
+}
 
-/* تنسيقات SweetAlert */
-.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; z-index: 999999 !important;}
-.swal2-title { font-size: 1.3rem !important; padding: 15px 10px !important; line-height: 1.5 !important; }
-.swal2-html-container { padding: 10px !important; }
-.swal2-confirm { background:#102a43 !important; color:#fff !important; border-radius:20px !important; padding:10px 30px !important; font-family:'Cairo',sans-serif; font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,.15); margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; border:none !important; }
+.service { 
+    background: #fff; border-radius: 20px; padding: 25px 20px; cursor: pointer; 
+    box-shadow: 0 10px 20px rgba(0,0,0,0.06); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+    display: flex; flex-direction: column; align-items: center; text-align: center; 
+    border: 1px solid #e2e8f0; position: relative; overflow: hidden; 
+}
+.service::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 5px;
+    background: linear-gradient(90deg, #1E68E8, #3b82f6); transform: scaleX(0); transition: 0.4s ease; transform-origin: right;
+}
+.service:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(30, 104, 232, 0.15); border-color: #93c5fd; }
+.service:hover::before { transform: scaleX(1); }
+.service:active { transform: translateY(-3px) scale(0.98); }
+
+.service-icon-wrapper {
+    width: 70px; height: 70px; border-radius: 18px; background: #f0f7ff;
+    display: flex; justify-content: center; align-items: center; margin-bottom: 15px;
+    transition: 0.4s ease; border: 2px solid transparent;
+}
+.service:hover .service-icon-wrapper { background: #1E68E8; transform: rotate(10deg); border-color: #fff; box-shadow: 0 8px 15px rgba(30, 104, 232, 0.3); }
+
+.service i { font-size: 32px; color: #1E68E8; transition: 0.4s ease; }
+.service:hover i { color: #fff; }
+
+.service h3 { color: #1e293b; font-size: 18px; font-weight: 800; margin: 0; line-height: 1.5; }
+
+/* الأيقونات المنبثقة داخل النوافذ (مودال) */
+.icon-container { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 10px; }
+.icon-btn { 
+    width: 140px; height: 130px; border-radius: 16px; border: 2px solid #e2e8f0; 
+    display: flex; flex-direction: column; align-items: center; justify-content: center; 
+    font-weight: 800; background: #fff; color: #1e293b; cursor: pointer; transition: .3s; 
+    text-align: center; padding: 10px; font-size: 15px; 
+}
+.icon-btn i { font-size: 32px; margin-bottom: 12px; color: #1E68E8; transition: 0.3s; }
+.icon-btn:hover { border-color: #1E68E8; box-shadow: 0 8px 20px rgba(30, 104, 232, 0.15); transform: translateY(-5px); color: #1E68E8; }
+.icon-btn:hover i { transform: scale(1.1); }
+.icon-btn:active { transform: scale(0.95); }
+
+/* تنسيقات SweetAlert العصرية */
+.swal2-popup { border-radius: 24px !important; padding: 0 !important; overflow: hidden; background: #fff !important; z-index: 999999 !important;}
+.swal2-title { background: #f8fafc; padding: 20px !important; margin: 0 !important; font-size: 20px !important; border-bottom: 1px solid #e2e8f0; color: #0f172a !important; }
+.swal2-html-container { padding: 20px !important; margin: 0 !important; }
+.swal2-actions { background: #f8fafc; padding: 15px !important; margin: 0 !important; border-top: 1px solid #e2e8f0; }
+
+.swal2-confirm { background:#102a43 !important; color:#fff !important; border-radius:12px !important; padding:10px 25px !important; font-family:'Cairo',sans-serif; font-weight:700; box-shadow:0 2px 6px rgba(0,0,0,.15); margin: 5px !important; border:none !important; }
 .swal2-confirm:hover { background: #243b53 !important; }
-.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 20px !important; padding: 10px 30px !important; font-family: 'Cairo', sans-serif; margin: 5px !important; transition: background 0.3s ease; font-size: 0.95rem !important; border:none !important; }
+.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 12px !important; padding: 10px 25px !important; font-family: 'Cairo', sans-serif; margin: 5px !important; border:none !important; }
 .swal2-deny:hover { background: #1557c0 !important; }
-.swal2-actions { flex-wrap: wrap !important; gap: 10px !important; padding: 10px !important; }
 
-footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25px; border-top-right-radius:25px; width: 100%; margin-top: auto; position: relative; font-size: 0.9rem; }
+footer { background: transparent; color: #64748b; padding: 20px; font-weight: 600; font-size: 13px; margin-top: auto; text-align: center; }
 
 /* شاشة التحميل الدائرية */
-.loader-spinner { border: 5px solid #f3f3f3; border-top: 5px solid #1E68E8; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: auto; }
+.loader-spinner { border: 4px solid #e2e8f0; border-top: 4px solid #1E68E8; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: auto; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* ============================================================
    📱 تحسينات التجاوب (Media Queries)
    ============================================================ */
+@media (max-width: 768px) {
+    header { padding: 30px 15px 50px 15px; border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; }
+    header h1 { font-size: 22px; }
+    .btn-back { top: 15px; right: 15px; padding: 6px 12px; font-size: 12px; }
+    .services { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: -25px; padding: 0 15px 30px 15px; }
+    .service { padding: 20px 15px; }
+    .service-icon-wrapper { width: 55px; height: 55px; margin-bottom: 10px; }
+    .service i { font-size: 26px; }
+    .service h3 { font-size: 15px; }
+    .icon-btn { width: 45%; height: 110px; font-size: 14px; }
+    .icon-btn i { font-size: 26px; }
+}
 
-/* الشاشات الصغيرة جداً (الهواتف عمودياً) */
 @media (max-width: 400px) {
-    .news-ticker-container { min-height: 60px; padding: 8px 10px; }
-    .typewriter-text { font-size: 12px; line-height: 1.3; }
-    
-    .logo-container { width: 110px; height: 110px; margin-bottom: 5px; }
-    .logo-container img { width: 85px; height: 85px; }
-    .logo-ring { width: 100px; height: 100px; border-width: 2px; }
-    
-    header { padding: 20px 10px; }
-    header h1 { font-size: 1.1rem; line-height: 1.4; padding: 0 5px; }
-    .btn-back { top: 15px; right: 15px; padding: 6px 12px; font-size: 13px; }
-    
-    .services { padding: 15px 10px; gap: 12px; grid-template-columns: 1fr; }
-    .service { flex-direction: row; text-align: right; padding: 15px; gap: 12px; align-items: center; justify-content: flex-start; min-height: 80px; }
-    .service i { font-size: 32px; margin-bottom: 0; min-width: 40px; text-align: center; }
-    .service h3 { font-size: 0.9rem; text-align: right; line-height: 1.4; }
-    
-    /* النوافذ المنبثقة للهواتف الصغيرة */
-    .icon-container { flex-direction: column; align-items: stretch; gap: 10px; padding: 5px; }
-    .icon-btn { flex: auto; width: 100%; height: 70px; flex-direction: row; gap: 12px; justify-content: flex-start; padding: 10px 15px; font-size: 0.9rem; }
-    .icon-btn i { font-size: 24px; margin-bottom: 0; min-width: 35px; }
-    
-    .swal2-popup { padding: 15px !important; }
-    .swal2-title { font-size: 1.1rem !important; }
-    .swal2-confirm, .swal2-deny { padding: 8px 20px !important; font-size: 0.85rem !important; }
-    
-    footer { font-size: 0.75rem; padding: 10px; }
+    .services { grid-template-columns: 1fr; }
+    .icon-btn { width: 100%; height: 80px; flex-direction: row; gap: 15px; justify-content: flex-start; padding: 0 20px; }
+    .icon-btn i { margin-bottom: 0; }
 }
-
-/* الشاشات المتوسطة (الهواتف الكبيرة والتابلت عمودياً) */
-@media (min-width: 401px) and (max-width: 768px) {
-    .news-ticker-container { min-height: 55px; }
-    .typewriter-text { font-size: 14px; }
-    
-    .logo-container { width: 130px; height: 130px; margin-bottom: 5px; }
-    .logo-container img { width: 100px; height: 100px; }
-    .logo-ring { width: 120px; height: 120px; }
-    
-    header h1 { font-size: 1.4rem; line-height: 1.4; }
-    
-    .services { padding: 25px 15px; gap: 15px; grid-template-columns: 1fr; }
-    .service { flex-direction: row; text-align: right; padding: 20px; gap: 15px; align-items: center; justify-content: flex-start; min-height: 100px; }
-    .service i { font-size: 40px; margin-bottom: 0; min-width: 50px; text-align: center; }
-    .service h3 { font-size: 1rem; text-align: right; }
-    
-    /* النوافذ المنبثقة للتابلت */
-    .icon-container { gap: 15px; justify-content: center; }
-    .icon-btn { flex: 0 1 140px; height: 120px; font-size: 0.9rem; }
-    .icon-btn i { font-size: 28px; margin-bottom: 10px; }
-    
-    .swal2-title { font-size: 1.2rem !important; }
-    footer { font-size: 0.85rem; padding: 12px; }
-}
-
-/* شاشات اللابتوب الصغيرة */
-@media (min-width: 800px) and (max-width: 1200px) {
-    .services { grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 30px 20px; }
-}
-
-/* الهواتف في الوضع الأفقي (Landscape) */
-@media (max-height: 500px) and (orientation: landscape) {
-    header { padding: 15px 10px; }
-    .logo-container { width: 100px; height: 100px; }
-    .logo-container img { width: 75px; height: 75px; }
-    .logo-ring { width: 90px; height: 90px; }
-    header h1 { font-size: 1.2rem; }
-    
-    .services { padding: 20px 15px; grid-template-columns: repeat(2, 1fr); }
-    .service { padding: 15px; min-height: 80px; }
-    
-    .icon-btn { height: 100px; font-size: 0.85rem; }
-    .icon-btn i { font-size: 24px; margin-bottom: 5px; }
-}
-
 </style>
 </head>
 
@@ -160,16 +167,10 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 
 <header>
   <!-- زر العودة للوحة التحكم -->
-  <button class="btn-back" onclick="goBack()"><i class="fa-solid fa-arrow-right"></i> رجوع للوحة التحكم</button>
-
-  <div class="logo-container">
-    <div class="logo-ring"></div>
-    <img src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" 
-         onerror="this.src='https://cdn-icons-png.flaticon.com/512/3413/3413535.png'" alt="شعار">
-  </div>
+  <button class="btn-back" onclick="goBack()"><i class="fa-solid fa-arrow-right"></i> رجوع للوحة</button>
 
   <h1>إدارة الملفات والمقاييس</h1>
-  <p style="margin:0; font-size:14px; color:#bbdefb; font-weight:600;">الرجاء اختيار المركز لإدارة ملفاته</p>
+  <p>الرجاء اختيار المركز لإدارة ملفاته ومقاييسه</p>
 </header>
 
 <!-- قسم عرض المراكز ديناميكياً -->
@@ -202,7 +203,7 @@ async function checkUserPermissions() {
             if (adminDoc.exists) {
                 const data = adminDoc.data();
                 if (data.jobTitle === "المسؤول الإداري") {
-                    document.body.innerHTML = ""; // إخفاء محتوى الصفحة فوراً للحماية
+                    document.body.innerHTML = ""; 
                     Swal.fire({
                         icon: 'error',
                         title: 'صلاحيات مقيدة',
@@ -258,17 +259,15 @@ const ICONS = {
 function initSiteSettings() {
     const docRef = db.collection("site_settings").doc("main");
     
-    // أضفنا كلمة async لتمكين الفحص المباشر في قاعدة البيانات
     docRef.onSnapshot(async (doc) => { 
         if (doc.exists) {
             SITE_SETTINGS = doc.data();
             
-            // 🌟 الجدار الأمني: فحص وظيفة المستخدم فوراً 🌟
             if (userEmpId !== "ADMIN_ACCESS") {
                 try {
                     const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
                     if (adminDoc.exists && adminDoc.data().jobTitle === "المسؤول الإداري") {
-                        document.body.innerHTML = ""; // تفريغ وإخفاء الشاشة فوراً
+                        document.body.innerHTML = ""; 
                         Swal.fire({
                             icon: 'error',
                             title: 'صلاحيات مقيدة',
@@ -276,16 +275,16 @@ function initSiteSettings() {
                             confirmButtonColor: '#1E68E8',
                             allowOutsideClick: false
                         }).then(() => {
-                            window.location.href = "inspector_dashboard.html"; // إعادته للوحة الرئيسية
+                            window.location.href = "inspector_dashboard.html"; 
                         });
-                        return; // إيقاف بناء عرض المراكز
+                        return; 
                     }
                 } catch (e) {
                     console.error("خطأ في فحص الصلاحيات:", e);
                 }
             }
 
-            renderCenters(); // بناء المراكز آلياً (للمسؤول البيداغوجي أو الأدمن فقط)
+            renderCenters(); 
         } else {
             Swal.fire('خطأ', 'لم يتم العثور على إعدادات الموقع المركزية.', 'error');
         }
@@ -294,7 +293,6 @@ function initSiteSettings() {
 
 // ==================== 3. الرسم الديناميكي للواجهة ====================
 
-// دالة رسم أزرار المراكز
 function renderCenters() {
     const container = document.getElementById("centers-container");
     container.innerHTML = "";
@@ -307,7 +305,7 @@ function renderCenters() {
         const cName = centers[cId];
         container.innerHTML += `
             <div class="service" onclick="openCenter('${cId}')">
-                <i class="fa-solid fa-school"></i>
+                <div class="service-icon-wrapper"><i class="fa-solid fa-school"></i></div>
                 <h3>مركز التكوين<br>${cName}</h3>
             </div>
         `;
@@ -318,11 +316,9 @@ function renderCenters() {
     }
 }
 
-// دالة النقر على المركز (الحماية + التوجيه الذكي)
 function openCenter(centerId) {
   const selectedCenterName = SITE_SETTINGS.UI_NAMES.centers[centerId];
   
-  // -- الجدار الأمني --
   if (userEmpId !== "ADMIN_ACCESS" && selectedCenterName !== inspectorCenter) {
      Swal.fire({
           icon: 'warning',
@@ -354,7 +350,6 @@ function openCenter(centerId) {
       return;
   }
 
-  // -- الفحص الذكي للهيكلة --
   const centerLinks = SITE_SETTINGS.dbLinks[centerId] || {};
   const availableLevels = Object.keys(centerLinks);
 
@@ -363,21 +358,17 @@ function openCenter(centerId) {
       return;
   }
 
-  // إذا كان هناك طور واحد فقط، تجنب سؤال المستخدم وافتح التخصصات مباشرة
   if (availableLevels.length === 1) {
       showSpecsModal(centerId, availableLevels[0], false);
   } else {
-      // إذا كان هناك أكثر من طور، افتح نافذة اختيار الطور
       showLevelsModal(centerId, availableLevels);
   }
 }
 
-// دالة عرض الأطوار المتاحة فقط
 function showLevelsModal(centerId, availableLevels) {
     let html = '<div class="icon-container">';
     
     availableLevels.forEach(lvlId => {
-        // تحديد الأيقونة والاسم الافتراضي
         let defaultIcon = 'fa-layer-group';
         let defaultName = lvlId;
         
@@ -386,14 +377,14 @@ function showLevelsModal(centerId, availableLevels) {
             defaultName = ICONS.levels[lvlId].name;
         }
         
-        // الأولوية لجلب الاسم العربي من إعدادات قاعدة البيانات (Firebase)
         let levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
                         ? SITE_SETTINGS.UI_NAMES.levels[lvlId] 
                         : defaultName;
 
         html += `
           <div class="icon-btn" onclick="showSpecsModal('${centerId}', '${lvlId}', true)">
-            <i class="fa-solid ${defaultIcon}"></i> ${levelName}
+            <i class="fa-solid ${defaultIcon}"></i>
+            <span>${levelName}</span>
           </div>`;
     });
     
@@ -409,8 +400,6 @@ function showLevelsModal(centerId, availableLevels) {
     });
 }
 
-// دالة عرض التخصصات المتاحة فقط في الطور المحدد
-// دالة عرض التخصصات المتاحة فقط في الطور المحدد
 function showSpecsModal(centerId, lvlId, showBackButton) {
     const specsData = SITE_SETTINGS.dbLinks[centerId][lvlId] || {};
     const availableSpecs = Object.keys(specsData);
@@ -420,7 +409,6 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
         return;
     }
 
-    // --- التعديل هنا: جلب اسم الطور لعرضه للوضوح ---
     const levelName = SITE_SETTINGS.UI_NAMES.levels[lvlId] || (ICONS.levels[lvlId] ? ICONS.levels[lvlId].name : lvlId);
 
     let html = '<div class="icon-container">';
@@ -429,14 +417,14 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
         let spcInfo = ICONS.specs[spcId] || { name: spcId, icon: 'fa-book' };
         html += `
           <div class="icon-btn" onclick="openLink('${centerId}', '${lvlId}', '${spcId}')">
-            <i class="fa-solid ${spcInfo.icon}"></i> ${spcInfo.name}
+            <i class="fa-solid ${spcInfo.icon}"></i>
+            <span>${spcInfo.name}</span>
           </div>`;
     });
     
     html += '</div>';
 
     let options = {
-        // --- التعديل هنا: دمج اسم الطور وعبارة "اختر التخصص المناسب" بشكل أنيق ---
         title: `<div style="color: #1E68E8; font-size: 20px; font-weight: bold; border-bottom: 2px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 10px;">
                     <i class="fa-solid fa-layer-group"></i> ${levelName}
                 </div>
@@ -448,7 +436,6 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
         scrollbarPadding: false
     };
 
-    // إظهار زر التراجع فقط إذا كانت النافذة قد فُتحت من نافذة الأطوار (لو كان هناك أكثر من طور)
     if (showBackButton) {
         options.showDenyButton = true;
         options.denyButtonText = '<i class="fa-solid fa-arrow-right"></i> تراجع للوراء';
@@ -463,7 +450,6 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
     });
 }
 
-// دالة التوجيه النهائي لصفحة إدارة المقاييس
 function openLink(centerId, levelId, specId) {
     window.location.href = `manage_courses.html?c=${centerId}&l=${levelId}&s=${specId}`;
 }
@@ -493,7 +479,6 @@ function startFadeOut() {
     }, 1000);
 }
 
-// الجديدة:
 window.onload = async function() { 
     typeWriter(); 
     const hasPermission = await checkUserPermissions();
@@ -501,7 +486,6 @@ window.onload = async function() {
         initSiteSettings();
     }
 };
-
 
 </script>
 
