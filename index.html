@@ -8,35 +8,29 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/html5-qrcode"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <style>
     /* ===========================
-       1. إعدادات أساسية للتجاوب
+       1. إعدادات أساسية والتجاوب
        =========================== */
     * { 
         box-sizing: border-box; 
-        -webkit-tap-highlight-color: transparent; /* إزالة وميض النقر في الموبايل */
+        -webkit-tap-highlight-color: transparent; 
     }
 
-   body {
+    body {
       font-family: 'Cairo', sans-serif;
       margin: 0;
-      /* =======================================
-         إعدادات الخلفية الجديدة
-         ======================================= */
-      /* ضع رابط الصورة url() */
+      /* صورة الخلفية المشتركة */
       background-image: url('https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1920&auto=format&fit=crop');
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
       background-repeat: no-repeat;
-      
-      /* إضافة طبقة لونية نصف شفافة (Overlay) فوق الصورة لجعلها هادئة */
       position: relative;
-      
       text-align: center;
       min-height: 100vh;
       display: flex;
@@ -47,85 +41,129 @@
       padding: 15px; 
     }
 
-    /* طبقة شفافة خضراء فوق الخلفية للتماشي مع ألوان الموقع */
+    /* طبقة شفافة زجاجية تدمج اللون الأخضر الهادئ مع التدرجات */
     body::before {
       content: "";
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: linear-gradient(135deg, rgba(232, 251, 240, 0.60), rgba(220, 247, 230, 0.90));
+      background: linear-gradient(135deg, rgba(8, 93, 40, 0.40), rgba(15, 186, 80, 0.50));
+      backdrop-filter: blur(0px);
       z-index: -1;
     }
 
     /* ===========================
-       2. الحاوية الرئيسية (متجاوبة)
+       2. الحاوية الرئيسية (تأثير الضوء الأخضر المتحرك)
        =========================== */
     .container {
-      background: white;
-      padding: 30px 25px;
-      border-radius: 20px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      padding: 35px 25px;
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 0 20px rgba(15, 186, 80, 0.15);
       text-align: center;
       width: 100%;
-      max-width: 480px; /* عرض مثالي للهواتف والتابلت */
+      max-width: 440px;
       margin: 0 auto;
       position: relative;
-      transition: all 0.3s ease;
+      overflow: hidden; 
+      z-index: 1; 
+      transform: translateZ(0); 
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* الضوء الدوار خلف الحاوية (معدل للون الأخضر وحركة بطيئة) */
+    .container::before {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%; width: 200%; height: 200%;
+      background: conic-gradient(from 0deg, transparent 65%, rgba(15, 186, 80, 0.5) 85%, #00ff6a 100%);
+      animation: spinBorderLight 15s linear infinite;
+      z-index: -2;
+    }
+
+    /* الخلفية البيضاء الزجاجية الأساسية التي تغطي الدوران وتترك الإطار */
+    .container::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px; right: 3px; bottom: 3px; 
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 25px; 
+      z-index: -1;
+    }
+
+    @keyframes spinBorderLight {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     /* ===========================
        3. النصوص والعناوين
        =========================== */
     .header-text {
-        margin-bottom: 30px;
-        border-bottom: 2px solid #f0f0f0;
-        padding-bottom: 15px;
+        margin-bottom: 20px;
+        border-bottom: 2px dashed #e2e8f0;
+        padding-bottom: 12px;
     }
 
     .header-text p {
-        margin: 3px 0;
-        font-size: 16px; /* حجم مناسب للموبايل */
+        margin: 4px 0;
+        font-size: 14px;
         font-weight: 700;
-        color: #444;
-        line-height: 1.5;
+        color: #1e293b;
+        letter-spacing: 0.3px;
     }
 
     .login-title {
-        color: #0FBA50;
-        margin-bottom: 15px;
-        font-size: 20px;
-        font-weight: 700;
-        margin-top: 20px;
+        color: #085d28;
+        margin-bottom: 20px;
+        font-size: 19px;
+        font-weight: 800;
+        margin-top: 15px;
+        line-height: 1.4;
     }
 
     /* ===========================
-       4. الشعار وحركته (متجاوب)
+       4. الشعار (حركة التحليق/الطفو)
        =========================== */
     .login-logo-wrapper {
         position: relative;
-        width: 130px;
-        height: 130px;
-        margin: 10px auto;
+        width: 120px;
+        height: 120px;
+        margin: 5px auto 15px auto;
         display: flex;
         justify-content: center;
         align-items: center;
+        
     }
 
     .login-logo {
-        width: 150px;
-        height: 150px;
+        width: 115px;
+        height: 115px;
         border-radius: 50%;
         object-fit: cover;
         border: 3px solid #fff;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         position: relative;
         z-index: 2;
+        /* حركة التحليق الناعمة */
+        animation: floatLogo 4s ease-in-out infinite;
     }
 
+    @keyframes floatLogo {
+        0%, 100% { transform: translateY(0px); box-shadow: 0 8px 20px rgba(15, 186, 80, 0.2); }
+        50% { transform: translateY(-8px); box-shadow: 0 18px 30px rgba(15, 186, 80, 0.35); }
+    }
+
+    /* الدائرة المتقطعة المتلاصقة */
     .login-logo-ring {
         position: absolute;
-        width: 155px;
-        height: 155px;
-        border: 2px dashed #0FBA50;
+        width: 119px; 
+        height: 119px;
+        border: 1.5px dashed #0FBA50; 
         border-radius: 50%;
         top: 50%;
         left: 50%;
@@ -140,94 +178,122 @@
     }
 
     /* ===========================
-       5. حقول الإدخال والأزرار
+       5. حقول الإدخال والأزرار العصرية
        =========================== */
+    .input-group {
+        position: relative;
+        margin-bottom: 15px;
+    }
+
+    .input-group i {
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 18px;
+        transition: 0.3s;
+    }
+
     input {
         width: 100%;
-        padding: 14px;
-        margin-bottom: 15px;
-        border-radius: 12px;
-        border: 2px solid #e0e0e0;
-        font-size: 16px; /* يمنع التكبير التلقائي في آيفون */
-        text-align: center;
+        padding: 14px 45px 14px 16px;
+        border-radius: 14px;
+        border: 2px solid #cbd5e1;
+        font-size: 16px;
+        text-align: right;
         font-family: 'Cairo', sans-serif;
+        font-weight: 700;
         transition: 0.3s;
-        background: #fafafa;
+        background: #f8fafc;
+        color: #0f172a;
     }
 
     input:focus {
         outline: none;
         border-color: #0FBA50;
         background: #fff;
-        box-shadow: 0 0 0 4px rgba(15, 186, 80, 0.1);
+        box-shadow: 0 0 0 4px rgba(15, 186, 80, 0.12);
+    }
+
+    input:focus + i, input:valid + i {
+        color: #0FBA50;
     }
 
     button {
-        background: #0FBA50;
+        background: linear-gradient(135deg, #0FBA50, #085d28);
         color: white;
         border: none;
         padding: 14px 0;
-        border-radius: 12px;
+        border-radius: 14px;
         font-size: 16px;
         cursor: pointer;
-        font-weight: 700;
+        font-weight: 800;
         width: 100%;
         font-family: 'Cairo', sans-serif;
-        transition: 0.3s;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         margin-bottom: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: 10px;
+        box-shadow: 0 6px 15px rgba(15, 186, 80, 0.25);
     }
 
-    button:hover, button:active {
-        background: #0a8a3a;
-        transform: translateY(-1px);
+    button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(15, 186, 80, 0.35);
+    }
+
+    button:active {
+        transform: translateY(0);
     }
 
     .barcode-btn {
         background: #fff;
-        color: #0FBA50;
+        color: #085d28;
         border: 2px solid #0FBA50;
+        box-shadow: none;
     }
 
-    .barcode-btn:hover, .barcode-btn:active {
-        background: #0FBA50;
-        color: white;
+    .barcode-btn:hover {
+        background: #f0fdf4;
+        color: #085d28;
+        box-shadow: 0 6px 15px rgba(15, 186, 80, 0.1);
     }
 
-    /* تنسيق منطقة الكاميرا لتكون متجاوبة */
+    /* منطقة الكاميرا والماسح */
     #reader {
         width: 100% !important;
-        max-width: 300px;
+        max-width: 320px;
         margin: 15px auto;
         display: none;
-        border-radius: 12px;
+        border-radius: 14px;
         overflow: hidden;
         border: 2px solid #0FBA50;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
     }
 
     /* ===========================
-       6. شاشة التحميل والرسائل
+       6. شاشة التحميل (Loader) والرسائل
        =========================== */
     #imageLoaderOverlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.4); display: none;
+        background: rgba(15, 23, 42, 0.6); display: none;
         justify-content: center; align-items: center; z-index: 99999;
-        backdrop-filter: blur(2px);
+        backdrop-filter: blur(4px);
     }
 
     #loaderBox {
-        background: #ffffff; padding: 25px 35px; border-radius: 16px;
-        box-shadow: 0 8px 35px rgba(0,0,0,0.25); text-align: center;
-        width: 85%; max-width: 300px;
+        background: #ffffff; padding: 25px 35px; border-radius: 20px;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.3); text-align: center;
+        width: 85%; max-width: 280px;
     }
 
     .loader-circle {
-        border: 5px solid #e6e6e6; border-top: 5px solid #0FBA50;
+        border: 4px solid #f1f5f9; border-top: 4px solid #0FBA50;
         border-radius: 50%; width: 50px; height: 50px; margin: auto;
-        animation: spinLoader 0.9s linear infinite;
+        animation: spinLoader 0.8s linear infinite;
     }
 
     @keyframes spinLoader {
@@ -236,39 +302,35 @@
     }
 
     .loader-text {
-        margin-top: 15px; font-size: 16px; font-weight: 700;
-        color: #0FBA50; font-family: 'Cairo', sans-serif;
-    }
-
-    .note-blink {
-        animation: softBlink 1.6s infinite ease-in-out;
-    }
-    @keyframes softBlink {
-        0% { opacity: 1; } 50% { opacity: 0.65; } 100% { opacity: 1; }
+        margin-top: 15px; font-size: 15px; font-weight: 800;
+        color: #085d28; font-family: 'Cairo', sans-serif;
     }
 
     .swal2-popup {
-        border-radius: 20px !important;
+        border-radius: 24px !important;
         font-family: 'Cairo', sans-serif !important;
+        padding: 20px !important;
     }
     
     .swal2-confirm {
         background: #0FBA50 !important;
-        box-shadow: 0 4px 10px rgba(15, 186, 80, 0.3) !important;
-        border-radius: 10px !important;
+        box-shadow: 0 6px 15px rgba(15, 186, 80, 0.3) !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
     }
 
     /* ===========================
-       7. استعلامات الوسائط (الشاشات الصغيرة جداً)
+       7. استعلامات الوسائط (الشاشات الصغيرة)
        =========================== */
     @media (max-width: 380px) {
-        .container { padding: 20px 15px; }
-        .header-text p { font-size: 12px; }
-        .login-logo-wrapper { width: 100px; height: 100px; }
-        .login-logo { width: 80px; height: 80px; }
-        .login-logo-ring { width: 95px; height: 95px; }
-        .login-title { font-size: 18px; }
-        button, input { font-size: 14px; }
+        .container { padding: 25px 18px; border-radius: 20px; }
+        .container::after { border-radius: 17px; } /* تعديل الداخلي للموبايل ليلائم الإطار */
+        .header-text p { font-size: 13px; }
+        .login-logo-wrapper { width: 100px; height: 100px; margin-bottom: 10px; }
+        .login-logo { width: 95px; height: 95px; }
+        .login-logo-ring { width: 99px; height: 99px; border-width: 1.5px; } 
+        .login-title { font-size: 17px; }
+        button, input { font-size: 14px; padding: 12px; }
     }
   </style>
 </head>
@@ -282,20 +344,24 @@
         <p>مديرية التربية لولاية توقرت</p>
       </div>
       
-      <div class="login-logo-wrapper">
+      <div class="login-logo-wrapper" onclick="handleLogoClick()">
           <div class="login-logo-ring"></div>
-          <img src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار اللجنة" class="login-logo" onclick="handleLogoClick()" style="user-select: none; -webkit-user-select: none;">
+          <img src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار اللجنة" class="login-logo" style="user-select: none; -webkit-user-select: none;">
       </div>
 
       <h2 class="login-title">الفضاء الرقمي للتكوين البيداغوجي توقرت</h2>
       
-      <input type="text" id="empId" placeholder="أدخل رقم التعريف الوظيفي" oninput="validateNumber(this)">
+      <div class="input-group">
+          <input type="text" id="empId" placeholder="أدخل رقم التعريف الوظيفي" oninput="validateNumber(this)" required>
+          <i class="fa-solid fa-id-card"></i>
+      </div>
       
-      <button onclick="checkEmployee()">تسجيل الدخول</button>
+      <button onclick="checkEmployee()">
+          <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
+      </button>
 
       <button type="button" class="barcode-btn" onclick="startBarcodeScanner()">
-        <i class="fa-solid fa-camera"></i>
-        مسح الباركود
+        <i class="fa-solid fa-camera"></i> مسح الباركود
       </button>
 
       <div id="reader"></div>
@@ -326,50 +392,43 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-
 const DASHBOARD_PAGE = "dashboard.html"; 
 
 const REGEX_PATTERNS = {
   nonDigit: /\D/g
 };
 
-
 function validateNumber(input) {
   input.value = input.value.replace(REGEX_PATTERNS.nonDigit, '');
   if (input.value.length > 16) input.value = input.value.slice(0, 16);
 }
 
-
 async function checkEmployee() {
   const empId = document.getElementById("empId").value.trim();
 
-  
   if (empId.length < 16) {
     Swal.fire({ 
       icon: 'warning', 
-      title: 'خطأ', 
+      title: 'تنبيه', 
       text: 'رقم التعريف الوظيفي يجب أن يتكون من 16 رقمًا',
       confirmButtonText: 'حسناً'
     });
     return;
   }
 
- 
   Swal.fire({ title: 'جاري التحقق...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
   try {
-    // 2. البحث في Firebase
     const docRef = db.collection("employeescomnew").doc(empId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
       Swal.close();
-      // رسالة الخطأ المخصصة (استبدال 1 بـ 0)
       Swal.fire({
         icon: "error",
         title: "❌ خطأ",
         html: `
-         رقم الموظف غير موجود ضمن قاعدة بيانات الأساتذة المربصين<br>
+         رقم الموظف غير موجود ضمن قاعدة بيانات الأساتذة المتربصين<br>
 يرجى مراجعة الرقم المدخل أو التواصل مع مصالح المديرية.<br><br>
         `,
         confirmButtonText: "حسناً"
@@ -377,17 +436,14 @@ async function checkEmployee() {
       return;
     }
 
-    // 3. نجاح التحقق
     const data = docSnap.data();
     
-    // حفظ البيانات في الجلسة لاستخدامها في صفحة الداشبورد
     sessionStorage.setItem("userEmpId", empId);
     sessionStorage.setItem("userName", data.name || "الموظف");
     sessionStorage.setItem("isLoggedIn", "true");
 
     Swal.close();
     
-    // رسالة ترحيب ثم التوجيه
     Swal.fire({
       icon: 'success',
       title: 'تم التحقق بنجاح',
@@ -419,19 +475,14 @@ function startBarcodeScanner() {
     const readerDiv = document.getElementById("reader");
     const imageInput = document.getElementById("barcodeImage");
 
-    // إظهار زر رفع الصورة
     imageInput.style.display = "block";
-
-    // تنظيف الإطار
     readerDiv.innerHTML = "";
     readerDiv.style.display = "block";
 
-    // منع إنشاء ماسح جديد إذا كان يعمل
     if (scanner) return;
 
     scanner = new Html5Qrcode("reader");
 
-    // تشغيل الكاميرا الخلفية
     scanner.start(
         { facingMode: { exact: "environment" } },
         { fps: 12, qrbox: 250 },
@@ -446,11 +497,9 @@ function startBarcodeScanner() {
                 imageInput.style.display = "none";
             });
 
-            // ✅ تشغيل الدخول التلقائي للكاميرا
             checkEmployee();
         }
     ).catch(() => {
-        // محاولة الكاميرا الخلفية ثم الأمامية
         Html5Qrcode.getCameras().then(cameras => {
             if (!cameras.length) {
                 Swal.fire("خطأ", "لا توجد كاميرات متاحة", "error");
@@ -478,24 +527,19 @@ function startBarcodeScanner() {
                         imageInput.style.display = "none";
                     });
 
-                    // ✅ تشغيل الدخول التلقائي للكاميرا الاحتياطية
                     checkEmployee();
                 }
             );
         });
     });
 
-    // 🖼 مسح باركود من الصورة
     imageInput.onchange = function (e) {
         let file = e.target.files[0];
         if (!file) return;
 
-        // 1. إظهار اللودر
         document.getElementById("imageLoaderOverlay").style.display = "flex";
-
         readerDiv.innerHTML = "";
 
-        // إنشاء عنصر مؤقت
         let hiddenDiv = document.createElement("div");
         hiddenDiv.id = "temp-file-scan";
         hiddenDiv.style.display = "none";
@@ -505,15 +549,11 @@ function startBarcodeScanner() {
 
         fileScanner.scanFile(file, true)
             .then(decodedText => {
-                // 2. إخفاء اللودر فوراً
                 document.getElementById("imageLoaderOverlay").style.display = "none";
 
                 if (navigator.vibrate) navigator.vibrate(200);
-                
-                // ملء الحقل بالرقم
                 document.getElementById("empId").value = decodedText;
                 
-                // تنظيف آمن
                 try { 
                     if (hiddenDiv.parentNode) hiddenDiv.parentNode.removeChild(hiddenDiv); 
                 } catch(err) { console.log(err); }
@@ -523,7 +563,7 @@ function startBarcodeScanner() {
                         scanner = null;
                         readerDiv.style.display = "none";
                         imageInput.style.display = "none";
-                        imageInput.value = ""; // تفريغ الحقل للسماح بإعادة الرفع
+                        imageInput.value = ""; 
                     }).catch(()=>{}); 
                 } else {
                     readerDiv.style.display = "none";
@@ -531,14 +571,12 @@ function startBarcodeScanner() {
                     imageInput.value = "";
                 }
 
-                // ✅ 3. تشغيل الدخول التلقائي مع تأخير بسيط جداً
                 setTimeout(() => {
                     checkEmployee();
                 }, 100);
 
             })
             .catch((err) => {
-                // إخفاء اللودر عند الفشل فقط
                 document.getElementById("imageLoaderOverlay").style.display = "none";
                 try { 
                     if (hiddenDiv.parentNode) hiddenDiv.parentNode.removeChild(hiddenDiv); 
@@ -559,7 +597,6 @@ function startBarcodeScanner() {
     };
 }
 
-// 🔒 تحكم في فتح وغلق الموقع
 const registrationOpen = true; 
 
 window.onload = function() {
@@ -584,21 +621,18 @@ let clickTimer;
 function handleLogoClick() {
     logoClickCount++;
     
-    // إعادة تصفير العداد إذا توقف المستخدم عن النقر لمدة ثانيتين (لتجنب النقرات العشوائية المتباعدة)
     clearTimeout(clickTimer);
     clickTimer = setTimeout(() => {
         logoClickCount = 0;
     }, 2000);
 
-    // التحقق مما إذا وصل عدد النقرات إلى 10
     if (logoClickCount === 10) {
-        logoClickCount = 0; // تصفير العداد
+        logoClickCount = 0; 
         promptSecretAdminPassword();
     }
 }
 
 async function promptSecretAdminPassword() {
-    // إظهار نافذة إدخال الرقم السري
     const { value: password } = await Swal.fire({
         title: '🔒 ولوج خاص',
         text: 'الرجاء إدخال الرقم السري للوحة التحكم',
@@ -616,7 +650,6 @@ async function promptSecretAdminPassword() {
     });
 
     if (password) {
-        // إظهار شاشة التحميل
         Swal.fire({
             title: 'جاري التحقق...',
             allowOutsideClick: false,
@@ -624,8 +657,6 @@ async function promptSecretAdminPassword() {
         });
 
         try {
-            // جلب الرقم السري من Firebase 
-            // Collection: config | Document: pass | Field: admin panel
             const docRef = db.collection("config").doc("pass");
             const docSnap = await docRef.get();
 
@@ -634,7 +665,6 @@ async function promptSecretAdminPassword() {
                 const correctPassword = data['admin panel'];
 
                 if (password === correctPassword) {
-                    // نجاح العملية والتحويل
                     Swal.fire({
                         icon: 'success',
                         title: 'تم التحقق بنجاح',
@@ -646,7 +676,6 @@ async function promptSecretAdminPassword() {
                         }
                     });
                 } else {
-                    // كلمة المرور خاطئة
                     Swal.fire({
                         icon: 'error',
                         title: '❌ خطأ',
@@ -664,15 +693,6 @@ async function promptSecretAdminPassword() {
         }
     }
 }
-// ========================================================================= 
-
 </script>
 </body>
 </html>
-
-
-
-
-
-
-

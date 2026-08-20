@@ -8,32 +8,282 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- 🌟 التعديل 1: إضافة مكتبة Firebase Auth الضرورية للمصادقة 🌟 -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <style>
-    /* الإعدادات الأساسية */
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { font-family: 'Cairo', sans-serif; margin: 0; background: linear-gradient(135deg, #e3f2fd, #bbdefb); text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-x: hidden; padding: 15px; }
-    .container { background: white; padding: 30px 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 480px; margin: 0 auto; position: relative; transition: all 0.3s ease; }
-    .header-text { margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; }
-    .header-text p { margin: 3px 0; font-size: 16px; font-weight: 700; color: #444; line-height: 1.5; }
-    .login-title { color: #1E68E8; margin-bottom: 5px; font-size: 20px; font-weight: 700; margin-top: 20px; }
-    .sub-title { color: #d32f2f; margin-top: 0; margin-bottom: 25px; font-size: 18px; font-weight: 700; border: 1px dashed #d32f2f; display: inline-block; padding: 5px 15px; border-radius: 8px; background-color: #ffebee; }
-    .login-logo-wrapper { position: relative; width: 130px; height: 130px; margin: 10px auto; display: flex; justify-content: center; align-items: center; }
-    .login-logo { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; z-index: 2; }
-    .login-logo-ring { position: absolute; width: 155px; height: 155px; border: 2px dashed #1E68E8; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: rotateRing 15s linear infinite; z-index: 1; }
-    @keyframes rotateRing { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-    .input-wrapper { position: relative; width: 100%; margin-bottom: 15px; }
-    input { width: 100%; padding: 14px 14px 14px 45px; border-radius: 12px; border: 2px solid #e0e0e0; font-size: 16px; text-align: center; font-family: 'Cairo', sans-serif; transition: 0.3s; background: #fafafa; direction: ltr; }
-    input:focus { outline: none; border-color: #1E68E8; background: #fff; box-shadow: 0 0 0 4px rgba(30, 104, 232, 0.1); }
-    .toggle-password { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #aaa; cursor: pointer; font-size: 18px; z-index: 10; padding: 5px; }
-    .toggle-password:hover { color: #1E68E8; }
-    button { background: #1E68E8; color: white; border: none; padding: 14px 0; border-radius: 12px; font-size: 16px; cursor: pointer; font-weight: 700; width: 100%; font-family: 'Cairo', sans-serif; transition: 0.3s; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    button:hover, button:active { background: #1557c0; transform: translateY(-1px); }
-    .swal2-popup { border-radius: 20px !important; font-family: 'Cairo', sans-serif !important; }
-    .swal2-confirm { background: #1E68E8 !important; box-shadow: 0 4px 10px rgba(30, 104, 232, 0.3) !important; border-radius: 10px !important; }
-    @media (max-width: 380px) { .container { padding: 20px 15px; } .header-text p { font-size: 12px; } .login-logo-wrapper { width: 100px; height: 100px; } .login-logo { width: 80px; height: 80px; } .login-logo-ring { width: 95px; height: 95px; } .login-title { font-size: 18px; } button, input { font-size: 14px; } }
+    /* ===========================
+       1. إعدادات أساسية والتجاوب
+       =========================== */
+    * { 
+        box-sizing: border-box; 
+        -webkit-tap-highlight-color: transparent; 
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      margin: 0;
+      /* صورة الخلفية المشتركة */
+      background-image: url('https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1920&auto=format&fit=crop');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      position: relative;
+      text-align: center;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow-x: hidden;
+      padding: 15px; 
+    }
+
+    /* طبقة شفافة زجاجية تدمج اللون الأزرق الهادئ مع التدرجات */
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(135deg, rgba(13, 71, 161, 0.40), rgba(30, 104, 232, 0.50));
+      backdrop-filter: blur(3px);
+      z-index: -1;
+    }
+
+    /* ===========================
+       2. الحاوية الرئيسية (تأثير الضوء الأزرق المتحرك)
+       =========================== */
+    .container {
+      padding: 35px 25px;
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 0 20px rgba(30, 104, 232, 0.15);
+      text-align: center;
+      width: 100%;
+      max-width: 440px;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden; 
+      z-index: 1; 
+      transform: translateZ(0); 
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* الضوء الدوار خلف الحاوية (معدل للون الأزرق) */
+    .container::before {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%; width: 200%; height: 200%;
+      background: conic-gradient(from 0deg, transparent 65%, rgba(30, 104, 232, 0.5) 85%, #60a5fa 100%);
+      animation: spinBorderLight 15s linear infinite;
+      z-index: -2;
+    }
+
+    /* الخلفية البيضاء الزجاجية */
+    .container::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px; right: 3px; bottom: 3px; 
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 25px; 
+      z-index: -1;
+    }
+
+    @keyframes spinBorderLight {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===========================
+       3. النصوص والعناوين
+       =========================== */
+    .header-text {
+        margin-bottom: 20px;
+        border-bottom: 2px dashed #e2e8f0;
+        padding-bottom: 12px;
+    }
+
+    .header-text p {
+        margin: 4px 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1e293b;
+        letter-spacing: 0.3px;
+    }
+
+    .login-title {
+        color: #0d47a1;
+        margin-bottom: 5px;
+        font-size: 19px;
+        font-weight: 900;
+        margin-top: 15px;
+        line-height: 1.4;
+    }
+
+    .sub-title { 
+        color: #d32f2f; 
+        margin-top: 5px; 
+        margin-bottom: 25px; 
+        font-size: 15px; 
+        font-weight: 800; 
+        border: 1px solid rgba(211, 47, 47, 0.3); 
+        display: inline-block; 
+        padding: 6px 20px; 
+        border-radius: 12px; 
+        background-color: rgba(211, 47, 47, 0.08); 
+    }
+
+    /* ===========================
+       4. الشعار (حركة التحليق الزرقاء)
+       =========================== */
+    .login-logo-wrapper {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin: 5px auto 15px auto;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .login-logo {
+        width: 115px;
+        height: 115px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #fff;
+        position: relative;
+        z-index: 2;
+        animation: floatLogo 4s ease-in-out infinite;
+    }
+
+    @keyframes floatLogo {
+        0%, 100% { transform: translateY(0px); box-shadow: 0 8px 20px rgba(30, 104, 232, 0.2); }
+        50% { transform: translateY(-8px); box-shadow: 0 18px 30px rgba(30, 104, 232, 0.35); }
+    }
+
+    .login-logo-ring {
+        position: absolute;
+        width: 119px; 
+        height: 119px;
+        border: 1.5px dashed #1E68E8; 
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        animation: rotateRing 15s linear infinite;
+        z-index: 1;
+    }
+
+    @keyframes rotateRing {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* ===========================
+       5. حقول الإدخال والأزرار العصرية
+       =========================== */
+    .input-wrapper { 
+        position: relative; 
+        width: 100%; 
+        margin-bottom: 15px; 
+    }
+    
+    input { 
+        width: 100%; 
+        padding: 14px 14px 14px 45px; 
+        border-radius: 14px; 
+        border: 2px solid #cbd5e1; 
+        font-size: 16px; 
+        text-align: center; 
+        font-family: 'Cairo', sans-serif; 
+        font-weight: 700;
+        transition: 0.3s; 
+        background: #f8fafc; 
+        color: #0f172a;
+        direction: ltr; 
+        letter-spacing: 2px;
+    }
+
+    input:focus { 
+        outline: none; 
+        border-color: #1E68E8; 
+        background: #fff; 
+        box-shadow: 0 0 0 4px rgba(30, 104, 232, 0.12); 
+    }
+    
+    .toggle-password { 
+        position: absolute; 
+        left: 16px; 
+        top: 50%; 
+        transform: translateY(-50%); 
+        color: #94a3b8; 
+        cursor: pointer; 
+        font-size: 18px; 
+        z-index: 10; 
+        padding: 5px; 
+        transition: 0.3s;
+    }
+    
+    .toggle-password:hover { color: #1E68E8; transform: translateY(-50%) scale(1.1); }
+    
+    input:focus ~ .toggle-password { color: #1E68E8; }
+
+    button { 
+        background: linear-gradient(135deg, #1E68E8, #0d47a1);
+        color: white; 
+        border: none; 
+        padding: 14px 0; 
+        border-radius: 14px; 
+        font-size: 16px; 
+        cursor: pointer; 
+        font-weight: 800; 
+        width: 100%; 
+        font-family: 'Cairo', sans-serif; 
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        margin-bottom: 12px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        gap: 10px; 
+        box-shadow: 0 6px 15px rgba(30, 104, 232, 0.25);
+    }
+
+    button:hover { 
+        transform: translateY(-2px); 
+        box-shadow: 0 10px 20px rgba(30, 104, 232, 0.35); 
+    }
+    
+    button:active { 
+        transform: translateY(0); 
+    }
+
+    .swal2-popup { border-radius: 24px !important; font-family: 'Cairo', sans-serif !important; padding: 20px !important;}
+    .swal2-confirm { background: #1E68E8 !important; box-shadow: 0 6px 15px rgba(30, 104, 232, 0.3) !important; border-radius: 12px !important; font-weight: 700 !important;}
+
+    /* ===========================
+       6. استعلامات الوسائط (الشاشات الصغيرة)
+       =========================== */
+    @media (max-width: 380px) { 
+        .container { padding: 25px 18px; border-radius: 20px; } 
+        .container::after { border-radius: 17px; }
+        .header-text p { font-size: 13px; } 
+        .login-logo-wrapper { width: 100px; height: 100px; } 
+        .login-logo { width: 95px; height: 95px; } 
+        .login-logo-ring { width: 99px; height: 99px; } 
+        .login-title { font-size: 17px; } 
+        .sub-title { font-size: 14px; padding: 5px 15px;}
+        button, input { font-size: 14px; padding: 12px;} 
+    }
   </style>
 </head>
 
@@ -47,15 +297,15 @@
       
       <div class="login-logo-wrapper">
           <div class="login-logo-ring"></div>
-          <img src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار اللجنة" class="login-logo">
+          <img src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار اللجنة" class="login-logo" style="user-select: none; -webkit-user-select: none;">
       </div>
 
       <h2 class="login-title">الفضاء الرقمي للتكوين البيداغوجي توقرت</h2>
-      <h3 class="sub-title">لوحة التحكم</h3>
+      <div class="sub-title"><i class="fa-solid fa-user-shield"></i> لوحة التحكم</div>
       
       <div class="input-wrapper">
-          <i class="fa-solid fa-eye toggle-password" id="toggleIcon" onclick="togglePasswordVisibility()"></i>
           <input type="password" id="accessCode" placeholder="أدخل كود الدخول الخاص">
+          <i class="fa-solid fa-eye toggle-password" id="toggleIcon" onclick="togglePasswordVisibility()"></i>
       </div>
       
       <button onclick="checkAccessCode()">
@@ -64,7 +314,7 @@
   </div>
 
 <script>
-// ================= إعدادات Firebase المحدثة للمشروع الأساسي =================
+// ================= إعدادات Firebase =================
 const firebaseConfig = {
   apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
   authDomain: "voyage-touggourt-48755.firebaseapp.com",
@@ -82,9 +332,13 @@ function togglePasswordVisibility() {
     const inputField = document.getElementById("accessCode");
     const icon = document.getElementById("toggleIcon");
     if (inputField.type === "password") {
-        inputField.type = "text"; icon.classList.remove("fa-eye"); icon.classList.add("fa-eye-slash");
+        inputField.type = "text"; 
+        icon.classList.remove("fa-eye"); 
+        icon.classList.add("fa-eye-slash");
     } else {
-        inputField.type = "password"; icon.classList.remove("fa-eye-slash"); icon.classList.add("fa-eye");
+        inputField.type = "password"; 
+        icon.classList.remove("fa-eye-slash"); 
+        icon.classList.add("fa-eye");
     }
 }
 
@@ -92,22 +346,37 @@ async function checkAccessCode() {
   const inputVal = document.getElementById("accessCode").value.trim();
 
   if (!inputVal) {
-    Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى إدخال كود الدخول', confirmButtonText: 'حسناً' });
+    Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى إدخال كود الدخول', confirmButtonText: 'حسناً', confirmButtonColor: '#1E68E8' });
     return;
   }
 
-  Swal.fire({ title: 'جاري التحقق...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  Swal.fire({ title: 'جاري التحقق والمصادقة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
   try {
-      // 1. التحقق من كود الإدارة (الإدارة العليا) من قاعدة البيانات (config -> pass -> admin_panel_of)
+      // 1. التحقق من كود الإدارة (المديرية)
       const configRef = db.collection("config").doc("pass");
       const configSnap = await configRef.get();
       
       if (configSnap.exists) {
           const configData = configSnap.data();
-          const adminPassword = configData['admin_panel_of']; // الفيلد الجديد
+          const adminPassword = configData['admin_panel_of']; 
           
           if (inputVal === adminPassword) {
+              const adminEmail = "admin_directorate@system.local";
+              
+              try {
+                  // محاولة تسجيل الدخول
+                  await firebase.auth().signInWithEmailAndPassword(adminEmail, inputVal);
+              } catch(e) {
+                  // 🌟 دعم التحديثات الأمنية الجديدة لفايربيز 🌟
+                  if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+                      await firebase.auth().createUserWithEmailAndPassword(adminEmail, inputVal);
+                  } else {
+                      throw e; // رمي الخطأ إذا كان من نوع آخر
+                  }
+              }
+
+              // الإبقاء على الجلسة القديمة للتوافقية
               sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
               sessionStorage.setItem("userName", "مدير النظام"); 
               sessionStorage.setItem("isLoggedIn", "true");
@@ -115,26 +384,37 @@ async function checkAccessCode() {
               Swal.fire({ icon: 'success', title: 'مرحباً بك', text: 'جاري التوجيه إلى لوحة تحكم المديرية...', timer: 1500, showConfirmButton: false })
               .then(() => window.location.href = "admin_dashboard.html");
               
-              return; // إنهاء الدالة هنا إذا كان الكود صحيحاً للإدارة
+              return; 
           }
       }
 
-      // 2. التحقق من قاعدة بيانات رؤساء المراكز (المفتشين/المدراء) في حال لم يكن كود الإدارة
+      // 2. التحقق من قاعدة بيانات المفتشين (رؤساء المراكز)
       const querySnapshot = await db.collection("center_admins").where("password", "==", inputVal).get();
       
       if (!querySnapshot.empty) {
           const adminData = querySnapshot.docs[0].data();
           
-          // التحقق إذا كان الحساب معطلاً من قبل الإدارة
           if (adminData.disabled === true) {
-              Swal.fire({ icon: 'error', title: 'حساب معطل', text: 'عذراً، تم تعطيل هذا الحساب من قبل الإدارة المركزية.', confirmButtonText: 'حسناً' });
+              Swal.fire({ icon: 'error', title: 'حساب معطل', text: 'عذراً، تم تعطيل هذا الحساب من قبل الإدارة المركزية.', confirmButtonText: 'حسناً', confirmButtonColor: '#d32f2f' });
               return;
           }
 
-          // تسجيل بيانات المشرف في الجلسة ليتم استخدامها في لوحة المفتش
+          const inspectorEmail = adminData.email || `inspector_${adminData.id}@system.local`; 
+          
+          try {
+              await firebase.auth().signInWithEmailAndPassword(inspectorEmail, inputVal);
+          } catch(e) {
+               // 🌟 دعم التحديثات الأمنية الجديدة لفايربيز للمفتشين 🌟
+               if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+                  await firebase.auth().createUserWithEmailAndPassword(inspectorEmail, inputVal);
+              } else {
+                  throw e;
+              }
+          }
+
           sessionStorage.setItem("userEmpId", adminData.id); 
           sessionStorage.setItem("userName", adminData.name); 
-          sessionStorage.setItem("inspectorCenter", adminData.center); // المركز المعين له
+          sessionStorage.setItem("inspectorCenter", adminData.center); 
           sessionStorage.setItem("isLoggedIn", "true");
 
           Swal.fire({
@@ -148,12 +428,11 @@ async function checkAccessCode() {
           });
 
       } else {
-          // لم يتم العثور على الكود في الإدارة ولا في رؤساء المراكز
-          Swal.fire({ icon: "error", title: "كود خاطئ", text: "يرجى التأكد من الرقم السري والمحاولة مرة أخرى", confirmButtonText: "حسناً" });
+          Swal.fire({ icon: "error", title: "كود خاطئ", text: "يرجى التأكد من الرقم السري والمحاولة مرة أخرى", confirmButtonText: "حسناً", confirmButtonColor: '#d32f2f' });
       }
   } catch (error) {
-      console.error("Error connecting to DB:", error);
-      Swal.fire({ icon: 'error', title: 'خطأ في الاتصال', text: 'يرجى التحقق من جودة الإنترنت لديك.' });
+      console.error("Auth Error:", error);
+      Swal.fire({ icon: 'error', title: 'خطأ في الاتصال', text: 'تأكد من صحة الكود السري أو جودة الإنترنت.', confirmButtonColor: '#1E68E8' });
   }
 }
 
@@ -165,7 +444,7 @@ window.onload = function() {
         const buttons = document.querySelectorAll("button");
         buttons.forEach(btn => btn.style.display = "none");
         const msg = document.createElement("div");
-        msg.innerHTML = `<div style="background: #cce5ff; color: #004085; border: 1px solid #b8daff; border-radius: 10px; padding: 15px; margin-bottom: 20px; font-size: 18px; font-weight: 600;">الموقع مغلق حاليًا<br></div>`;
+        msg.innerHTML = `<div style="background: #e2e8f0; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; margin-bottom: 20px; font-size: 16px; font-weight: 700;">الموقع مغلق حاليًا<br></div>`;
         document.querySelector(".header-text").appendChild(msg);
     }
 };

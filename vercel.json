@@ -1,0 +1,15 @@
+{
+  "routes": [
+    { "src": "/login", "dest": "/index.html" },
+    { "src": "/portal", "dest": "/dashboard.html" },
+    { "src": "/inspector", "dest": "/inspector_dashboard.html" },
+    { "src": "/admin-panel", "dest": "/admin_dashboard.html" },
+    { "src": "/secure-login", "dest": "/admin095526.html" },
+    { "src": "/framers", "dest": "/framers_management.html" },
+    { "src": "/grades", "dest": "/grades_management.html" },
+    { "src": "/courses-manage", "dest": "/manage_courses.html" },
+    { "src": "/scanner-tool", "dest": "/scanner.html" },
+    { "src": "/statistics", "dest": "/tracking.html" },
+    { "src": "/files-upload", "dest": "/dashboard_finale_upload.html" }
+  ]
+}

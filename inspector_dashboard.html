@@ -8,13 +8,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- مكتبات تصدير الإكسل -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  
   
   <!-- استدعاء قاعدة البيانات المحلية -->
   <script src="database.js"></script>
@@ -693,19 +697,27 @@ function extractCoreId(val) {
 let INSPECTOR_CENTER = "";
 
 window.onload = function() {
+    // التحقق من وجود الجلسة والمركز المخزن
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
-        window.location.href = "index.html";
+        window.location.href = "admin095526.html";
         return;
     }
 
-    document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
-    
-    // استدعاء دالة جلب أسماء مسؤولي المركز
-    loadCenterAdmins();
-    fetchData();
+    // التحقق الحقيقي من أن الحساب نشط ومصادق عليه عبر Firebase Auth
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            // المستخدم مسجل دخول، يتم جلب بيانات المركز وعرض لوحة التحكم بأمان
+            document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
+            loadCenterAdmins();
+            fetchData();
+        } else {
+            // إذا لم يكن مسجلاً دخوله في Auth، يتم طرده فوراً
+            window.location.href = "admin095526.html";
+        }
+    });
 };
 
 
@@ -868,8 +880,12 @@ const rowsPerPage = 10;
 let selectedTrainees = new Set();
 
 function logout() {
-    sessionStorage.clear();
-    window.location.href = "index.html";
+    firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "admin095526.html";
+    }).catch((error) => {
+        console.error("خطأ أثناء تسجيل الخروج:", error);
+    });
 }
 
 // ================= دوال التحقق من الصلاحيات والمنع =================

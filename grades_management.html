@@ -12,6 +12,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  
   <style>
     * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
     body { margin: 0; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); color: #333; min-height: 100vh; display: flex; flex-direction: column; }
@@ -425,24 +430,52 @@ window.handleImageFallback = function(imgElement, driveUrl) {
 };
 
 // ================= Initialization =================
+// ================= Initialization & Security Guard =================
 window.onload = function() {
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "flex";
+
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+
     if (!isLoggedIn || !INSPECTOR_CENTER) {
-        window.location.href = "index.html";
+        if (loader) loader.style.display = "none";
+        window.location.href = "admin095526.html";
         return;
     }
-    document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
 
-    db.collection("site_settings").doc("main").get().then(doc => {
-        if (doc.exists && doc.data().DRIVE_SETTINGS && doc.data().DRIVE_SETTINGS.academicYear) {
-            TRAINING_YEAR = doc.data().DRIVE_SETTINGS.academicYear;
+    // التحقق الحقيقي من المصادقة عبر Firebase Auth
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
+
+            db.collection("site_settings").doc("main").get().then(doc => {
+                if (doc.exists && doc.data().DRIVE_SETTINGS && doc.data().DRIVE_SETTINGS.academicYear) {
+                    TRAINING_YEAR = doc.data().DRIVE_SETTINGS.academicYear;
+                }
+            }).catch(e => console.log("تعذر جلب السنة التكوينية"));
+
+            checkPermissions();
+            fetchPhotos();
+            fetchData();
+
+            // إخفاء شاشة التحميل فوراً عند نجاح المصادقة
+            if (loader) loader.style.display = "none";
+        } else {
+            if (loader) loader.style.display = "none";
+            window.location.href = "admin095526.html";
         }
-    }).catch(e => console.log("تعذر جلب السنة التكوينية"));
-
-    checkPermissions();
-    fetchPhotos();
-    fetchData();
+    });
 };
+
+function logout() {
+    firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "admin095526.html";
+    }).catch((error) => {
+        console.error("خطأ أثناء تسجيل الخروج:", error);
+    });
+}
 
 function checkPermissions() {
     let userEmpId = sessionStorage.getItem("userEmpId");

@@ -206,6 +206,9 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 
 <!-- الهيدر الحديث (البطاقة المدمجة) -->
 <header class="hero-section">
+<button onclick="logout()" style="position: absolute; top: 20px; left: 20px; background: rgba(239, 68, 68, 0.2); backdrop-filter: blur(10px); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 18px; border-radius: 25px; cursor: pointer; font-weight: 700; font-family: 'Cairo'; z-index: 30; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease; font-size: 13px;" onmouseover="this.style.background='#dc2626'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='rgba(239, 68, 68, 0.2)'; this.style.transform='translateY(0)';">
+        <i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج
+    </button>
     <div class="identity-card">
         <!-- معلومات المستخدم -->
         <div class="user-profile">
@@ -341,6 +344,7 @@ window.onload = async function() {
     
     const empId = sessionStorage.getItem("userEmpId");
     if(!empId) {
+        document.getElementById("loader").style.display = "none";
         window.location.href = "index_2.html"; 
         return;
     }
@@ -349,13 +353,12 @@ window.onload = async function() {
         document.getElementById("loader").style.display = "none";
         loggedInUser = { center: "ADMIN" }; 
         
-        // تعبئة البروفايل الخاص بمدير النظام
         document.getElementById('userNameDisplay').innerText = 'مدير النظام';
         document.getElementById('userRankDisplay').innerText = 'حساب الإدارة المركزية';
         document.getElementById('userWorkplaceDisplay').innerText = 'مديرية التربية لولاية توقرت';
         document.getElementById('userAvatarContainer').innerHTML = `<i class="fa-solid fa-user-shield" style="font-size:35px; color:#0FBA50;"></i>`;
         
-        initSiteSettings(); // بدء جلب المراكز للمدير
+        initSiteSettings(); 
         return;
     }
 
@@ -375,14 +378,15 @@ window.onload = async function() {
         }
 
         if(!loggedInUser) {
+            document.getElementById("loader").style.display = "none";
             Swal.fire('خطأ', 'لم يتم العثور على بياناتك، يرجى مراجعة الإدارة.', 'error')
             .then(() => { sessionStorage.clear(); window.location.href="index_2.html"; });
             return;
         }
 
+        // 🌟 إخفاء شاشة التحميل هنا فور جلب بيانات المتكون بنجاح 🌟
         document.getElementById("loader").style.display = "none";
         
-        // تعبئة البروفايل للمتكون
         document.getElementById('userNameDisplay').innerText = loggedInUser.name || 'مستخدم مجهول';
         document.getElementById('userRankDisplay').innerText = loggedInUser.grade || loggedInUser.rank || 'رتبة غير محددة';
         document.getElementById('userWorkplaceDisplay').innerText = loggedInUser.place || loggedInUser.workplace || 'مكان العمل غير محدد';
@@ -397,7 +401,7 @@ window.onload = async function() {
         }
 
         checkAndFillMissingInfo();
-        initSiteSettings(); // بدء جلب المراكز للأستاذ
+        initSiteSettings(); 
 
     } catch (error) {
         console.error("Error fetching data:", error);
@@ -405,6 +409,35 @@ window.onload = async function() {
         Swal.fire('خطأ في الاتصال', 'تعذر الاتصال بقاعدة البيانات. تأكد من جودة الإنترنت.', 'error');
     }
 };
+
+// ==========================================
+// دالة جلب الإعدادات من Firestore وإيقاف الدوران فوراً
+// ==========================================
+// دالة جلب الإعدادات اللحظية (تعمل بصمت في الخلفية دون إزعاج المستخدم)
+function initSiteSettings() {
+    db.collection("site_settings").doc("main").onSnapshot((doc) => {
+        // إخفاء الـ Loader فوراً فور وصول البيانات
+        const loader = document.getElementById("loader");
+        if (loader) loader.style.display = "none";
+
+        if (doc.exists) {
+            SITE_SETTINGS = doc.data();
+            renderCenters(); 
+        } else {
+            const container = document.getElementById("centers-container");
+            if (container) {
+                container.innerHTML = '<div style="grid-column: 1/-1; color: #dc2626; font-weight: bold; font-size: 18px; text-align:center;">لم يتم العثور على إعدادات الموقع المركزية في قاعدة البيانات.</div>';
+            }
+        }
+    }, (error) => {
+        // 🌟 قمنا بإلغاء إظهار نافذة الخطأ (Swal.fire) هنا نهائياً 🌟
+        // لأن النظام يعمل بالبيانات المخزنة مؤقتاً ولنزع الإزعاج عن المتكون
+        console.warn("التحديث اللحظي تأخر قليلاً، سيتم الاعتماد على النسخة المخزنة مؤقتاً:", error);
+        
+        const loader = document.getElementById("loader");
+        if (loader) loader.style.display = "none";
+    });
+}
 
 // ==========================================
 // منع إدخال غير الحروف العربية في حقل مكان الميلاد
@@ -531,17 +564,7 @@ const swalConfig = {
     showCloseButton: false, scrollbarPadding: false
 };
 
-// دالة جلب الإعدادات المركزية
-function initSiteSettings() {
-    db.collection("site_settings").doc("main").onSnapshot((doc) => {
-        if (doc.exists) {
-            SITE_SETTINGS = doc.data();
-            renderCenters(); 
-        } else {
-            Swal.fire('خطأ', 'لم يتم العثور على إعدادات الموقع المركزية.', 'error');
-        }
-    });
-}
+
 
 // دالة رسم المراكز في الشاشة الرئيسية
 function renderCenters() {
@@ -688,6 +711,29 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
 function openLink(centerId, type, level) {
     const targetUrl = `courses.html?c=${centerId}&l=${level}&s=${type}`;
     window.location.href = targetUrl;
+}
+
+function logout() {
+    Swal.fire({
+        title: 'تأكيد الخروج',
+        text: 'هل أنت متأكد من رغبتك في تسجيل الخروج؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، خروج',
+        cancelButtonText: 'تراجع',
+        confirmButtonColor: '#dc2626', // لون أحمر للتأكيد
+        cancelButtonColor: '#64748b',
+        buttonsStyling: true,
+        customClass: {
+            confirmButton: 'swal-uniform-btn',
+            cancelButton: 'swal-uniform-btn'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            sessionStorage.clear();
+            window.location.href = "index.html";
+        }
+    });
 }
 
 </script>

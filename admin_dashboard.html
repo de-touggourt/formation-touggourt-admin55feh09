@@ -13,13 +13,18 @@
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   
   <!-- مكتبات تصدير وتنسيق الإكسل الاحترافي (ExcelJS) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
   <!-- ملف قاعدة بيانات الموقع (سيتم الاستغناء عنه تدريجياً، نتركه مؤقتاً للـ Migration) -->
-  <script src="database.js"></script>
+  <script src="database.js"></script>*
+  
+
 
   <style>
     /* =========================================
@@ -1024,7 +1029,20 @@ window.startBulkImageUpload = async function() {
     let failedLog = [];
 
     // مفتاح ImgBB الخاص بك
-    const IMGBB_API_KEY = "9919b0c1de1822c4c1bf10d372c4a3ec";
+    let IMGBB_API_KEY = "";
+    try {
+        // سيتم جلب المفتاح من Firestore (collection: site_settings, document: keys)
+        const keyDoc = await db.collection("site_settings").doc("keys").get();
+        if (keyDoc.exists && keyDoc.data().imgbb) {
+            IMGBB_API_KEY = keyDoc.data().imgbb;
+        } else {
+            throw new Error("Missing API Key");
+        }
+    } catch (err) {
+        Swal.fire('خطأ', 'لم يتم العثور على مفتاح رفع الصور.', 'error');
+        document.getElementById('uploadProgressContainer').style.display = 'none';
+        return;
+    }
 
     // --- التعديل الأخير: دالة المؤقت الزمني لتفادي حظر سيرفر ImgBB ---
     const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -1868,17 +1886,38 @@ let selectedTrainees = new Set();
 let selectedGroupsTrainees = new Set(); 
 
 window.onload = function() {
-    if(sessionStorage.getItem("userEmpId") !== "ADMIN_ACCESS") {
-        window.location.href = "index.html"; 
-        return;
-    }
-    populateCentersDropdowns(); 
-    fetchData();
+    // إظهار شاشة التحميل فوراً
+    document.getElementById("loader").style.display = "flex";
+
+    // التحقق الحقيقي من سيرفر Firebase Auth
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            // التحقق من أن الإيميل المسجل هو إيميل الإدارة العليا
+            if (user.email === "admin_directorate@system.local") {
+                populateCentersDropdowns(); 
+                fetchData();
+                document.getElementById("loader").style.display = "none";
+            } else {
+                // طرد أي مستخدم آخر (مثل المفتشين)
+                firebase.auth().signOut();
+                Swal.fire({ icon: 'error', title: 'صلاحيات مقيدة', text: 'لا تملك صلاحية دخول لوحة المديرية.'})
+                .then(() => window.location.href = "admin095526.html");
+            }
+        } else {
+            // لا يوجد جلسة نشطة
+            window.location.href = "admin095526.html";
+        }
+    });
 };
 
 function logout() {
-    sessionStorage.clear();
-    window.location.href = "admin095526.html";
+    // تسجيل الخروج الفعلي من سيرفرات فايربيز
+    firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "admin095526.html";
+    }).catch((error) => {
+        console.error("خطأ في تسجيل الخروج:", error);
+    });
 }
 
 
@@ -3084,11 +3123,37 @@ async function verifyAndCreateAdmin(empId) {
             }
         }).then(async (res) => {
             if (res.isConfirmed) {
-                Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                Swal.fire({ title: 'جاري إنشاء الحساب والمصادقة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 try {
-                    // 1. الحفظ في قاعدة الحسابات (للسماح له بالدخول)
+                    // 1. إنشاء الإيميل الوهمي الديناميكي
+                    const generatedEmail = `inspector_${userData.id}@system.local`;
+
+                    // 2. إنشاء تطبيق Firebase ثانوي لإنشاء الحساب دون طرد المدير
+                    const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryApp");
+                    try {
+                        // إنشاء الحساب في Firebase Authentication
+                        await secondaryApp.auth().createUserWithEmailAndPassword(generatedEmail, res.value.password);
+                        // تسجيل الخروج من التطبيق الثانوي فقط وإغلاقه
+                        await secondaryApp.auth().signOut();
+                        await secondaryApp.delete();
+                    } catch (authErr) {
+                        await secondaryApp.delete();
+                        console.error("Auth Error:", authErr);
+                        Swal.fire('خطأ في المصادقة', 'تعذر إنشاء حساب Auth، قد يكون مسجلاً مسبقاً.', 'error');
+                        return;
+                    }
+
+                    // 3. الحفظ في قاعدة الحسابات Firestore (ونحفظ الإيميل الوهمي معها)
                     await db.collection("center_admins").doc(userData.id).set({
-                        id: userData.id, name: res.value.name, rank: res.value.rank, center: res.value.center, password: res.value.password, role: "inspector", jobTitle: res.value.jobTitle, disabled: false
+                        id: userData.id, 
+                        name: res.value.name, 
+                        rank: res.value.rank, 
+                        center: res.value.center, 
+                        password: res.value.password, 
+                        role: "inspector", 
+                        jobTitle: res.value.jobTitle, 
+                        disabled: false,
+                        email: generatedEmail
                     });
 
                     // 2. تجهيز وتنسيق رقم الهاتف للحفظ في جدول المؤطرين
@@ -3155,9 +3220,25 @@ window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle)
         }
     }).then(async (res) => {
         if (res.isConfirmed) {
-            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: 'جاري إنشاء الحساب واعتماده...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                // حفظ البيانات كحساب رسمي في مجموعة center_admins
+                // 1. إنشاء الإيميل الوهمي الديناميكي
+                const generatedEmail = `inspector_${empId}@system.local`;
+
+                // 2. إنشاء الحساب في Firebase Auth عبر تطبيق ثانوي
+                const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryApp2");
+                try {
+                    await secondaryApp.auth().createUserWithEmailAndPassword(generatedEmail, res.value);
+                    await secondaryApp.auth().signOut();
+                    await secondaryApp.delete();
+                } catch (authErr) {
+                    await secondaryApp.delete();
+                    console.error("Auth Error:", authErr);
+                    Swal.fire('خطأ', 'فشل إنشاء حساب Auth في النظام الأساسي.', 'error');
+                    return;
+                }
+
+                // 3. حفظ البيانات كحساب رسمي في مجموعة center_admins
                 await db.collection("center_admins").doc(empId).set({
                     id: empId, 
                     name: name, 
@@ -3166,7 +3247,8 @@ window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle)
                     password: res.value, 
                     role: "inspector", 
                     jobTitle: jobTitle, 
-                    disabled: false
+                    disabled: false,
+                    email: generatedEmail 
                 });
 
                 // --- التعديل الجديد: تفعيل الحماية في جدول المؤطرين للمركز ---
@@ -3487,16 +3569,51 @@ async function editAdminAccount(docId) {
             }
         }).then(async (res) => {
             if (res.isConfirmed) {
-                Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                Swal.fire({ title: 'جاري الحفظ وتحديث المصادقة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                
+                // تجهيز المتغيرات للتحديث
+                let updates = { 
+                    center: res.value.center, 
+                    password: res.value.password, 
+                    jobTitle: res.value.jobTitle 
+                };
+
                 try {
-                    await db.collection("center_admins").doc(docId).update({ center: res.value.center, password: res.value.password, jobTitle: res.value.jobTitle });
+                    // 1. التحقق مما إذا تم تغيير كلمة المرور
+                    if (res.value.password !== data.password) {
+                        // إنشاء إيميل وهمي جديد كلياً لتفادي تضارب الحسابات
+                        const newGeneratedEmail = `inspector_${docId}_${Date.now()}@system.local`;
+                        
+                        // إنشاء تطبيق ثانوي لإنشاء الحساب دون تسجيل خروج المدير
+                        const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryAppEdit");
+                        try {
+                            await secondaryApp.auth().createUserWithEmailAndPassword(newGeneratedEmail, res.value.password);
+                            await secondaryApp.auth().signOut();
+                            await secondaryApp.delete();
+                            
+                            // إضافة الإيميل الجديد ليتم حفظه في Firestore
+                            updates.email = newGeneratedEmail; 
+                        } catch (authErr) {
+                            await secondaryApp.delete();
+                            console.error("Auth Edit Error:", authErr);
+                            Swal.fire('خطأ', 'فشل في تحديث بيانات الدخول (Auth).', 'error').then(() => manageCenterAdmins());
+                            return;
+                        }
+                    }
+
+                    // 2. تحديث قاعدة البيانات بالمعلومات (والإيميل الجديد إن وجد)
+                    await db.collection("center_admins").doc(docId).update(updates);
                     await db.collection("center_framers").doc(docId).update({ center: res.value.center, role: res.value.jobTitle }).catch(() => console.log("المؤطر غير موجود مسبقاً"));
                     await db.collection("employeescomplus").doc(docId).update({ center: res.value.center, password: res.value.password }).catch(()=>console.log("Not in plus"));
                     await db.collection("employeescomnew").doc(docId).update({ center: res.value.center, password: res.value.password }).catch(()=>console.log("Not in new"));
 
                     Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات رئيس المركز بنجاح!', confirmButtonColor: '#1E68E8', timer: 2000 }).then(() => manageCenterAdmins()); 
-                } catch(e) { Swal.fire('خطأ', 'تعذر حفظ التعديلات.', 'error').then(() => manageCenterAdmins()); }
-            } else { manageCenterAdmins(); }
+                } catch(e) { 
+                    Swal.fire('خطأ', 'تعذر حفظ التعديلات.', 'error').then(() => manageCenterAdmins()); 
+                }
+            } else { 
+                manageCenterAdmins(); 
+            }
         });
 
     } catch (err) { Swal.fire('خطأ', 'فشل جلب البيانات.', 'error').then(() => manageCenterAdmins()); }

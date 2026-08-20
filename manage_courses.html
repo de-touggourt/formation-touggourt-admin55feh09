@@ -5,46 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>فضاء التكوين البيداغوجي توقرت - إدارة المقاييس</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<!-- ربط Firebase بدلاً من ملف قاعدة البيانات القديم -->
+<!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 
 <style>
 /* ============================================================
-   التنسيقات الأساسية
+   1. الإعدادات الأساسية والخلفية العصرية (نفس ستايل لوحة المراكز)
    ============================================================ */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body { font-family:'Cairo',sans-serif; margin:0; background:linear-gradient(135deg,#e3f2fd,#bbdefb); text-align:center; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; padding: 0; }
+html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
 
-.news-ticker-container { background-color: #0d47a1; color: #fff; width: 100%; min-height: 50px; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1000; box-shadow: 0 4px 8px rgba(0,0,0,0.3); padding: 10px 15px; }
-.typewriter-text { font-size: 17px; font-weight: 700; display: inline-block; opacity: 1; transition: opacity 1s ease-in-out; text-shadow: 0 2px 4px rgba(0,0,0,0.3); white-space: normal; overflow: visible; text-overflow: clip; max-width: 95%; line-height: 1.4; text-align: center; }
+body::before {
+  content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: #f4f7f6;
+  background-image: radial-gradient(#1E68E8 0.5px, transparent 0.5px), radial-gradient(#1E68E8 0.5px, #f4f7f6 0.5px);
+  background-size: 20px 20px; background-position: 0 0, 10px 10px; opacity: 0.1;
+  z-index: -1;
+}
 
-.logo-container { position: relative; display: inline-block; width: 160px; height: 160px; margin-bottom: 0px; transition: transform 0.3s ease; }
-.logo-container img { width: 130px; height: 130px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; z-index: 2; animation: pulseLogo 2.5s ease-in-out infinite; }
-.logo-ring { position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; border-radius: 50%; border: 3px dashed #fff; background: transparent; transform: translate(-50%, -50%); animation: rotateRing 10s linear infinite; z-index: 1; }
+body { 
+    font-family:'Cairo',sans-serif; margin:0; text-align:center; 
+    min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; 
+}
+
+/* شريط التمرير */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: #e2e8f0; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+body.swal2-shown { overflow-y: auto !important; padding-right: 0 !important; }
+
+/* شريط الأخبار العلوي */
+.news-ticker-container { 
+    background-color: #0d47a1; color: #fff; width: 100%; min-height: 40px; 
+    display: flex; align-items: center; justify-content: center; position: relative; 
+    z-index: 20; padding: 5px 15px; font-size: 14px; font-weight: 600; 
+}
+.typewriter-text { display: inline-block; transition: opacity 0.5s; }
+.typewriter-text.fade-out { opacity: 0; }
+
+/* الهيدر العصري بتدرج أزرق فاخر مع اللوجو الدوار */
+header { 
+    background: linear-gradient(135deg, #1E68E8 0%, #0d47a1 100%);
+    position: relative; padding: 30px 20px 60px 20px; 
+    border-bottom-left-radius: 40px; border-bottom-right-radius: 40px; 
+    box-shadow: 0 10px 30px rgba(30, 104, 232, 0.2); 
+    z-index: 10; display: flex; flex-direction: column; align-items: center; 
+}
+
+.logo-container { position: relative; display: inline-block; width: 130px; height: 130px; margin-bottom: 10px; }
+.logo-container img { width: 105px; height: 105px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; z-index: 2; animation: pulseLogo 2.5s ease-in-out infinite; }
+.logo-ring { position: absolute; top: 50%; left: 50%; width: 125px; height: 125px; border-radius: 50%; border: 2.5px dashed #fff; background: transparent; transform: translate(-50%, -50%); animation: rotateRing 10s linear infinite; z-index: 1; }
 @keyframes rotateRing { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
 @keyframes pulseLogo { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } }
 
-header { background:#1E68E8; color:#fff; padding:30px 15px; border-bottom-left-radius:25px; border-bottom-right-radius:25px; box-shadow:0 4px 10px rgba(0,0,0,.2); width: 100%; position: relative; }
-header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 10px; line-height: 1.5; }
-.btn-back { position: absolute; top: 20px; right: 20px; background: #fff; color: #1E68E8; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; z-index: 10; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.3s; }
-.btn-back:hover { background: #f0f7ff; transform: translateY(-2px); }
+header h1 { margin: 10px 0 5px 0; font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+header p { margin: 0; font-size: 14px; color: #bbdefb; font-weight: 600; }
 
-/* البطاقات (المقاييس) */
-.services { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:25px; padding:40px 20px; max-width:1000px; margin:auto; justify-content: center; flex: 1; width: 100%; }
-.service { background:#fff; border-radius:20px; padding:30px 15px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.1); transition:.4s; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; border: 2px solid transparent;}
-.service:hover { transform:translateY(-8px) scale(1.05); border: 2px solid #1E68E8; }
-.service.video-card:hover { border: 2px solid #dc2626; }
-.service:active { transform:scale(0.98); }
-.service i { font-size:55px; color:#1E68E8; margin-bottom:15px; transition: 0.3s; }
+/* زر الرجوع للوحة التحكم */
+.btn-back { 
+    position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.2); 
+    backdrop-filter: blur(10px); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); 
+    padding: 8px 16px; border-radius: 25px; cursor: pointer; font-weight: 700; font-family: 'Cairo'; 
+    z-index: 30; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+    transition: 0.3s; font-size: 13px; 
+}
+.btn-back:hover { background: #fff; color: #1E68E8; transform: translateY(-2px); }
+
+/* البطاقات (المقاييس) بتصميم شبكي متداخل Overlapping */
+.services { 
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); 
+    gap: 25px; padding: 0 20px 40px 20px; max-width: 1100px; width: 100%; 
+    margin: -30px auto 0; z-index: 20; position: relative; flex: 1; 
+}
+
+.service { 
+    background: #fff; border-radius: 20px; padding: 25px 20px; cursor: pointer; 
+    box-shadow: 0 10px 20px rgba(0,0,0,0.06); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+    display: flex; flex-direction: column; align-items: center; text-align: center; 
+    border: 1px solid #e2e8f0; position: relative; overflow: hidden; 
+}
+.service::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 5px;
+    background: linear-gradient(90deg, #1E68E8, #3b82f6); transform: scaleX(0); transition: 0.4s ease; transform-origin: right;
+}
+.service:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(30, 104, 232, 0.15); border-color: #93c5fd; }
+.service:hover::before { transform: scaleX(1); }
+.service:active { transform: translateY(-3px) scale(0.98); }
+
+.service.video-card::before { background: linear-gradient(90deg, #dc2626, #f87171); }
+.service.video-card:hover { border-color: #fca5a5; }
+
+.service-icon-wrapper {
+    width: 70px; height: 70px; border-radius: 18px; background: #f0f7ff;
+    display: flex; justify-content: center; align-items: center; margin-bottom: 15px;
+    transition: 0.4s ease; border: 2px solid transparent;
+}
+.service.video-card .service-icon-wrapper { background: #fef2f2; }
+
+.service:hover .service-icon-wrapper { background: #1E68E8; transform: rotate(10deg); border-color: #fff; box-shadow: 0 8px 15px rgba(30, 104, 232, 0.3); }
+.service.video-card:hover .service-icon-wrapper { background: #dc2626; box-shadow: 0 8px 15px rgba(220, 38, 38, 0.3); }
+
+.service i { font-size: 32px; color: #1E68E8; transition: 0.4s ease; }
 .service.video-card i { color: #dc2626; }
-.service:hover i { transform: scale(1.1); }
-.service h3 { color:#1557c0; font-size: 1.1rem; margin: 0; line-height: 1.6; }
-.service.video-card h3 { color: #b91c1c; }
+.service:hover i, .service.video-card:hover i { color: #fff; }
+
+.service h3 { color: #1e293b; font-size: 17px; font-weight: 800; margin: 0; line-height: 1.5; }
 
 /* نوافذ الدورات المنبثقة */
 .cycles-container { display: flex; flex-direction: row; justify-content: center; gap: 20px; width: 100%; padding: 15px; flex-wrap: nowrap; }
@@ -58,10 +130,10 @@ header h1 { margin-top: 5px; margin-bottom: 10px; font-size: 1.8rem; padding: 0 
 .badge.open { background:#e3f2fd; color:#1565c0; border: 1px solid #1565c0; }
 .badge.closed { background:#ffebee; color:#c62828; border: 1px solid #c62828; }
 
-footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25px; border-top-right-radius:25px; width: 100%; margin-top: auto; font-size: 0.9rem; }
+footer { background: transparent; color: #64748b; padding: 20px; font-weight: 600; font-size: 13px; margin-top: auto; text-align: center; }
 
 /* تنسيقات مدير الملفات (SweetAlert) */
-.swal2-popup { border-radius: 20px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; font-family:'Cairo',sans-serif !important; z-index: 999999 !important;}
+.swal2-popup { border-radius: 24px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; font-family:'Cairo',sans-serif !important; z-index: 999999 !important;}
 .swal2-title { font-size: 1.6rem !important; font-weight: 800 !important; }
 .swal2-confirm { background:#939393 !important; color:#fff !important; border-radius:20px !important; padding:12px 35px !important; font-weight:700; border:none !important; margin: 5px !important; transition: 0.3s; font-size: 1.1rem !important; }
 .swal2-confirm:hover { background: #d6d6d6 !important; }
@@ -86,6 +158,14 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 
 /* الميديا كويري */
 @media (max-width: 768px) {
+    header { padding: 25px 15px 45px 15px; border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; }
+    .btn-back { top: 15px; right: 15px; padding: 6px 12px; font-size: 12px; }
+    .services { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: -20px; padding: 0 15px 30px 15px; }
+    .service { padding: 20px 15px; min-height: 120px; }
+    .service-icon-wrapper { width: 55px; height: 55px; margin-bottom: 10px; }
+    .service i { font-size: 26px; }
+    .service h3 { font-size: 15px; }
+    
     .cycles-container { flex-direction: column; flex-wrap: wrap; }
     .cycle-btn { width: 100%; height: 120px; font-size: 1.1rem; flex-direction: row; justify-content: flex-start; gap: 20px; padding: 15px 20px; }
     .cycle-btn i { font-size: 35px; margin-bottom: 0; }
@@ -98,11 +178,10 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 }
 
 @media (max-width: 400px) {
-    .logo-container { width: 110px; height: 110px; }
-    .logo-container img { width: 85px; height: 85px; }
-    .logo-ring { width: 100px; height: 100px; }
+    .logo-container { width: 100px; height: 100px; }
+    .logo-container img { width: 75px; height: 75px; }
+    .logo-ring { width: 90px; height: 90px; }
     header h1 { font-size: 1.1rem; }
-    .btn-back { top: 15px; right: 15px; padding: 6px 12px; font-size: 13px; }
     .services { padding: 15px 10px; grid-template-columns: 1fr; }
     .service { flex-direction: row; text-align: right; padding: 15px; min-height: 80px; justify-content: flex-start; gap: 12px; }
     .service i { font-size: 32px; margin-bottom: 0; min-width: 40px; }
@@ -123,7 +202,7 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 
   <div class="logo-container">
     <div class="logo-ring"></div>
-    <img id="center-logo" src="https://drive.google.com/thumbnail?id=1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl&sz=w400" alt="شعار المركز">
+    <img id="center-logo" src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار المركز">
   </div>
 
   <h1 id="page-title">جاري الاتصال بقاعدة البيانات...</h1>
@@ -131,19 +210,55 @@ footer { background:#1E68E8; color:#fff; padding:15px; border-top-left-radius:25
 </header>
 
 <section class="services">
-    <div class="service" onclick="openCourses('didactique')"><i class="fa-solid fa-chalkboard"></i><h3>تعليمية مادة التخصص</h3></div>
-    <div class="service" onclick="openCourses('tasyire')"><i class="fa-solid fa-users-gear"></i><h3>تقنيات تسيير القسم</h3></div>
-    <div class="service" onclick="openCourses('takwime')"><i class="fa-solid fa-clipboard-check"></i><h3>التقويم و المعالجة البيداغوجية</h3></div>
-    <div class="service" onclick="openCourses('informatique')"><i class="fa-solid fa-computer"></i><h3>الإعلام الآلي</h3></div>
-    <div class="service" onclick="openCourses('nidame')"><i class="fa-solid fa-school"></i><h3>النظام التربوي و المناهج</h3></div>
-    <div class="service" onclick="openCourses('akhlakiyate')"><i class="fa-solid fa-scale-balanced"></i><h3>أخلاقيات المهنة</h3></div>
-    <div class="service" onclick="openCourses('handasa')"><i class="fa-solid fa-network-wired"></i><h3>هندسة التكوين</h3></div>
-    <div class="service" onclick="openCourses('wasata')"><i class="fa-solid fa-handshake"></i><h3>الوساطة المدرسية</h3></div>
-    <div class="service" onclick="openCourses('tachri')"><i class="fa-solid fa-gavel"></i><h3>التشريع المدرسي</h3></div>
-    <div class="service" onclick="openCourses('psycho')"><i class="fa-solid fa-brain"></i><h3>علوم التربية وعلم النفس</h3></div>
-    <div class="service" onclick="openCourses('fasad')"><i class="fas fa-shield-halved"></i></i><h3>الشفافية والوقاية من الفساد</h3></div>
+    <div class="service" onclick="openCourses('didactique')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-chalkboard"></i></div>
+        <h3>تعليمية مادة التخصص</h3>
+    </div>
+    <div class="service" onclick="openCourses('tasyire')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-users-gear"></i></div>
+        <h3>تقنيات تسيير القسم</h3>
+    </div>
+    <div class="service" onclick="openCourses('takwime')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-clipboard-check"></i></div>
+        <h3>التقويم و المعالجة البيداغوجية</h3>
+    </div>
+    <div class="service" onclick="openCourses('informatique')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-computer"></i></div>
+        <h3>الإعلام الآلي</h3>
+    </div>
+    <div class="service" onclick="openCourses('nidame')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-school"></i></div>
+        <h3>النظام التربوي و المناهج</h3>
+    </div>
+    <div class="service" onclick="openCourses('akhlakiyate')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-scale-balanced"></i></div>
+        <h3>أخلاقيات المهنة</h3>
+    </div>
+    <div class="service" onclick="openCourses('handasa')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-network-wired"></i></div>
+        <h3>هندسة التكوين</h3>
+    </div>
+    <div class="service" onclick="openCourses('wasata')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-handshake"></i></div>
+        <h3>الوساطة المدرسية</h3>
+    </div>
+    <div class="service" onclick="openCourses('tachri')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-gavel"></i></div>
+        <h3>التشريع المدرسي</h3>
+    </div>
+    <div class="service" onclick="openCourses('psycho')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-brain"></i></div>
+        <h3>علوم التربية وعلم النفس</h3>
+    </div>
+    <div class="service" onclick="openCourses('fasad')">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-shield-halved"></i></div>
+        <h3>الشفافية والوقاية من الفساد</h3>
+    </div>
     <!-- قسم الفيديوهات الجديد -->
-    <div class="service video-card" onclick="openVideos()"><i class="fa-solid fa-circle-play"></i><h3>الفيديوهات المرفقة</h3></div>
+    <div class="service video-card" onclick="openVideos()">
+        <div class="service-icon-wrapper"><i class="fa-solid fa-circle-play"></i></div>
+        <h3>الفيديوهات المرفقة</h3>
+    </div>
 </section>
 
 <footer>© 2026 مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي | جميع الحقوق محفوظة</footer>
@@ -169,18 +284,15 @@ let currentLinks = {};
 const userEmpId = sessionStorage.getItem("userEmpId");
 const inspectorCenter = sessionStorage.getItem("inspectorCenter");
 
-if (!userEmpId) { window.location.href = "index_2.html"; }
-
 // ==================== فحص صلاحيات المسؤول الإداري ====================
 async function checkUserPermissions() {
     if (userEmpId !== "ADMIN_ACCESS") {
         try {
-            // جلب بيانات المسؤول من قاعدة البيانات للتحقق من وظيفته
             const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
             if (adminDoc.exists) {
                 const data = adminDoc.data();
                 if (data.jobTitle === "المسؤول الإداري") {
-                    document.body.innerHTML = ""; // إخفاء محتوى الصفحة بالكامل فوراً للحماية
+                    document.body.innerHTML = ""; 
                     Swal.fire({
                         icon: 'error',
                         title: 'صلاحيات مقيدة',
@@ -189,19 +301,19 @@ async function checkUserPermissions() {
                         confirmButtonText: 'العودة للوحة التحكم',
                         confirmButtonColor: '#1E68E8'
                     }).then(() => {
-                        window.location.href = "inspector_dashboard.html"; // إرجاعه للوحة
+                        window.location.href = "inspector_dashboard.html"; 
                     });
-                    return false; // منع إكمال تحميل الصفحة
+                    return false; 
                 }
             }
         } catch(e) {
             console.warn("خطأ في التحقق من الصلاحيات:", e);
         }
     }
-    return true; // السماح بالمرور إذا كان مسؤولاً بيداغوجياً أو مديرية
+    return true; 
 }
 
-// استخراج المعطيات من الرابط بالطريقة الأصلية
+// استخراج المعطيات من الرابط
 const params = new URLSearchParams(window.location.search);
 const cId = params.get('c');
 const lvl = params.get('l');
@@ -267,19 +379,26 @@ function initSiteSettings() {
 window.onload = async function() { 
     typeWriter(); 
     
-    // تشغيل الجدار الأمني أولاً
-    const hasPermission = await checkUserPermissions();
-    
-    // إذا كان لديه الصلاحية، قم بتحميل بيانات الصفحة
-    if (hasPermission) {
-        initSiteSettings();
+    // التحقق من وجود الجلسة وسيرفرات فايربيز
+    const userEmpId = sessionStorage.getItem("userEmpId");
+    if (!userEmpId) { 
+        window.location.href = "admin095526.html"; 
+        return; 
     }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+            const hasPermission = await checkUserPermissions();
+            if (hasPermission) {
+                initSiteSettings();
+            }
+        } else {
+            window.location.href = "admin095526.html";
+        }
+    });
 };
 
 // ==================== الفيديوهات المرفقة ====================
-// ==================== الفيديوهات المرفقة (النظام المطور - واسع ومنظم) ====================
-
-// دالة مزامنة الإدخالات في الواجهة مع المصفوفة قبل إعادة بناء النافذة
 function syncVideoInputs() {
     if (!currentLinks['videos']) return;
     let videos = currentLinks['videos'];
@@ -291,7 +410,6 @@ function syncVideoInputs() {
     });
 }
 
-// دالة إضافة حقل فيديو جديد
 window.addVideoField = function() {
     syncVideoInputs();
     if (!currentLinks['videos']) currentLinks['videos'] = [];
@@ -299,12 +417,10 @@ window.addVideoField = function() {
     openVideos(); 
 }
 
-// دالة حذف حقل فيديو مع تنبيه مسبق إذا كان الحقل يحتوي على بيانات
 window.removeVideoField = function(index) {
     syncVideoInputs();
     let vid = currentLinks['videos'][index];
     
-    // إذا كان الحقل فارغاً تماماً، احذفه فوراً
     if (!vid.url && (!vid.title || vid.title === "الدرس: ")) {
         currentLinks['videos'].splice(index, 1);
         openVideos();
@@ -328,7 +444,6 @@ window.removeVideoField = function(index) {
     });
 }
 
-// دالة حفظ الفيديوهات في قاعدة البيانات
 window.saveVideosToFirebase = async function() {
     syncVideoInputs();
     Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
@@ -350,48 +465,34 @@ window.saveVideosToFirebase = async function() {
     }
 }
 
-// الدالة الرئيسية لفتح نافذة إدارة الفيديوهات
 window.openVideos = function() {
     if(!SITE_SETTINGS) return;
     if (!currentLinks['videos']) currentLinks['videos'] = [];
     let videos = currentLinks['videos'];
     
-    // CSS مخصص لتكبير الحقول وتوسيع النافذة
     let customCSS = `
         <style>
             .vid-modal-body { text-align: right; direction: rtl; font-family: 'Cairo', sans-serif; padding: 10px; }
             .vid-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 20px; position: relative; border-right: 6px solid #1E68E8; box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
-            
-            /* التوزيع المرن للحقول: عمودي للهواتف، وأفقي واسع للكمبيوتر */
             .vid-grid { display: flex; flex-direction: column; gap: 20px; }
             @media (min-width: 800px) {
                 .vid-grid { flex-direction: row; align-items: flex-start; }
-                .vid-input-group-title { flex: 1.2; } /* يأخذ مساحة للعنوان */
-                .vid-input-group-url { flex: 2.8; }   /* يأخذ مساحة مضاعفة للرابط */
+                .vid-input-group-title { flex: 1.2; }
+                .vid-input-group-url { flex: 2.8; }
             }
-            
             .vid-input-group label { display: block; font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 10px; }
-            
-            /* تصميم الحقول واسعة وواضحة */
             .vid-input { width: 100%; padding: 14px 18px; border: 2px solid #cbd5e1; border-radius: 10px; font-family: 'Cairo'; font-size: 15px; outline: none; transition: 0.3s; background: #f8fafc; color: #0f172a; font-weight: 600; box-sizing: border-box; }
             .vid-input:focus { border-color: #1E68E8; background: #ffffff; box-shadow: 0 0 0 4px rgba(30,104,232,0.15); }
-            
             .vid-actions { display: flex; gap: 15px; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #e2e8f0; }
-            
-            /* الأزرار */
             .btn-v { padding: 10px 22px; border-radius: 10px; font-family: 'Cairo'; font-weight: bold; font-size: 15px; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; text-decoration: none; }
             .btn-v-watch { background: #e0f2fe; color: #0284c7; }
             .btn-v-watch:hover { background: #bae6fd; color: #0369a1; transform: translateY(-2px); }
             .btn-v-delete { background: #fee2e2; color: #dc2626; }
             .btn-v-delete:hover { background: #fecaca; color: #b91c1c; transform: translateY(-2px); }
-            
             .btn-v-add { width: 100%; background: #f0fdf4; color: #16a34a; border: 3px dashed #bbf7d0; padding: 20px; justify-content: center; font-size: 18px; margin-bottom: 25px; transition: 0.3s; border-radius: 12px; }
             .btn-v-add:hover { background: #dcfce7; border-color: #86efac; transform: translateY(-3px); box-shadow: 0 5px 15px rgba(22,163,74,0.1); }
-            
             .btn-v-save { background: #1E68E8; color: white; padding: 16px 45px; font-size: 18px; justify-content: center; box-shadow: 0 5px 15px rgba(30,104,232,0.3); border-radius: 40px; transition: 0.3s; }
             .btn-v-save:hover { background: #1557c0; transform: translateY(-3px); box-shadow: 0 8px 20px rgba(30,104,232,0.4); }
-            
-            /* تكبير نافذة SweetAlert لتتسع لـ 1100 بكسل */
             .swal-modal-custom-wide { max-width: 1100px !important; padding: 30px 10px !important; }
         </style>
     `;
@@ -421,7 +522,6 @@ window.openVideos = function() {
                         <input type="text" id="vid_title_${index}" class="vid-input" value="${vid.title || ''}" placeholder="اكتب العنوان هنا (مثال: الدرس الأول)...">
                     </div>
                     
-                    <!-- حقل الرابط محاذى لليسار ومساحته واسعة جداً -->
                     <div class="vid-input-group-url">
                         <label><i class="fa-solid fa-link" style="color:#1E68E8; margin-left:8px; font-size:18px;"></i> رابط الفيديو (Youtube / Google Drive):</label>
                         <input type="text" id="vid_url_${index}" class="vid-input" value="${vid.url || ''}" placeholder="https://..." dir="ltr" style="text-align:left;">
@@ -436,28 +536,16 @@ window.openVideos = function() {
         });
     }
     
-    html += `</div>`; // إغلاق منطقة التمرير (Scroll)
-
-    html += `
-        <button onclick="addVideoField()" class="btn-v btn-v-add">
-            <i class="fa-solid fa-plus-circle" style="font-size:22px;"></i> أضف حقل فيديو جديد للقائمة
-        </button>
-    `;
-
-    html += `
-        <div style="display:flex; justify-content:center; border-top: 2px solid #e2e8f0; padding-top: 25px;">
-            <button onclick="saveVideosToFirebase()" class="btn-v btn-v-save">
-                <i class="fa-solid fa-floppy-disk" style="font-size:20px;"></i> حفظ واعتماد التعديلات
-            </button>
-        </div>
-    </div>`;
+    html += `</div>`;
+    html += `<button onclick="addVideoField()" class="btn-v btn-v-add"><i class="fa-solid fa-plus-circle" style="font-size:22px;"></i> أضف حقل فيديو جديد للقائمة</button>`;
+    html += `<div style="display:flex; justify-content:center; border-top: 2px solid #e2e8f0; padding-top: 25px;"><button onclick="saveVideosToFirebase()" class="btn-v btn-v-save"><i class="fa-solid fa-floppy-disk" style="font-size:20px;"></i> حفظ واعتماد التعديلات</button></div></div>`;
 
     Swal.fire({
         title: '<div style="font-family: Cairo; font-weight: 900; color: #0f172a; font-size: 26px;"><i class="fa-solid fa-clapperboard" style="color:#dc2626; margin-left: 10px;"></i> إدارة المحتوى المرئي</div>',
         html: html, 
         showConfirmButton: false,
         showCloseButton: true,
-        width: '1100px', // عرض النافذة أصبح 1100px (فسيحة جداً للكمبيوتر)
+        width: '1100px',
         customClass: { popup: 'swal2-popup swal-modal-custom-wide' }, 
         background: '#f1f5f9' 
     });

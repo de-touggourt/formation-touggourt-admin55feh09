@@ -15,6 +15,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  
   <style>
     * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
     body { margin: 0; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); color: #333; min-height: 100vh; display: flex; flex-direction: column; }
@@ -468,20 +473,40 @@ window.removeBrokenImage = async function(docId, cardType = 'info') {
 
 // ================= التحميل الأولي والتهيئة =================
 window.onload = function() {
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "flex";
+
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
-        window.location.href = "index.html";
+        if (loader) loader.style.display = "none";
+        window.location.href = "index.html"; // أو admin095526.html حسب صفحة الدخول الخاصة بالمفتش
         return;
     }
-    document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
-    initializeSystem();
+
+    // التحقق الحقيقي من المصادقة عبر سيرفرات فايربيز
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
+            initializeSystem();
+            
+            // إخفاء شاشة التحميل فوراً بعد التحقق وبدء التهيئة
+            if (loader) loader.style.display = "none";
+        } else {
+            if (loader) loader.style.display = "none";
+            window.location.href = "index.html";
+        }
+    });
 };
 
 function logout() {
-    sessionStorage.clear();
-    window.location.href = "index.html";
+    firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "index.html";
+    }).catch((error) => {
+        console.error("خطأ أثناء تسجيل الخروج:", error);
+    });
 }
 
 // متغير عالمي لتخزين إعدادات الحجم الساعي القادمة من المديرية
@@ -846,7 +871,12 @@ function renderFramersTable(data) {
     document.getElementById('st-framer-s3').innerText = framersData.filter(f => f.s3).length;
 
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding: 30px; font-weight:bold; color:#777; font-size:16px;">لا توجد بيانات مطابقة في هذا التبويب</td></tr>`;
+        // إذا كان النظام ما زال في طور التحميل الأول ولم يتم جلب البيانات بعد
+        let msg = isFirstFramerLoad 
+            ? '<i class="fa-solid fa-spinner fa-spin"></i> جاري مزامنة وجلب البيانات...' 
+            : 'لا توجد بيانات مطابقة في هذا التبويب';
+
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding: 30px; font-weight:bold; color:#777; font-size:16px;">${msg}</td></tr>`;
         document.getElementById('framersPagination').style.display = 'none';
         return;
     }

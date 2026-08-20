@@ -87,9 +87,23 @@ let INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 let trackingData = [];
 
 window.onload = async function() {
-    if (!INSPECTOR_CENTER) { Swal.fire('خطأ', 'الرجاء تسجيل الدخول أولاً', 'error'); return; }
-    document.getElementById("centerTitle").innerText = `المركز: ${INSPECTOR_CENTER}`;
-    await processTrackingData();
+    // التحقق من الجلسة وسيرفرات فايربيز
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+
+    if (!isLoggedIn || !INSPECTOR_CENTER) {
+        window.location.href = "admin095526.html";
+        return;
+    }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+            document.getElementById("centerTitle").innerText = `المركز: ${INSPECTOR_CENTER}`;
+            await processTrackingData();
+        } else {
+            window.location.href = "admin095526.html";
+        }
+    });
 };
 
 async function processTrackingData() {
