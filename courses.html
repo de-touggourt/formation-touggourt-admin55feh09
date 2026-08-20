@@ -381,19 +381,7 @@ const cId = params.get('c');
 const lvl = params.get('l');
 const spc = params.get('s');
 
-// تحديد العناوين (تطبيق التعديل الخاص بأساتذة التعليم...)
-if(cId && lvl && spc && typeof UI_NAMES !== 'undefined') {
-    document.getElementById('page-title').innerText = "مركز التكوين " + (UI_NAMES.centers[cId] || "");
-    
-    let levelText = "";
-    if (lvl === 'primary') levelText = "أساتذة التعليم الابتدائي";
-    else if (lvl === 'middle') levelText = "أساتذة التعليم المتوسط";
-    else if (lvl === 'secondary') levelText = "أساتذة التعليم الثانوي";
-    else levelText = UI_NAMES.levels[lvl] || "";
 
-    let specText = UI_NAMES.specs[spc] || "";
-    document.getElementById('page-subtitle').innerText = levelText + " - " + specText;
-}
 
 // جلب الروابط
 let currentLinks = {};
@@ -430,6 +418,7 @@ window.onload = async function() {
     if(!empId) { window.location.href = "index.html"; return; }
 
     try {
+        // 1. جلب بيانات المستخدم
         let docSnap = await db.collection("employeescomnew").doc(empId).get();
         if(docSnap.exists) {
             loggedInUser = docSnap.data();
@@ -448,17 +437,50 @@ window.onload = async function() {
         document.getElementById('userRankDisplay').innerText = loggedInUser.grade || loggedInUser.rank || 'رتبة غير محددة';
         document.getElementById('userWorkplaceDisplay').innerText = loggedInUser.place || loggedInUser.workplace || 'مكان العمل غير محدد';
 
-        // محاولة إدراج الصورة من فايربيز إن وجدت
+        // الصورة الشخصية
         const avatarBox = document.getElementById('userAvatarContainer');
         if (loggedInUser.photoUrl_fb) {
             let imgUrl = loggedInUser.photoUrl_fb;
             if (imgUrl.includes('sz=w200')) imgUrl = imgUrl.replace('sz=w200', 'sz=w800');
             avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية">`;
-            document.getElementById("loader").style.display = "none";
         } else {
-            // إن لم توجد في فايربيز، نجلبها من سكريبت درايف
             fetchPhotosFromDrive(extractCoreId(empId), avatarBox);
         }
+
+        // 2. 🌟 جلب إعدادات الموقع والعناوين وروابط المقاييس من Firestore مباشرة 🌟
+        const settingsDoc = await db.collection("site_settings").doc("main").get();
+        if (settingsDoc.exists) {
+            const SITE_SETTINGS = settingsDoc.data();
+            
+            const params = new URLSearchParams(window.location.search);
+            const cId = params.get('c');
+            const lvl = params.get('l');
+            const spc = params.get('s');
+
+            if (cId && lvl && spc) {
+                // تعيين اسم المركز
+                const centerName = SITE_SETTINGS.UI_NAMES.centers[cId] || "";
+                document.getElementById('page-title').innerText = "مركز التكوين " + centerName;
+                
+                // تعيين اسم الطور
+                let levelText = "";
+                if (lvl === 'primary') levelText = "أساتذة التعليم الابتدائي";
+                else if (lvl === 'middle') levelText = "أساتذة التعليم المتوسط";
+                else if (lvl === 'secondary') levelText = "أساتذة التعليم الثانوي";
+                else levelText = (SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvl]) || lvl;
+
+                // تعيين اسم التخصص
+                let specText = (SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[spc]) || spc;
+                document.getElementById('page-subtitle').innerText = levelText + " - " + specText;
+
+                // جلب الروابط الخاصة بهذا المقياس
+                if (SITE_SETTINGS.dbLinks && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
+                    currentLinks = SITE_SETTINGS.dbLinks[cId][lvl][spc];
+                }
+            }
+        }
+
+        document.getElementById("loader").style.display = "none";
 
     } catch (e) {
         console.error(e);

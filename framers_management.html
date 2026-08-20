@@ -220,6 +220,7 @@
             <table class="att-table" id="framersTable">
                 <thead>
                     <tr>
+                        <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllFramers" onchange="toggleSelectAllFramers()" style="width:16px; height:16px; cursor:pointer; accent-color:#e67e22;"></th>
                         <th style="width: 40px;">#</th>
                         <th style="width: 120px;">الصورة + الرقم</th>
                         <th style="width: 140px;">الحساب الجاري</th>
@@ -821,6 +822,30 @@ window.toggleWorkshiftMode = function() {
     }
 };
 
+// ================= نظام تحديد المؤطرين لطباعة البطاقات =================
+let selectedFramers = new Set();
+
+function toggleSelectAllFramers() {
+    const isChecked = document.getElementById("selectAllFramers").checked;
+    if (isChecked) {
+        currentFilteredData.forEach(f => selectedFramers.add(f.docId));
+    } else {
+        selectedFramers.clear();
+    }
+    document.querySelectorAll(".framer-row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleFramerSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedFramers.add(docId);
+    } else {
+        selectedFramers.delete(docId);
+        const selectAllChk = document.getElementById("selectAllFramers");
+        if(selectAllChk) selectAllChk.checked = false;
+    }
+}
+// =========================================================================
+
 // ================= الفلترة والتبويبات ورسم الجدول (المؤطرين) =================
 window.switchTab = function(tabId) {
     currentTab = tabId;
@@ -831,6 +856,11 @@ window.switchTab = function(tabId) {
 }
 
 window.filterFramersTable = function() {
+    // 🌟 تفريغ التحديدات عند البحث أو تغيير الفلتر
+    selectedFramers.clear();
+    const selectAllChk = document.getElementById("selectAllFramers");
+    if(selectAllChk) selectAllChk.checked = false;
+
     const search = document.getElementById('framerSearch').value.toLowerCase();
     const roleF = document.getElementById('framerRoleFilter').value;
     const rankF = document.getElementById('framerRankFilter').value;
@@ -941,6 +971,9 @@ const deleteBtn = (f.isProtected || !canCenterDeleteFramer) ? '' : `<button oncl
 
         tableHtml += `
             <tr>
+                <td style="text-align:center; vertical-align: middle;">
+                    <input type="checkbox" class="framer-row-checkbox" value="${f.docId}" ${selectedFramers.has(f.docId) ? 'checked' : ''} onchange="toggleSingleFramerSelect(this, '${f.docId}')" style="width:16px; height:16px; cursor:pointer; accent-color:#e67e22;">
+                </td>
                 <td style="text-align:center; vertical-align: middle;">${counter++}</td>
                 <td style="text-align:center; vertical-align: middle; white-space:nowrap;">
                     ${photoHtml}
@@ -959,6 +992,10 @@ const deleteBtn = (f.isProtected || !canCenterDeleteFramer) ? '' : `<button oncl
     });
 
     tbody.innerHTML = tableHtml; 
+	
+	const selectAllChk = document.getElementById("selectAllFramers");
+    if (selectAllChk) selectAllChk.checked = (currentFilteredData.length > 0 && selectedFramers.size === currentFilteredData.length);
+	
     renderFramerPagination(totalPages);
 }
 
@@ -1398,72 +1435,93 @@ window.showAddFramerForm = function(empId, baseData) {
             window.toggleTeacherFields(); 
         },
         preConfirm: async () => { 
-            let rawPhone = document.getElementById('fr-phone').value.trim().replace(/\s+/g, '');
-            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+                    let rawPhone = document.getElementById('add-fr-phone').value.trim().replace(/\s+/g, '');
+                    let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+                    
+                    const ccp = document.getElementById('add-fr-ccp').value.trim();
+                    const cle = document.getElementById('add-fr-cle').value.trim();
+                    const role = document.getElementById('add-fr-role').value;
+                    
+                    let framingSpecs = []; let framingModules = []; let framingGroups = [];
 
-            const ccp = document.getElementById('fr-ccp').value;
-            const cle = document.getElementById('fr-cle').value;
-            const role = document.getElementById('fr-role').value;
-            
-            let framingSpecs = []; let framingModules = []; let framingGroups = [];
+                    if(role === 'أستاذ مؤطر') {
+                        document.querySelectorAll('.spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
+                        document.querySelectorAll('.mod-cb:checked').forEach(cb => framingModules.push(cb.value));
+                        
+                        framingSpecs.forEach(spec => {
+                            const safeSpec = spec.replace(/\s+/g, '');
+                            const allCb = document.querySelector(`.grp-all-${safeSpec}`);
+                            if (allCb && allCb.checked) {
+                                framingGroups.push(`${spec}::كل الأفواج`);
+                            } else {
+                                document.querySelectorAll(`.grp-item-${safeSpec}:checked`).forEach(cb => framingGroups.push(cb.value));
+                            }
+                        });
 
-            if(role === 'أستاذ مؤطر') {
-                document.querySelectorAll('.spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
-                document.querySelectorAll('.mod-cb:checked').forEach(cb => framingModules.push(cb.value));
-                
-                framingSpecs.forEach(spec => {
-                    const safeSpec = spec.replace(/\s+/g, '');
-                    const allCb = document.querySelector(`.grp-all-${safeSpec}`);
-                    if (allCb && allCb.checked) {
-                        framingGroups.push(`${spec}::كل الأفواج`);
-                    } else {
-                        document.querySelectorAll(`.grp-item-${safeSpec}:checked`).forEach(cb => framingGroups.push(cb.value));
+                        if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
+                        if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
+                        if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
                     }
-                });
 
-                if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
-                if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
-                if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
-            }
+                    if (!role) { Swal.showValidationMessage('الرجاء اختيار وظيفة المؤطر!'); return false; }
+                    
+                    // 🌟 التحقق من صيغة ومنع تكرار رقم الهاتف
+                    if (rawPhone.length > 0) {
+                        if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
+                            Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
+                            return false; 
+                        }
+                        let phoneExists = framersData.some(d => d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                        if (phoneExists) {
+                            Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر في المركز!');
+                            return false;
+                        }
+                    }
 
-            if (!role) { Swal.showValidationMessage('الرجاء اختيار وظيفة المؤطر!'); return false; }
-            if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
-            
-            if (UNIQUE_ROLES.includes(role)) {
-                if (framersData.some(f => f.role === role)) {
-                    Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); 
-                    return false;
+                    // 🌟 منع تكرار رقم الحساب الجاري
+                    if (ccp.length > 0) {
+                        let ccpExists = framersData.some(d => d.ccp && d.ccp === ccp);
+                        if (ccpExists) {
+                            Swal.showValidationMessage('رقم الحساب الجاري (CCP) مستخدم بالفعل!');
+                            return false;
+                        }
+                    }
+                    
+                    if (UNIQUE_ROLES.includes(role)) {
+                        if (framersData.some(f => f.role === role)) {
+                            Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); 
+                            return false;
+                        }
+                        const globalCheck = await db.collection("center_framers").where("empId", "==", empId).get();
+                        let isManagerElsewhere = false;
+                        globalCheck.forEach(d => {
+                            if (UNIQUE_ROLES.includes(d.data().role)) isManagerElsewhere = true;
+                        });
+                        if (isManagerElsewhere) {
+                            Swal.showValidationMessage(`يُمنع تسجيل المسؤول الإداري أو البيداغوجي في أكثر من مركز!`); 
+                            return false;
+                        }
+                    }
+
+                    return {
+                        empId: empId, 
+                        name: baseData.name || 'غير متوفر',
+                        rank: baseData.grade || baseData.rank || '-', 
+                        center: INSPECTOR_CENTER, 
+                        role: role, 
+                        phone: formattedPhone, 
+                        ccp: ccp, 
+                        ccpKey: cle, 
+                        s1: document.getElementById('fr-s1').checked, 
+                        s2: document.getElementById('fr-s2').checked, 
+                        s3: document.getElementById('fr-s3').checked,
+                        shifts: [], 
+                        isProtected: false, 
+                        framingSpecs, 
+                        framingModules, 
+                        framingGroups
+                    };
                 }
-                const globalCheck = await db.collection("center_framers").where("empId", "==", empId).get();
-                let isManagerElsewhere = false;
-                globalCheck.forEach(d => {
-                    if (UNIQUE_ROLES.includes(d.data().role)) isManagerElsewhere = true;
-                });
-                if (isManagerElsewhere) {
-                    Swal.showValidationMessage(`يُمنع تسجيل المسؤول الإداري أو البيداغوجي في أكثر من مركز!`); 
-                    return false;
-                }
-            }
-
-            return {
-                empId: empId, 
-                name: baseData.name || 'غير متوفر',
-                rank: baseData.grade || baseData.rank || '-', 
-                center: INSPECTOR_CENTER, 
-                role: role, 
-                phone: formattedPhone, 
-                ccp: ccp, 
-                ccpKey: cle, 
-                s1: document.getElementById('fr-s1').checked, 
-                s2: document.getElementById('fr-s2').checked, 
-                s3: document.getElementById('fr-s3').checked,
-                shifts: [], 
-                isProtected: UNIQUE_ROLES.includes(role), 
-                framingSpecs, 
-                framingModules, 
-                framingGroups
-            };
-        }
     }).then(async (res) => {
         if (res.isConfirmed) {
             Swal.hideLoading(); 
@@ -1519,9 +1577,10 @@ window.editFramer = function(docId) {
         title: '<i class="fa-solid fa-user-pen" style="color:#e67e22; margin-left:8px;"></i> بطاقة تعديل بيانات المؤطر',
         html: `
             <style>
-                /* التصميم الأفقي الجديد */
-                .swal-wide-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; }
-                @media(max-width: 768px) { .swal-wide-container { grid-template-columns: 1fr; } }
+                /* التصميم الديناميكي الجديد (يتمدد حسب الوظيفة) */
+                #edit-framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
+                #edit-framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
+                @media(max-width: 768px) { #edit-framer-form-container.is-teacher { grid-template-columns: 1fr; } }
                 .col-main { display: flex; flex-direction: column; gap: 15px; }
                 
                 .framer-section { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
@@ -1546,7 +1605,7 @@ window.editFramer = function(docId) {
                 .s-pill input:checked ~ .s-pill-content i { display:inline-block; }
             </style>
             
-            <div class="swal-wide-container">
+            <div id="edit-framer-form-container" class="${f.role === 'أستاذ مؤطر' ? 'is-teacher' : ''}">
                 <!-- العمود الأيمن: البيانات الشخصية والدورات -->
                 <div class="col-main">
                     <div class="framer-section">
@@ -1588,9 +1647,9 @@ window.editFramer = function(docId) {
                     </div>
                 </div>
 
-                <!-- العمود الأيسر: المهام البيداغوجية -->
-                <div class="col-main">
-                    <div id="editTeacherFields" class="framer-section" style="display:${f.role === 'أستاذ مؤطر' ? 'block' : 'none'}; border-color:#93c5fd; background:#f8fbff;">
+                <!-- العمود الأيسر: المهام البيداغوجية (يظهر فقط للأستاذ المؤطر) -->
+                <div class="col-main" id="editTeacherFieldsCol" style="display:${f.role === 'أستاذ مؤطر' ? 'flex' : 'none'};">
+                    <div id="editTeacherFields" class="framer-section" style="border-color:#93c5fd; background:#f8fbff;">
                         <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
                         
                         <div class="input-group">
@@ -1600,9 +1659,7 @@ window.editFramer = function(docId) {
 
                         <div class="input-group" id="groups-container">
                             <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
-                            <!-- حاوية الأفواج المنفصلة -->
                             <div id="edit-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;">
-                                <!-- سيتم تعبئتها ديناميكياً -->
                             </div>
                         </div>
 
@@ -1614,17 +1671,35 @@ window.editFramer = function(docId) {
                 </div>
             </div>
         `,
-        width: '950px', // تكبير النافذة لتدعم العمودين
+        // 🌟 1. تحديد عرض النافذة ديناميكياً 🌟
+        width: f.role === 'أستاذ مؤطر' ? '950px' : '550px', 
         showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
         didOpen: () => {
 		
-		    Swal.hideLoading();
+            Swal.hideLoading();
             Swal.enableButtons();
+            
+            // 🌟 2. إضافة تأثير التمدد الديناميكي 🌟
+            Swal.getPopup().style.transition = 'width 0.4s ease-in-out';
 			
             window.toggleEditTeacherFields = () => {
                 const roleEl = document.getElementById('edit-fr-role');
                 const role = isProtectedRole ? f.role : roleEl.value;
-                document.getElementById('editTeacherFields').style.display = role === 'أستاذ مؤطر' ? 'block' : 'none';
+                
+                // 🌟 3. تكبير وتصغير النافذة بانسجام عند تغيير الوظيفة 🌟
+                const container = document.getElementById('edit-framer-form-container');
+                const teacherCol = document.getElementById('editTeacherFieldsCol');
+                const popup = Swal.getPopup();
+
+                if (role === 'أستاذ مؤطر') {
+                    popup.style.width = '950px';
+                    container.classList.add('is-teacher');
+                    teacherCol.style.display = 'flex';
+                } else {
+                    popup.style.width = '550px';
+                    container.classList.remove('is-teacher');
+                    teacherCol.style.display = 'none';
+                }
             };
 
             // الدالة المطورة لفصل الأفواج حسب التخصص
@@ -1696,12 +1771,11 @@ window.editFramer = function(docId) {
             window.updateEditGroups();
         },
         preConfirm: () => {
-            // جلب الهاتف وتنسيقه ليحفظ بصيغة 00 00 00 00 00
             let rawPhone = document.getElementById('edit-fr-phone').value.trim().replace(/\s+/g, '');
             let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
 
-            const ccp = document.getElementById('edit-fr-ccp').value;
-            const cle = document.getElementById('edit-fr-cle').value;
+            const ccp = document.getElementById('edit-fr-ccp').value.trim();
+            const cle = document.getElementById('edit-fr-cle').value.trim();
             
             const roleEl = document.getElementById('edit-fr-role');
             const role = isProtectedRole ? f.role : roleEl.value;
@@ -1733,21 +1807,37 @@ window.editFramer = function(docId) {
                 if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
             }
 
-            // التحقق من الهاتف الخام
-            if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { 
-                Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
-                return false; 
+            // 🌟 التحقق من صيغة ومنع تكرار رقم الهاتف
+            if (rawPhone.length > 0) {
+                if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
+                    Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
+                    return false; 
+                }
+                let phoneExists = framersData.some(d => d.docId !== docId && d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                if (phoneExists) {
+                    Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر!');
+                    return false;
+                }
+            }
+
+            // 🌟 منع تكرار رقم الحساب الجاري
+            if (ccp.length > 0) {
+                let ccpExists = framersData.some(d => d.docId !== docId && d.ccp && d.ccp === ccp);
+                if (ccpExists) {
+                    Swal.showValidationMessage('رقم الحساب الجاري (CCP) مستخدم بالفعل!');
+                    return false;
+                }
             }
             
             return { 
-                phone: formattedPhone, // استخدام الهاتف المنسق للحفظ
+                phone: formattedPhone,
                 ccp, ccpKey: cle, role, s1, s2, s3, framingSpecs, framingModules, framingGroups 
             };
         }
 
     }).then(async (res) => {
         if (res.isConfirmed) {
-            Swal.hideLoading(); // تنظيف قبل الحفظ
+            Swal.hideLoading();
             Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
                 await db.collection("center_framers").doc(docId).update(res.value);
@@ -1758,10 +1848,10 @@ window.editFramer = function(docId) {
                 window.filterFramersTable();
                 if(isShiftMode) window.renderShiftsTable();
                 
-                Swal.hideLoading(); // تنظيف قبل رسالة النجاح
+                Swal.hideLoading(); 
                 Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم التعديل بنجاح', showConfirmButton: false, timer: 1500 });
             } catch (e) { 
-                Swal.hideLoading(); // تنظيف قبل رسالة الخطأ
+                Swal.hideLoading(); 
                 Swal.fire('خطأ', 'تعذر الحفظ في قاعدة البيانات.', 'error'); 
             }
         }
@@ -2025,7 +2115,26 @@ window.formatPhoneInput = function(input) {
 };
 
 window.printFramerIDCards = function() {
-    if (currentFilteredData.length === 0) return Swal.fire('تنبيه', 'لا يوجد مؤطرين في هذا التبويب لطباعة بطاقاتهم.', 'warning');
+    let dataToPrint = [];
+    
+    // 🌟 التحقق: هل قام المستخدم بتحديد مربعات معينة؟
+    if (selectedFramers.size > 0) {
+        dataToPrint = currentFilteredData.filter(f => selectedFramers.has(f.docId));
+    } else {
+        // إذا لم يحدد أحداً، نطبع كل القائمة المفلترة الحالية
+        dataToPrint = currentFilteredData;
+    }
+
+    if (dataToPrint.length === 0) {
+        return Swal.fire('تنبيه', 'لا يوجد مؤطرين لطباعة بطاقاتهم.', 'warning');
+    }
+
+    // إشعار للمستخدم بالعدد الذي يتم تجهيزه
+    Swal.fire({
+        toast: true, position: 'top-end', icon: 'info',
+        title: `جاري تجهيز ${dataToPrint.length} بطاقة للطباعة...`,
+        showConfirmButton: false, timer: 2000
+    });
 
     let printWindow = window.open('', '_blank');
     let pagesHtml = '';
@@ -2036,8 +2145,8 @@ window.printFramerIDCards = function() {
         return '#8e44ad'; 
     };
 
-    for (let i = 0; i < currentFilteredData.length; i += 8) {
-        let pageData = currentFilteredData.slice(i, i + 8);
+    for (let i = 0; i < dataToPrint.length; i += 8) {
+        let pageData = dataToPrint.slice(i, i + 8);
         pagesHtml += '<div class="page">';
         
         pageData.forEach(f => {

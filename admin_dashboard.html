@@ -21,8 +21,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
-  <!-- ملف قاعدة بيانات الموقع (سيتم الاستغناء عنه تدريجياً، نتركه مؤقتاً للـ Migration) -->
-  <script src="database.js"></script>*
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
 
 
@@ -574,6 +574,7 @@
             <button class="tab-btn" onclick="switchSettingTab('hourly_volume', this)"><i class="fa-solid fa-clock"></i> الحجم الساعي</button>
             <button class="tab-btn" onclick="switchSettingTab('images', this)"><i class="fa-solid fa-cloud-arrow-up"></i> رفع الصور لفايربيز</button>
 			<button class="tab-btn" onclick="switchSettingTab('drive', this)"><i class="fa-brands fa-google-drive"></i> إدارة Google Drive</button>
+			<button class="tab-btn" onclick="switchSettingTab('database', this)"><i class="fa-solid fa-database"></i> قواعد البيانات</button>
 		</div>
 
         <div class="settings-body" id="settingsBody">
@@ -593,6 +594,9 @@
     <!-- شريط الأدوات العلوي (إضافة، بحث، طباعة) -->
     <div class="att-controls" style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; justify-content: space-between;">
         <div style="display: flex; gap: 10px;">
+		    <button class="btn-print" style="background: #ff9800;" onclick="openDigitizationModal()">
+                <i class="fa-solid fa-database"></i> موظفين المديرية
+            </button>
             <button class="btn-print" style="background: #0FBA50;" onclick="adminPromptAddFramer()">
                 <i class="fa-solid fa-user-plus"></i> إضافة مؤطر جديد
             </button>
@@ -602,6 +606,7 @@
 			<button class="btn-print" style="background: #8e44ad;" onclick="openFramerSettingsModal()">
                 <i class="fa-solid fa-gears"></i> إعدادات التأطير
             </button>
+			
         </div>
         <div style="display: flex; gap: 10px; align-items: center; width: 300px;">
             <input type="text" id="adminFramerSearch" placeholder="بحث بالاسم أو الرقم..." oninput="renderAdminFramersTableData()" class="crud-input" style="margin:0;">
@@ -821,15 +826,10 @@ const MODULE_AR_NAMES = {
 // =========================================================================
 // 2. دالة الهجرة وجلب البيانات من Firestore
 // =========================================================================
-// =========================================================================
-// 2. دالة الهجرة وجلب البيانات من Firestore
-// =========================================================================
 async function initSiteSettings() {
     const docRef = db.collection("site_settings").doc("main");
     try {
         const docSnap = await docRef.get();
-        
-        // الهيكل الافتراضي لدورة واحدة (لسهولة التكرار)
         
         const defaultSessionVol = {
             presidents: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
@@ -837,11 +837,10 @@ async function initSiteSettings() {
             admins: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
             teachers: { count: 0, days: 0, hoursPerDay: 0, total: 0 }, 
             guards: { count: 0, days: 0, hoursPerDay: 0, total: 0 },
-            extraHours: { total: 0 }, // 🌟 إضافة الساعات الإضافية هنا
+            extraHours: { total: 0 },
             globalTotal: 0
         };
 
-        // 🌟 الهيكل الافتراضي لتواريخ الدورات 🌟
         const defaultSessionDates = {
             s1: { start: "2026-08-01", end: "2026-08-10" },
             s2: { start: "2026-08-15", end: "2026-08-25" },
@@ -849,20 +848,27 @@ async function initSiteSettings() {
         };
 
         if (!docSnap.exists) {
-            console.log("جاري النقل...");
+            // الهيكل الأساسي فارغ ونظيف لتنشئه المديرية حسب الحاجة
             const initialData = {
-                UI_NAMES: (typeof UI_NAMES !== 'undefined') ? UI_NAMES : { centers: {}, levels: FIXED_LEVELS, specs: FIXED_SPECS },
-                dbLinks: (typeof dbLinks !== 'undefined') ? dbLinks : {},
-                GLOBAL_CYCLE_STATUS: (typeof GLOBAL_CYCLE_STATUS !== 'undefined') ? GLOBAL_CYCLE_STATUS : {1:true, 2:false, 3:false},
-                MODULE_CYCLE_STATUS: (typeof MODULE_CYCLE_STATUS !== 'undefined') ? MODULE_CYCLE_STATUS : {},
-                SESSION_DATES: defaultSessionDates, // 🌟 إضافة التواريخ 🌟
+                UI_NAMES: { 
+                    centers: {}, // 🌟 تركناها فارغة ليقوم المدير بإنشائها من لوحة التحكم
+                    levels: FIXED_LEVELS, 
+                    specs: FIXED_SPECS 
+                },
+                dbLinks: {},
+                GLOBAL_CYCLE_STATUS: {1: true, 2: false, 3: false},
+                MODULE_CYCLE_STATUS: {
+                    didactique: {1: true, 2: false, 3: false},
+                    tasyire: {1: true, 2: false, 3: false}
+                },
+                SESSION_DATES: defaultSessionDates,
                 HOURLY_VOLUME: {
                     s1: JSON.parse(JSON.stringify(defaultSessionVol)),
                     s2: JSON.parse(JSON.stringify(defaultSessionVol)),
                     s3: JSON.parse(JSON.stringify(defaultSessionVol)),
                     isLocked: false
                 },
-				CENTER_PERMISSIONS: {}
+                CENTER_PERMISSIONS: {} // فارغة لتتعبأ أوتوماتيكياً مع كل مركز جديد
             };
             await docRef.set(initialData);
             SITE_SETTINGS = initialData;
@@ -872,12 +878,11 @@ async function initSiteSettings() {
             SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
         }
 
-        // الاستماع للتغييرات اللحظية
+        // الاستماع للتغييرات اللحظية من السحابة
         docRef.onSnapshot((doc) => {
             if (doc.exists) {
                 SITE_SETTINGS = doc.data();
                 
-                // حماية النظام وحقن البيانات إذا كانت النسخة قديمة
                 if (!SITE_SETTINGS.HOURLY_VOLUME || !SITE_SETTINGS.HOURLY_VOLUME.s1) {
                     SITE_SETTINGS.HOURLY_VOLUME = {
                         s1: JSON.parse(JSON.stringify(defaultSessionVol)),
@@ -886,15 +891,14 @@ async function initSiteSettings() {
                         isLocked: false
                     };
                 }
-				
-				if (!SITE_SETTINGS.CENTER_PERMISSIONS) {
-                     SITE_SETTINGS.CENTER_PERMISSIONS = {};
-                       for (let key in SITE_SETTINGS.UI_NAMES.centers) {
-                      SITE_SETTINGS.CENTER_PERMISSIONS[key] = { canAddFramer: true, canDeleteFramer: true };
+                
+                if (!SITE_SETTINGS.CENTER_PERMISSIONS) {
+                    SITE_SETTINGS.CENTER_PERMISSIONS = {};
+                    for (let key in SITE_SETTINGS.UI_NAMES.centers) {
+                        SITE_SETTINGS.CENTER_PERMISSIONS[key] = { canAddFramer: true, canDeleteFramer: true };
                     }
                 } 
 
-                // 🌟 حماية لإضافة التواريخ للنسخ القديمة 🌟
                 if (!SITE_SETTINGS.SESSION_DATES) {
                     SITE_SETTINGS.SESSION_DATES = defaultSessionDates;
                 }
@@ -902,20 +906,6 @@ async function initSiteSettings() {
                 if (SITE_SETTINGS.UI_NAMES) {
                     SITE_SETTINGS.UI_NAMES.levels = FIXED_LEVELS;
                     SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
-                }
-
-                // كود الهجرة القديم للروابط...
-                if (SITE_SETTINGS.dbLinks) {
-                    let requiresMigration = false;
-                    for (let centerId in SITE_SETTINGS.dbLinks) {
-                        if (SITE_SETTINGS.dbLinks[centerId]["middle_secondary"]) {
-                            SITE_SETTINGS.dbLinks[centerId]["middle"] = JSON.parse(JSON.stringify(SITE_SETTINGS.dbLinks[centerId]["middle_secondary"]));
-                            SITE_SETTINGS.dbLinks[centerId]["secondary"] = JSON.parse(JSON.stringify(SITE_SETTINGS.dbLinks[centerId]["middle_secondary"]));
-                            delete SITE_SETTINGS.dbLinks[centerId]["middle_secondary"];
-                            requiresMigration = true;
-                        }
-                    }
-                    if (requiresMigration) db.collection("site_settings").doc("main").set(SITE_SETTINGS);
                 }
 
                 populateCentersDropdownsDynamic(); 
@@ -928,7 +918,7 @@ async function initSiteSettings() {
             }
         });
     } catch (error) {
-        console.error("خطأ:", error);
+        console.error("خطأ في جلب الإعدادات السحابية:", error);
     }
 }
 
@@ -953,6 +943,7 @@ function refreshCurrentTab() {
     if (CURRENT_TAB === 'hourly_volume') renderHourlyVolumeTab(); 
 	if (CURRENT_TAB === 'images') renderImagesTab();
 	if (CURRENT_TAB === 'drive') renderDriveTab();
+	if (CURRENT_TAB === 'database') renderDatabaseTab();
 }
 
 // =========================================================================
@@ -2119,7 +2110,7 @@ function updateSpecText() {
 // ================= دوال المراكز (محدثة بالذكور والإناث) =================
 function initCentersStats() {
     const container = document.getElementById("centersStatsContainer");
-    const centers = UI_NAMES.centers;
+    const centers = SITE_SETTINGS?.UI_NAMES?.centers || {};
     let html = '';
     for (let key in centers) {
         html += `
@@ -2141,7 +2132,7 @@ function initCentersStats() {
 }
 
 function populateCentersDropdowns() {
-    const centers = UI_NAMES.centers;
+    const centers = SITE_SETTINGS?.UI_NAMES?.centers || {};
     let optionsHtml = '';
     for (let key in centers) {
         optionsHtml += `<option value="${centers[key]}">${centers[key]}</option>`;
@@ -2152,7 +2143,7 @@ function populateCentersDropdowns() {
 
 function getCenterOptionsHtml(selectedCenter) {
     // التعديل هنا: نطلب منه جلب المراكز من الإعدادات الديناميكية لفايربيز أولاً
-    const centers = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES) ? SITE_SETTINGS.UI_NAMES.centers : UI_NAMES.centers;
+    const centers = SITE_SETTINGS?.UI_NAMES?.centers || {};
     
     let html = `<option value="">-- اختر المركز --</option>`;
     for (let key in centers) {
@@ -2328,7 +2319,7 @@ function updateStats() {
     document.getElementById("stat-filtered").innerText = filteredData.length;
 
     // تحديث إحصائيات المراكز مع الذكور والإناث
-    const centers = UI_NAMES.centers;
+    const centers = SITE_SETTINGS?.UI_NAMES?.centers || {};
     for (let key in centers) {
         const centerData = filteredData.filter(i => i.center === centers[key]);
         const totalCount = centerData.length;
@@ -2361,7 +2352,7 @@ function renderTable() {
     const end = start + rowsPerPage;
     const paginatedData = filteredData.slice(start, end);
 
-    const centersList = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES) ? SITE_SETTINGS.UI_NAMES.centers : UI_NAMES.centers;
+    const centersList = SITE_SETTINGS?.UI_NAMES?.centers || {};
     
     let htmlContent = ""; 
 
@@ -3765,7 +3756,7 @@ function populateGroupingFilters() {
     
     // جلب أسماء المراكز الأصلية من القائمة الثابتة (UI_NAMES.centers)
     centerSel.innerHTML = '<option value="الكل">كل المراكز</option>';
-    const centersList = UI_NAMES.centers;
+    const centersList = SITE_SETTINGS?.UI_NAMES?.centers || {};
     for (let key in centersList) {
         centerSel.innerHTML += `<option value="${centersList[key]}">${centersList[key]}</option>`;
     }
@@ -4402,11 +4393,12 @@ window.printDetailedStatsPoster = function() {
 }
 
 // =====================================================================
-// نظام تسيير المؤطرين الشامل (خاص بالمديرية)
+// نظام تسيير المؤطرين الشامل (خاص بالمديرية) - مزامنة لحظية (Real-Time)
 // =====================================================================
 let adminFramersData = [];
 let currentAdminFramerCenter = "الكل";
 let currentAdminFramerSession = "all"; 
+let adminFramersUnsub = null; // 🌟 متغير جديد لحفظ الاتصال اللحظي
 
 function openAdminFramersModal() {
     document.getElementById('adminFramersModal').style.display = 'flex';
@@ -4417,57 +4409,92 @@ function openAdminFramersModal() {
 function closeAdminFramersModal() {
     document.getElementById('adminFramersModal').style.display = 'none';
     document.body.style.overflow = 'auto';
+    
+    // 🌟 إيقاف الاستماع اللحظي عند إغلاق النافذة لتخفيف الضغط على الشبكة
+    if (adminFramersUnsub) {
+        adminFramersUnsub();
+        adminFramersUnsub = null;
+    }
 }
 
-// 1. جلب بيانات جميع المؤطرين في الولاية
-// جلب بيانات جميع المؤطرين في الولاية باستخدام الرقم الوظيفي (empId) مباشرة
+window.formatPhoneInput = function(input) {
+    // ترك الأرقام فقط واقتطاع 10 أرقام كحد أقصى
+    let val = input.value.replace(/\D/g, '').slice(0, 10);
+    // إضافة مسافة بعد كل رقمين
+    if (val.length > 0) {
+        input.value = val.match(/.{1,2}/g).join(' ');
+    } else {
+        input.value = '';
+    }
+};
+
+// 1. جلب بيانات جميع المؤطرين في الولاية (بالتحديث اللحظي)
 async function loadAllFramersForAdmin() {
     const tbody = document.getElementById('adminFramersTableBody');
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; font-weight:bold; color:#777;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>جاري جلب بيانات المؤطرين...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; font-weight:bold; color:#777;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>جاري المزامنة اللحظية لبيانات المؤطرين...</td></tr>';
     
     try {
-        const snap = await db.collection("center_framers").get();
-        const fetchPromises = snap.docs.map(async (doc) => {
-            let data = doc.data();
-            if (doc.id.startsWith("settings_")) return null; 
-            
-            // 🌟 استخدام الرقم الوظيفي الموجود صراحة في الحقل (empId) داخل الوثيقة 🌟
-            let empId = data.empId ? String(data.empId).trim() : extractCleanEmpId(doc.id);
-            if (!empId) return null;
+        // جلب أصحاب الحسابات مرة واحدة لتمييزهم
+        const adminsSnap = await db.collection("center_admins").get();
+        const adminIds = new Set(adminsSnap.docs.map(doc => String(doc.id).trim()));
 
-            let baseDataLoc = null;
+        // تنظيف أي اتصال سابق لتجنب تكرار الجلب
+        if (adminFramersUnsub) {
+            adminFramersUnsub();
+        }
 
-            try {
-                // 1. البحث المباشر والسريع في employeescomplus باستخدام الرقم الوظيفي كمفتاح (Document ID)
-                let pSnap = await db.collection("employeescomplus").doc(empId).get();
-                if (pSnap.exists) {
-                    baseDataLoc = pSnap.data();
-                } else {
-                    // 2. إذا لم يوجد، البحث المباشر في employeescomnew باستخدام الرقم الوظيفي كمفتاح
-                    let nSnap = await db.collection("employeescomnew").doc(empId).get();
-                    if (nSnap.exists) {
-                        baseDataLoc = nSnap.data();
+        // 🌟 التعديل السحري: استخدام onSnapshot بدلاً من get 🌟
+        adminFramersUnsub = db.collection("center_framers").onSnapshot(async (snap) => {
+            const fetchPromises = snap.docs.map(async (doc) => {
+                let data = doc.data();
+                if (doc.id.startsWith("settings_")) return null; 
+                
+                let empId = data.empId ? String(data.empId).trim() : extractCoreId(doc.id);
+                if (!empId) return null;
+
+                let baseDataLoc = null;
+                let safeId = empId.toUpperCase().replace(/\D/g, "").replace(/^0+/, "");
+                if(safeId === "") safeId = empId;
+
+                try {
+                    let pSnap = await db.collection("employeescomplus").doc(empId).get();
+                    if (!pSnap.exists) pSnap = await db.collection("employeescomplus").doc(safeId).get();
+                    if (!pSnap.exists) {
+                        let q = await db.collection("employeescomplus").where("id", "==", empId).get();
+                        if(!q.empty) pSnap = q.docs[0];
                     }
-                }
-            } catch(e) {
-                console.error("خطأ في جلب بيانات الموظف:", empId, e);
-            }
+                    
+                    if (pSnap && pSnap.exists) {
+                        baseDataLoc = pSnap.data();
+                    } else {
+                        let nSnap = await db.collection("employeescomnew").doc(safeId).get();
+                        if (nSnap.exists) baseDataLoc = nSnap.data();
+                    }
+                } catch(e) { console.error("خطأ في جلب بيانات الموظف:", empId, e); }
+                
+                if (!baseDataLoc) baseDataLoc = {};
+                if (!baseDataLoc.name && data.name) baseDataLoc.name = data.name;
+                if (!baseDataLoc.grade && !baseDataLoc.rank && data.rank) baseDataLoc.grade = data.rank;
+                
+                let isAccountOwner = adminIds.has(empId);
+                
+                return { ...data, docId: doc.id, empId: empId, baseInfo: baseDataLoc, isAccountOwner: isAccountOwner };
+            });
+
+            const results = await Promise.all(fetchPromises);
+            adminFramersData = results.filter(item => item !== null);
             
-            // الترقيع الذكي وتوحيد البيانات لضمان عدم ظهور "غير متوفر"
-            if (!baseDataLoc) baseDataLoc = {};
-            if (!baseDataLoc.name && data.name) baseDataLoc.name = data.name;
-            if (!baseDataLoc.grade && !baseDataLoc.rank && data.rank) baseDataLoc.grade = data.rank;
+            // 🌟 إعادة رسم الجدول أوتوماتيكياً كلما أضاف المفتش أو حذف أحداً 🌟
+            renderAdminFramersUI();
             
-            return { ...data, docId: doc.id, empId: empId, baseInfo: baseDataLoc };
+        }, (error) => {
+            console.error("Listener error:", error);
+            Swal.fire('خطأ', 'انقطع الاتصال اللحظي بالخادم.', 'error');
         });
 
-        const results = await Promise.all(fetchPromises);
-        adminFramersData = results.filter(item => item !== null);
-        
-        renderAdminFramersUI();
     } catch (e) {
         console.error("Error loading framers:", e);
-        Swal.fire('خطأ', 'تعذر جلب بيانات المؤطرين.', 'error');
+        Swal.fire('خطأ', 'تعذر تهيئة المزامنة اللحظية.', 'error');
     }
 }
 
@@ -4532,7 +4559,21 @@ function renderAdminFramersTableData() {
         const s3Badge = f.s3 ? '<i class="fa-solid fa-check" style="color:#0FBA50; font-size:18px;"></i>' : '-';
 
         let safeDocId = f.docId.replace(/'/g, "\\'"); 
-        let deleteBtn = f.isProtected ? '' : `<button onclick="adminDeleteFramer('${safeDocId}')" class="btn-action" style="background:#dc3545;" title="حذف من التأطير"><i class="fa-solid fa-trash"></i></button>`;
+        let actionButtons = '';
+
+        if (f.isAccountOwner) {
+            // صاحب حساب (رئيس مركز): يمكن تعديل بياناته لكن لا يُحذف
+            actionButtons = `
+                <button onclick="adminEditFramer('${safeDocId}')" class="btn-action" style="background:#1E68E8;" title="تعديل أو إضافة معلومات"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>
+                <span style="font-size:11px; color:#d90429; font-weight:bold; padding: 4px 6px; background: #ffeaea; border-radius: 6px; border: 1px solid #ffc6c6; display: flex; align-items: center;"><i class="fa-solid fa-lock"></i> صاحب حساب </span>
+            `;
+        } else {
+            // مؤطر عادي: المديرية تملك الصلاحية الكاملة لتعديله وحذفه دائماً
+            actionButtons = `
+                <button onclick="adminEditFramer('${safeDocId}')" class="btn-action" style="background:#1E68E8;" title="تعديل أو تغيير المركز"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>
+                <button onclick="adminDeleteFramer('${safeDocId}')" class="btn-action" style="background:#dc3545;" title="حذف من التأطير"><i class="fa-solid fa-trash"></i></button>
+            `;
+        }
 
         // 🌟 تجهيز الصورة بنظام الإنقاذ وزر الاستعادة 🌟
         const coreEmpId = extractCoreId(f.empId);
@@ -4570,9 +4611,8 @@ function renderAdminFramersTableData() {
                 <td style="text-align:center; background:#f8fafc; vertical-align: middle;">${s2Badge}</td>
                 <td style="text-align:center; background:#f8fafc; vertical-align: middle;">${s3Badge}</td>
                 <td style="text-align:center; vertical-align: middle;">
-                    <div style="display:flex; justify-content:center; gap:5px;">
-                        <button onclick="adminEditFramer('${safeDocId}')" class="btn-action" style="background:#1E68E8;" title="تعديل أو تغيير المركز"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>
-                        ${deleteBtn}
+                    <div style="display:flex; justify-content:center; gap:5px; align-items:center;">
+                        ${actionButtons}
                     </div>
                 </td>
             </tr>
@@ -4609,23 +4649,21 @@ window.adminEditFramer = function(docId) {
     const f = adminFramersData.find(x => x.docId === docId);
     if (!f) return;
 
-    // جلب المراكز لاختيار نقل المركز
     let centerOptions = '';
     for(let key in SITE_SETTINGS.UI_NAMES.centers) {
         let cName = SITE_SETTINGS.UI_NAMES.centers[key];
         centerOptions += `<option value="${cName}" ${f.center === cName ? 'selected' : ''}>${cName}</option>`;
     }
 
-    // إضافة كل الوظائف الممكنة وضمان عدم اختفاء الوظيفة الحالية
-    let allRoles = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "أستاذ(ة) مكون(ة)", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
-    if (!allRoles.includes(f.role)) allRoles.push(f.role); 
+let allRoles = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];    if (!allRoles.includes(f.role)) allRoles.push(f.role); 
 
     let rolesHtml = '';
-    if (f.isProtected) {
-        rolesHtml = `<option value="${f.role}" selected>${f.role}</option>`;
-    } else {
-        allRoles.forEach(r => rolesHtml += `<option value="${r}" ${f.role === r ? 'selected' : ''}>${r}</option>`);
-    }
+    allRoles.forEach(r => rolesHtml += `<option value="${r}" ${f.role === r ? 'selected' : ''}>${r}</option>`);
+
+    // إقفال حقل الوظيفة والمركز إذا كان صاحب حساب
+    let isLocked = f.isAccountOwner;
+    let lockStyle = isLocked ? 'background:#eee; cursor:not-allowed;' : '';
+    let lockNote = isLocked ? '<span style="font-size:11px; color:#d90429; font-weight:bold; display:block; margin-bottom:10px;">المركز والوظيفة مقفلان (صاحب حساب). لتغييرهما توجه إلى إدارة الحسابات. يمكن تعديل باقي المعلومات.</span>' : '';
 
     Swal.fire({
         title: '<i class="fa-solid fa-user-pen" style="color:#1E68E8;"></i> تعديل بيانات المؤطر',
@@ -4636,18 +4674,34 @@ window.adminEditFramer = function(docId) {
                     <span style="color:#64748b; font-size:13px;">الرقم الوظيفي: ${f.empId}</span>
                 </div>
                 
+                ${lockNote}
+
                 <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">مركز التأطير الحالي:</label>
-                <select id="adm-fr-center" class="crud-input" style="margin-bottom:5px; border-color:#0FBA50; border-width:2px; font-weight:bold; ${f.isProtected?'background:#eee;':''}" ${f.isProtected ? 'disabled' : ''}>
+                <select id="adm-fr-center" class="crud-input" style="margin-bottom:15px; border-color:#0FBA50; border-width:2px; font-weight:bold; ${lockStyle}" ${isLocked ? 'disabled' : ''}>
                     ${centerOptions}
                 </select>
-                ${f.isProtected ? '<span style="font-size:11px; color:#d90429; font-weight:bold; margin-bottom:15px; display:block;">تغيير المركز للمسؤولين يتم من قسم حسابات رؤساء المراكز</span>' : '<div style="margin-bottom:15px;"></div>'}
                 
                 <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">الوظيفة بالمركز:</label>
-                <select id="adm-fr-role" class="crud-input" ${f.isProtected ? 'disabled' : ''} style="margin-bottom:5px; border-color:#0FBA50; border-width:2px; font-weight:bold; ${f.isProtected?'background:#eee;':''}">
+                <select id="adm-fr-role" class="crud-input" style="margin-bottom:15px; border-color:#0FBA50; border-width:2px; font-weight:bold; ${lockStyle}" ${isLocked ? 'disabled' : ''}>
                     ${rolesHtml}
                 </select>
-                ${f.isProtected ? '<span style="font-size:11px; color:#d90429; font-weight:bold; margin-bottom:15px; display:block;">غير قابل للتعديل (وظيفة محمية)</span>' : '<div style="margin-bottom:15px;"></div>'}
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43; font-size:13px; display:block; margin-bottom:5px;">رقم الهاتف</label>
+                        <input type="text" id="adm-fr-phone" class="crud-input" value="${f.phone || ''}" style="direction:ltr; text-align:right; padding:8px;" maxlength="14" oninput="window.formatPhoneInput(this)">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43; font-size:13px; display:block; margin-bottom:5px;">حساب CCP</label>
+                        <input type="text" id="adm-fr-ccp" class="crud-input" value="${f.ccp || ''}" style="direction:ltr; text-align:right; padding:8px;" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    </div>
+                    <div style="flex:0.5;">
+                        <label style="font-weight:bold; color:#102a43; font-size:13px; display:block; margin-bottom:5px;">المفتاح</label>
+                        <input type="text" id="adm-fr-cle" class="crud-input" value="${f.ccpKey || ''}" style="direction:ltr; text-align:center; padding:8px;" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    </div>
+                </div>
                 
+                <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px; margin-top:15px;">الدورات المشارك فيها:</label>
                 <div style="background:#e8fbf0; padding:10px; border-radius:8px; border:1px dashed #0FBA50; display:flex; justify-content:space-around;">
                     <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="adm-s1" ${f.s1?'checked':''} style="accent-color:#0FBA50;"> الدورة 1</label>
                     <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="adm-s2" ${f.s2?'checked':''} style="accent-color:#0FBA50;"> الدورة 2</label>
@@ -4656,48 +4710,78 @@ window.adminEditFramer = function(docId) {
             </div>
         `,
         width: '500px', showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+		
         preConfirm: async () => {
-            const newCenter = f.isProtected ? f.center : document.getElementById('adm-fr-center').value;
-            const newRole = f.isProtected ? f.role : document.getElementById('adm-fr-role').value;
-
-            // 🌟 الحماية الذكية والتأكد من عدم التكرار للمناصب القيادية أثناء التعديل 🌟
-            const UNIQUE_ROLES_CHECK = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
+            const newCenter = isLocked ? f.center : document.getElementById('adm-fr-center').value;
+            const newRole = isLocked ? f.role : document.getElementById('adm-fr-role').value;
             
-            if (!f.isProtected && UNIQUE_ROLES_CHECK.includes(newRole)) {
-                // 1. التأكد أن المنصب الجديد غير محجوز لشخص *آخر* في المركز الجديد أو الحالي
-                const centerRoleCheck = await db.collection("center_framers").where("center", "==", newCenter).where("role", "==", newRole).get();
-                let isTakenByOther = false;
-                centerRoleCheck.forEach(d => {
-                    // استثناء سجل المؤطر الحالي من الفحص
-                    if (d.id !== docId) isTakenByOther = true;
-                });
-                
-                if (isTakenByOther) {
-                    Swal.showValidationMessage(`عذراً، منصب "${newRole}" محجوز لشخص آخر في مركز ${newCenter}!`); 
-                    return false;
-                }
+            let rawPhone = document.getElementById('adm-fr-phone').value.trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+            
+            const ccp = document.getElementById('adm-fr-ccp').value.trim();
+            const cle = document.getElementById('adm-fr-cle').value.trim();
 
-                // 2. التأكد أن هذا الشخص ليس مسؤولاً أو نائباً في مركز *آخر*
-                const globalCheck = await db.collection("center_framers").where("empId", "==", f.empId).get();
-                let isManagerElsewhere = false;
-                globalCheck.forEach(d => {
-                    if (d.id !== docId && UNIQUE_ROLES_CHECK.includes(d.data().role)) {
-                        isManagerElsewhere = true;
-                    }
-                });
-                
-                if (isManagerElsewhere) {
-                    Swal.showValidationMessage(`يُمنع تسجيل الموظف في منصب قيادي في أكثر من مركز!`); 
+            const s1 = document.getElementById('adm-s1').checked;
+            const s2 = document.getElementById('adm-s2').checked;
+            const s3 = document.getElementById('adm-s3').checked;
+
+            // 🌟 1. التحقق من صيغة الهاتف
+            if (rawPhone.length > 0 && !/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
+                Swal.showValidationMessage('رقم الهاتف غير صالح! يجب أن يبدأ بـ 05, 06 أو 07 ويتكون من 10 أرقام.'); 
+                return false; 
+            }
+
+            // 🌟 2. منع تكرار رقم الهاتف (مع استثناء الموظف الحالي باستخدام d.docId !== docId)
+            if (rawPhone.length > 0) {
+                let phoneExists = adminFramersData.some(d => d.docId !== docId && d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                if (phoneExists) {
+                    Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر!');
                     return false;
                 }
             }
 
+            // 🌟 3. منع تكرار رقم الحساب الجاري CCP (مع استثناء الموظف الحالي)
+            if (ccp.length > 0) {
+                let ccpExists = adminFramersData.some(d => d.docId !== docId && d.ccp && d.ccp === ccp);
+                if (ccpExists) {
+                    Swal.showValidationMessage('رقم الحساب الجاري (CCP) هذا مستخدم بالفعل من قبل مؤطر آخر!');
+                    return false;
+                }
+            }
+
+            // 🌟 4. حماية الوظائف القيادية من التكرار في نفس المركز
+            if (!isLocked && newRole !== f.role) {
+                const UNIQUE_ROLES_CHECK = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
+                
+                if (UNIQUE_ROLES_CHECK.includes(newRole)) {
+                    const centerRoleCheck = await db.collection("center_framers").where("center", "==", newCenter).where("role", "==", newRole).get();
+                    let isTakenByOther = false;
+                    centerRoleCheck.forEach(d => {
+                        if (d.id !== docId) isTakenByOther = true; // استثناء السجل الحالي للموظف
+                    });
+                    
+                    if (isTakenByOther) {
+                        Swal.showValidationMessage(`عذراً، منصب "${newRole}" محجوز لشخص آخر في مركز ${newCenter}!`); 
+                        return false;
+                    }
+
+                    const globalCheck = await db.collection("center_framers").where("empId", "==", f.empId).get();
+                    let isManagerElsewhere = false;
+                    globalCheck.forEach(d => {
+                        if (d.id !== docId && UNIQUE_ROLES_CHECK.includes(d.data().role)) {
+                            isManagerElsewhere = true;
+                        }
+                    });
+                    
+                    if (isManagerElsewhere) {
+                        Swal.showValidationMessage(`يُمنع تسجيل الموظف في منصب قيادي في أكثر من مركز!`); 
+                        return false;
+                    }
+                }
+            }
+
             return {
-                newCenter: newCenter,
-                newRole: newRole,
-                s1: document.getElementById('adm-s1').checked,
-                s2: document.getElementById('adm-s2').checked,
-                s3: document.getElementById('adm-s3').checked
+                newCenter, newRole, formattedPhone, ccp, cle, s1, s2, s3
             };
         }
     }).then(async (result) => {
@@ -4705,18 +4789,21 @@ window.adminEditFramer = function(docId) {
             Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             let updates = result.value;
             try {
-                if (updates.newCenter !== f.center) {
+                if (!isLocked && updates.newCenter !== f.center) {
                     let newDocId = f.empId + "_" + updates.newCenter;
                     let newObj = { ...f };
-                    delete newObj.docId; delete newObj.baseInfo; 
+                    delete newObj.docId; delete newObj.baseInfo; delete newObj.isAccountOwner;
                     newObj.center = updates.newCenter; newObj.role = updates.newRole;
+                    newObj.phone = updates.formattedPhone; newObj.ccp = updates.ccp; newObj.ccpKey = updates.cle;
                     newObj.s1 = updates.s1; newObj.s2 = updates.s2; newObj.s3 = updates.s3;
                     
                     await db.collection("center_framers").doc(newDocId).set(newObj);
                     await db.collection("center_framers").doc(docId).delete(); 
                 } else {
                     await db.collection("center_framers").doc(docId).update({
-                        role: updates.newRole, s1: updates.s1, s2: updates.s2, s3: updates.s3
+                        role: updates.newRole, 
+                        phone: updates.formattedPhone, ccp: updates.ccp, ccpKey: updates.cle,
+                        s1: updates.s1, s2: updates.s2, s3: updates.s3
                     });
                 }
                 
@@ -4745,41 +4832,69 @@ window.adminPromptAddFramer = function() {
     }).then(async (res) => {
         if (res.isConfirmed) {
             const empId = res.value;
-            Swal.fire({ title: 'جاري البحث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             
-            // 1. جلب بيانات الموظف من القاعدة الرئيسية
+            // 🌟 1. التحقق الفوري: هل الموظف مسجل مسبقاً كمؤطر في أي مركز؟
+            let safeId = empId.toUpperCase().replace(/\D/g, "").replace(/^0+/, "");
+            if (safeId === "") safeId = empId;
+
+            let existingFramer = adminFramersData.find(f => f.empId === empId || extractCoreId(f.empId) === safeId);
+            
+            if (existingFramer) {
+                // إيقاف العملية فوراً وعرض رسالة التحذير مع اسم المركز
+                return Swal.fire({
+                    icon: 'warning',
+                    title: 'مسجل مسبقاً',
+                    html: `هذا الموظف مسجل بالفعل كمؤطر في مركز:<br><b style="color:#1E68E8; font-size:16px;">${existingFramer.center}</b><br>بوظيفة: <b style="color:#d90429;">${existingFramer.role}</b>`,
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#102a43'
+                }).then(() => window.adminPromptAddFramer()); // إعادة فتح نافذة البحث
+            }
+
+            Swal.fire({ title: 'جاري البحث في القاعدة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
+            // 2. جلب بيانات الموظف من القاعدة الرئيسية بشكل ذكي
             let baseData = null;
             try {
-                let s = await db.collection("employeescomnew").doc(empId).get();
-                if(!s.exists) s = await db.collection("employeescomplus").doc(empId).get();
-                if(s.exists) baseData = s.data();
+                let s = await db.collection("employeescomplus").doc(empId).get();
+                if(!s.exists) s = await db.collection("employeescomplus").doc(safeId).get();
+                if(!s.exists) {
+                    let q = await db.collection("employeescomplus").where("id", "==", empId).get();
+                    if(!q.empty) s = q.docs[0];
+                }
+                if (!s || !s.exists) {
+                    s = await db.collection("employeescomnew").doc(safeId).get();
+                }
+                if (s && s.exists) baseData = s.data();
             } catch(e) {}
 
             if (!baseData) {
                 return Swal.fire('غير موجود', 'لم يتم العثور على الموظف في قاعدة البيانات الرئيسية.', 'error').then(()=>window.adminPromptAddFramer());
             }
 
-            // 2. تجهيز قائمة المراكز
+            let fName = baseData.name || 'غير متوفر';
+            let fRank = baseData.grade || baseData.rank || '-';
+            let fPhone = baseData.phone || baseData.tel || '';
+            let fCcp = baseData.ccp || '';
+            let fCle = baseData.ccpKey || baseData.cle || '';
+
+            // 3. تجهيز قائمة المراكز
             let centerOptions = '<option value="" disabled selected>-- اختر المركز الموجه إليه --</option>';
             for(let key in SITE_SETTINGS.UI_NAMES.centers) {
                 let cName = SITE_SETTINGS.UI_NAMES.centers[key];
                 centerOptions += `<option value="${cName}">${cName}</option>`;
             }
 
-            // 3. تجهيز قائمة الوظائف
-            let allRoles = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "أستاذ(ة) مكون(ة)", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
-            let rolesHtml = '<option value="" disabled selected>-- اختر الوظيفة --</option>';
+            // 4. تجهيز قائمة الوظائف
+            let allRoles = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];            let rolesHtml = '<option value="" disabled selected>-- اختر الوظيفة --</option>';
             allRoles.forEach(r => rolesHtml += `<option value="${r}">${r}</option>`);
 
-            // 4. جلب الصورة مباشرة من البيانات الأساسية (baseData)
+            // 5. جلب الصورة
             const coreEmpId = extractCoreId(empId);
             let photoUrl = (baseData && baseData.photoUrl_fb) ? baseData.photoUrl_fb : employeePhotosMap[coreEmpId];
             if (photoUrl && photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w800');
-			
             const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : `<i class="fa-solid fa-user" style="font-size:40px; color:#94a3b8;"></i>`;
-			
 
-            // 5. عرض نافذة التعبئة
+            // 6. عرض نافذة التعبئة (الدورات غير محددة افتراضياً)
             Swal.fire({
                 title: 'تكوين بيانات التأطير',
                 html: `
@@ -4789,8 +4904,8 @@ window.adminPromptAddFramer = function() {
                                 <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #f1f5f9;">${imgHtml}</div>
                             </div>
                             <div style="flex-grow: 1;">
-                                <div><b style="color:#6c757d; font-size:12px; display:block;">الاسم واللقب</b><span style="font-weight:bold; font-size:15px; color:#333;">${baseData.name || '-'}</span></div>
-                                <div><span style="font-weight:bold; font-size:13px; color:#1E68E8; font-family:monospace;">${empId}</span></div>
+                                <div><b style="color:#6c757d; font-size:12px; display:block;">الاسم واللقب</b><span style="font-weight:bold; font-size:15px; color:#333;">${fName}</span></div>
+                                <div><span style="font-weight:bold; font-size:13px; color:#1E68E8; font-family:monospace;">${empId} - ${fRank}</span></div>
                             </div>
                         </div>
                         
@@ -4807,37 +4922,28 @@ window.adminPromptAddFramer = function() {
                         <div style="display:flex; gap:15px;">
                             <div style="flex:1;">
                                 <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">رقم الهاتف</label>
-                                <input type="text" id="add-fr-phone" class="crud-input" value="${baseData.phone || baseData.tel || ''}" style="direction:ltr; text-align:right;" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
+                                <input type="text" id="add-fr-phone" class="crud-input" value="${fPhone}" style="direction:ltr; text-align:right;" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
                             </div>
                             <div style="flex:1;">
                                 <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">الحساب الجاري (CCP)</label>
-                                <input type="text" id="add-fr-ccp" class="crud-input" value="${baseData.ccp || ''}" style="direction:ltr; text-align:right;" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                <input type="text" id="add-fr-ccp" class="crud-input" value="${fCcp}" style="direction:ltr; text-align:right;" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                             </div>
                             <div style="flex:0.5;">
                                 <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">المفتاح</label>
-                                <input type="text" id="add-fr-cle" class="crud-input" value="${baseData.ccpKey || ''}" style="direction:ltr; text-align:center;" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                <input type="text" id="add-fr-cle" class="crud-input" value="${fCle}" style="direction:ltr; text-align:center;" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                             </div>
                         </div>
                         
                         <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px; margin-top:15px;">الدورات المشارك فيها:</label>
                         <div style="background:#e8fbf0; padding:10px; border-radius:8px; border:1px dashed #0FBA50; display:flex; justify-content:space-around;">
-                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s1" checked style="accent-color:#0FBA50;"> الدورة 1</label>
-                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s2" checked style="accent-color:#0FBA50;"> الدورة 2</label>
-                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s3" checked style="accent-color:#0FBA50;"> الدورة 3</label>
-                        </div>
-                        
-                        <div id="add-teacher-note" style="display:none; background:#fff3cd; color:#856404; padding:10px; border-radius:6px; margin-top:15px; font-size:12px; font-weight:bold;">
-                            <i class="fa-solid fa-circle-info"></i> تنويه: تفاصيل المقاييس والأفواج الخاصة بالأستاذ المؤطر (إن وجدت) يمكن لمدير المركز إدراجها لاحقاً من لوحته الخاصة.
+                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s1" style="accent-color:#0FBA50;"> الدورة 1</label>
+                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s2" style="accent-color:#0FBA50;"> الدورة 2</label>
+                            <label style="cursor:pointer; font-weight:bold;"><input type="checkbox" id="add-s3" style="accent-color:#0FBA50;"> الدورة 3</label>
                         </div>
                     </div>
                 `,
                 width: '600px', 
                 showCancelButton: true, confirmButtonText: 'حفظ وإضافة للمركز', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
-                didOpen: () => {
-                    document.getElementById('add-fr-role').addEventListener('change', (e) => {
-                        document.getElementById('add-teacher-note').style.display = e.target.value === 'أستاذ مؤطر' ? 'block' : 'none';
-                    });
-                },
                 preConfirm: async () => {
                     const center = document.getElementById('add-fr-center').value;
                     const role = document.getElementById('add-fr-role').value;
@@ -4845,20 +4951,43 @@ window.adminPromptAddFramer = function() {
                     let rawPhone = document.getElementById('add-fr-phone').value.trim().replace(/\s+/g, '');
                     let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
                     
-                    const ccp = document.getElementById('add-fr-ccp').value;
-                    const cle = document.getElementById('add-fr-cle').value;
+                    const ccp = document.getElementById('add-fr-ccp').value.trim();
+                    const cle = document.getElementById('add-fr-cle').value.trim();
 
                     const s1 = document.getElementById('add-s1').checked;
                     const s2 = document.getElementById('add-s2').checked;
                     const s3 = document.getElementById('add-s3').checked;
 
+                    // تحقق من الحقول الأساسية
                     if (!center) { Swal.showValidationMessage('الرجاء اختيار المركز!'); return false; }
                     if (!role) { Swal.showValidationMessage('الرجاء اختيار الوظيفة!'); return false; }
-                    if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone) && rawPhone.length > 0) { Swal.showValidationMessage('رقم الهاتف غير صالح!'); return false; }
+                    
+                    // 🌟 1. التحقق من صيغة الهاتف
+                    if (rawPhone.length > 0 && !/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
+                        Swal.showValidationMessage('رقم الهاتف غير صالح! يجب أن يبدأ بـ 05, 06 أو 07 ويتكون من 10 أرقام.'); 
+                        return false; 
+                    }
+
+                    // 🌟 2. منع تكرار رقم الهاتف
+                    if (rawPhone.length > 0) {
+                        let phoneExists = adminFramersData.some(d => d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                        if (phoneExists) {
+                            Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر!');
+                            return false;
+                        }
+                    }
+
+                    // 🌟 3. منع تكرار رقم الحساب الجاري CCP
+                    if (ccp.length > 0) {
+                        let ccpExists = adminFramersData.some(d => d.ccp && d.ccp === ccp);
+                        if (ccpExists) {
+                            Swal.showValidationMessage('رقم الحساب الجاري (CCP) هذا مستخدم بالفعل من قبل مؤطر آخر!');
+                            return false;
+                        }
+                    }
 
                     const UNIQUE_ROLES_CHECK = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
                     
-                    // 🌟 الحماية 1: التحقق إذا كان الموظف يمتلك بالفعل وظيفة قيادية في أي مركز 🌟
                     const globalCheck = await db.collection("center_framers").where("empId", "==", empId).get();
                     let existingManagerRole = null;
                     let existingCenter = null;
@@ -4870,20 +4999,11 @@ window.adminPromptAddFramer = function() {
                         }
                     });
 
-                    // إذا كان قيادياً، نمنع تسجيله مرة أخرى في أي مركز (حتى لو كان كأستاذ مؤطر)
                     if (existingManagerRole) {
                         Swal.showValidationMessage(`هذا الموظف يشغل منصب (${existingManagerRole}) في مركز "${existingCenter}"! يُمنع إضافته كمؤطر مرة أخرى.`); 
                         return false;
                     }
 
-                    // 🌟 الحماية 2: التحقق إذا كان المركز نفسه يحتوي بالفعل على هذا الشخص 🌟
-                    const docIdToCheck = empId + "_" + center;
-                    const checkSnap = await db.collection("center_framers").doc(docIdToCheck).get();
-                    if (checkSnap.exists) {
-                        Swal.showValidationMessage(`هذا الموظف مسجل بالفعل في مركز "${center}"!`); return false;
-                    }
-
-                    // 🌟 الحماية 3: إذا كانت الوظيفة المُختارة قيادية، يجب ألا تكون محجوزة في ذلك المركز 🌟
                     if (UNIQUE_ROLES_CHECK.includes(role)) {
                         const centerRoleCheck = await db.collection("center_framers").where("center", "==", center).where("role", "==", role).get();
                         if (!centerRoleCheck.empty) {
@@ -4891,8 +5011,12 @@ window.adminPromptAddFramer = function() {
                         }
                     }
 
+                    const docIdToCheck = empId + "_" + center;
+
                     let newFramer = {
                         empId: empId,
+                        name: fName,
+                        rank: fRank,
                         center: center,
                         role: role,
                         phone: formattedPhone,
@@ -4900,7 +5024,7 @@ window.adminPromptAddFramer = function() {
                         ccpKey: cle,
                         s1: s1, s2: s2, s3: s3,
                         shifts: [],
-                        isProtected: false
+                        isProtected: true 
                     };
 
                     if (role === 'أستاذ مؤطر') {
@@ -4917,7 +5041,7 @@ window.adminPromptAddFramer = function() {
                     try {
                         await db.collection("center_framers").doc(result.value.newDocId).set(result.value.data);
                         Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تمت الإضافة بنجاح', showConfirmButton: false, timer: 1500 });
-                        loadAllFramersForAdmin(); // تحديث الجدول فوراً
+                        loadAllFramersForAdmin(); 
                     } catch (e) {
                         Swal.fire('خطأ', 'تعذر الحفظ في قاعدة البيانات.', 'error');
                     }
@@ -6697,6 +6821,408 @@ window.syncAllCentersDrive = async function() {
     } else {
         Swal.fire('مكتمل جزئياً', `تم مزامنة ${successCount} من أصل ${centersKeys.length} مراكز. تحقق من السجلات.`, 'warning');
     }
+}
+
+// ================= نظام رقمنة المديرية (الاستعلام الشامل والذكي) =================
+let allPlusEmployees = [];
+
+window.openDigitizationModal = async function() {
+    // 1. التحقق مما إذا كانت البيانات موجودة مسبقاً في الذاكرة الحية (RAM)
+    if (allPlusEmployees.length > 0) {
+        renderDigitizationModal();
+        return;
+    }
+
+    // 2. التحقق مما إذا كانت البيانات مخزنة في جلسة المتصفح (Session Storage)
+    let cachedData = sessionStorage.getItem("digiEmployeesCache");
+    if (cachedData) {
+        try {
+            allPlusEmployees = JSON.parse(cachedData);
+            renderDigitizationModal();
+            return;
+        } catch (e) {
+            console.warn("فشل قراءة الذاكرة المؤقتة، سيتم جلب البيانات مجدداً.");
+        }
+    }
+
+    // 3. إذا لم تكن البيانات موجودة نهائياً، نجلبها من قاعدة البيانات لأول مرة فقط
+    await fetchDigiDataFromFirebase();
+};
+
+// دالة جلب البيانات من فايربيز وحفظها في المتصفح
+window.fetchDigiDataFromFirebase = async function() {
+    Swal.fire({ title: 'جاري جلب البيانات يرجى الإنتظار...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        let tempArr = [];
+        const snap = await db.collection("employeescomplus").get();
+        snap.forEach(doc => {
+            let d = doc.data();
+            if(!d.id) d.id = doc.id; // ضمان وجود الرقم الوظيفي
+            tempArr.push(d);
+        });
+
+        allPlusEmployees = tempArr;
+
+        // حفظ البيانات في ذاكرة المتصفح لتفادي جلبها مرة أخرى
+        try {
+            sessionStorage.setItem("digiEmployeesCache", JSON.stringify(tempArr));
+        } catch (storageError) {
+            console.warn("حجم البيانات كبير على SessionStorage، سيتم الاعتماد على الذاكرة الحية فقط.");
+        }
+
+        Swal.close();
+        
+        // إذا كانت النافذة مفتوحة مسبقاً (حالة التحديث اليدوي)، نُحدث الجدول فقط
+        if (document.getElementById('digiTableBody')) {
+            filterDigiTable();
+        } else {
+            renderDigitizationModal();
+        }
+
+    } catch (error) {
+        console.error(error);
+        Swal.fire('خطأ', 'حدث مشكل أثناء جلب البيانات من رقمنة المديرية', 'error');
+    }
+};
+
+// زر التحديث اليدوي لإجبار النظام على مسح الذاكرة وجلب بيانات جديدة
+window.refreshDigiData = function() {
+    sessionStorage.removeItem("digiEmployeesCache");
+    allPlusEmployees = [];
+    fetchDigiDataFromFirebase();
+};
+
+window.renderDigitizationModal = function() {
+    let html = `
+        <div style="text-align:right; font-family:'Cairo'; padding: 5px;">
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <div style="position: relative; flex: 1;">
+                    <i class="fa-solid fa-search" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #777;"></i>
+                    <input type="text" id="digiSearchInput" placeholder="بحث شامل (الاسم، اللقب، الرقم الوظيفي)..." class="crud-input" style="width:100%; padding:12px 40px 12px 12px; font-weight:bold; font-size:16px; border:2px solid #ff9800; border-radius:10px;" oninput="filterDigiTable()">
+                </div>
+                <!-- زر التحديث لجلب أحدث البيانات يدوياً -->
+                <button onclick="refreshDigiData()" style="background: #102a43; color: white; border: none; padding: 0 20px; border-radius: 10px; font-family: 'Cairo'; font-weight: bold; cursor: pointer; font-size: 15px; display: flex; align-items: center; gap: 8px; transition:0.3s;" onmouseover="this.style.background='#243b53'" onmouseout="this.style.background='#102a43'" title="تحديث القائمة من قاعدة البيانات">
+                    <i class="fa-solid fa-arrows-rotate"></i> تحديث السجلات
+                </button>
+            </div>
+            
+            <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+                <span><i class="fa-solid fa-circle-info"></i> يعرض الجدول أول 100 نتيجة فقط لتسريع الأداء، استخدم البحث للوصول الدقيق.</span>
+                <span id="digiTotalCountBadge" style="background: #ffc107; color: #000; padding: 3px 10px; border-radius: 15px;">إجمالي المسجلين: ${allPlusEmployees.length}</span>
+            </div>
+            
+            <div style="max-height: 550px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px;">
+                <table class="att-table" style="width: 100%; text-align: right; border-collapse: collapse; font-size: 14px;">
+                    <thead style="background: #102a43; color: white; position: sticky; top: 0; z-index: 2;">
+                        <tr>
+                            <th style="padding: 12px; text-align: center; width: 15%;">الرقم الوظيفي</th>
+                            <th style="padding: 12px; text-align: right; width: 25%;">الاسم واللقب</th>
+                            <th style="padding: 12px; text-align: right; width: 15%;">الرتبة</th>
+                            <th style="padding: 12px; text-align: right; width: 25%;">مكان العمل</th>
+                            <th style="padding: 12px; text-align: center; width: 20%;">رقم الحساب (CCP)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="digiTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-database" style="color:#ff9800;"></i> رقمنة المديرية - الاستعلام الشامل للموظفين',
+        html: html,
+        width: '98%', // 🌟 جعل النافذة تأخذ 98% من عرض الشاشة لتعرض الجدول براحة تامة
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق النافذة',
+        confirmButtonColor: '#102a43',
+        customClass: { popup: 'swal-modal-custom' },
+        didOpen: () => {
+            filterDigiTable();
+        }
+    });
+};
+
+window.filterDigiTable = function() {
+    const searchInput = document.getElementById('digiSearchInput');
+    if (!searchInput) return;
+    const query = searchInput.value.toLowerCase().trim();
+    const tbody = document.getElementById('digiTableBody');
+    
+    // تحديث رقم الإجمالي المعروض
+    const countBadge = document.getElementById('digiTotalCountBadge');
+    if (countBadge) countBadge.innerText = `إجمالي المسجلين: ${allPlusEmployees.length}`;
+
+    let filtered = allPlusEmployees;
+    if (query) {
+        filtered = allPlusEmployees.filter(emp => {
+            let name = (emp.name || "").toLowerCase();
+            let id = (emp.id || "").toLowerCase();
+            return name.includes(query) || id.includes(query);
+        });
+    }
+
+    // تحديد العرض بـ 100 نتيجة فقط لتجنب تشنج المتصفح
+    const displayData = filtered.slice(0, 100);
+
+    if (displayData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; font-weight:bold; color:#777; font-size: 16px;">لا توجد نتائج مطابقة للبحث</td></tr>';
+        return;
+    }
+
+    let rowsHtml = '';
+    displayData.forEach((emp, index) => {
+        let bgStyle = index % 2 === 0 ? 'background:#fff;' : 'background:#f8fafc;';
+        
+        // معالجة رقم الحساب وتنسيقه ليكون واضحاً وغير ملتف
+        let ccpDisplay = emp.ccp ? `<span style="letter-spacing:1px; font-size:15px;">${emp.ccp}</span><br><span style="font-size:12px; color:#777;">المفتاح: <b style="color:#1E68E8;">${emp.ccpKey || emp.cle || '00'}</b></span>` : '-';
+        
+        rowsHtml += `
+            <tr style="${bgStyle} border-bottom: 1px solid #e2e8f0; transition: background 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${index % 2 === 0 ? '#fff' : '#f8fafc'}'">
+                <td style="padding: 12px; text-align: center; font-family: monospace; font-weight: bold; color: #e67e22; font-size:16px;">${emp.id || '-'}</td>
+                <td style="padding: 12px; font-weight: 800; color: #102a43; font-size: 15px;">${emp.name || '-'}</td>
+                <td style="padding: 12px; font-weight: 600; color: #475569;">${emp.grade || emp.rank || '-'}</td>
+                <td style="padding: 12px; font-weight: 600; color: #475569;">${emp.place || emp.workplace || '-'}</td>
+                <td style="padding: 12px; text-align: center; direction: ltr; font-family: monospace; font-weight: bold; color:#1E68E8;">${ccpDisplay}</td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = rowsHtml;
+};
+
+// =========================================================================
+// نظام تحديث ورفع قواعد البيانات (الموظفين والمتربصين)
+// =========================================================================
+function renderDatabaseTab() {
+    const body = document.getElementById('settingsBody');
+    body.innerHTML = `
+    <div class="setting-card">
+        <h3><i class="fa-solid fa-database"></i> تحديث قواعد البيانات الشاملة</h3>
+        <div style="background:#fff3cd; color:#856404; padding:15px; border-radius:8px; margin-bottom:20px; font-weight:bold; font-size:14px; border: 1px solid #ffeeba;">
+            <i class="fa-solid fa-triangle-exclamation"></i> تنبيه هام: رفع ملف إكسل جديد سيقوم <b>بمسح كافة البيانات القديمة</b> في القاعدة واستبدالها بالبيانات المرفوعة حديثاً! يرجى التأكد من الملف قبل الرفع.
+        </div>
+
+        <!-- قاعدة بيانات الموظفين الكلية -->
+        <div style="margin-bottom: 20px; border: 1px solid #cbd5e1; padding: 20px; border-radius: 12px; background: #f8fafc;">
+            <h4 style="margin-top:0; color:#1E68E8;"><i class="fa-solid fa-users"></i> قاعدة بيانات الموظفين الكلية </h4>
+            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                <input type="file" id="file_plus" accept=".xlsx, .xls" class="crud-input" style="flex: 2; padding: 10px; background: #fff; cursor: pointer;">
+                <button class="btn-action btn-save" onclick="uploadDatabase('plus')" style="flex: 1; justify-content: center; background:#1E68E8;">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> رفع وتحديث (Plus)
+                </button>
+            </div>
+        </div>
+
+        <!-- قاعدة بيانات المتربصين -->
+        <div style="margin-bottom: 10px; border: 1px solid #cbd5e1; padding: 20px; border-radius: 12px; background: #f8fafc;">
+            <h4 style="margin-top:0; color:#0FBA50;"><i class="fa-solid fa-user-graduate"></i> قاعدة بيانات المتربصين </h4>
+            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                <input type="file" id="file_new" accept=".xlsx, .xls" class="crud-input" style="flex: 2; padding: 10px; background: #fff; cursor: pointer;">
+                <button class="btn-action btn-save" onclick="uploadDatabase('new')" style="flex: 1; justify-content: center; background:#0FBA50;">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> رفع وتحديث (New)
+                </button>
+            </div>
+        </div>
+
+        <!-- شريط التقدم -->
+        <div id="dbProgressContainer" style="display: none; margin-top: 20px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; color: #102a43;">
+                <span id="dbProgressText">جاري تهيئة الملف...</span>
+                <span id="dbProgressPercent">0%</span>
+            </div>
+            <div style="width: 100%; background-color: #e2e8f0; border-radius: 10px; overflow: hidden; height: 25px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+                <div id="dbProgressBar" style="width: 0%; height: 100%; background-color: #e67e22; transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+    </div>`;
+}
+
+// 1. الدالة الرئيسية للقراءة والرفع
+window.uploadDatabase = async function(type) {
+    const inputId = type === 'plus' ? 'file_plus' : 'file_new';
+    const collectionName = type === 'plus' ? 'employeescomplus' : 'employeescomnew';
+    const fileInput = document.getElementById(inputId);
+    
+    if (!fileInput.files.length) {
+        return Swal.fire('تنبيه', 'يرجى اختيار ملف الإكسل من جهازك أولاً.', 'warning');
+    }
+
+    const confirm = await Swal.fire({
+        title: 'تأكيد الحذف الشامل والرفع',
+        html: `هل أنت متأكد من <b>حذف كافة السجلات الحالية</b> في قاعدة <b>(${collectionName})</b> ورفع الملف الجديد؟<br><br><span style="color:#d90429; font-size:13px;">هذا الإجراء لا يمكن التراجع عنه.</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، قم بالمسح والرفع',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d90429'
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    document.getElementById('dbProgressContainer').style.display = 'block';
+    updateDbProgress(5, 'جاري قراءة ملف الإكسل...');
+
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            // تفعيل cellDates لقراءة التواريخ ككائنات زمنية
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const sheetName = workbook.SheetNames[0];
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+            if (rows.length === 0) throw new Error("ملف الإكسل فارغ ولا يحتوي على بيانات.");
+
+            updateDbProgress(15, `تمت قراءة ${rows.length} سجل. جاري حذف البيانات القديمة (قد يستغرق بعض الوقت)...`);
+
+            // 1. مسح البيانات القديمة بالدفعات (Batches)
+            await clearCollectionData(collectionName);
+
+            updateDbProgress(40, 'تم مسح البيانات القديمة. جاري تهيئة ورفع البيانات الجديدة...');
+
+            // 2. رفع البيانات الجديدة بالدفعات
+            await uploadRowsInBatches(collectionName, rows, type);
+
+            updateDbProgress(100, 'اكتملت العملية بنجاح تام!');
+            Swal.fire('نجاح', `تم تحديث قاعدة بيانات ${collectionName} بنجاح وإضافة ${rows.length} سجل.`, 'success');
+
+        } catch (err) {
+            console.error(err);
+            Swal.fire('خطأ', 'فشلت العملية: ' + err.message, 'error');
+            updateDbProgress(0, 'فشلت العملية');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+};
+
+// 2. دالة مسح الكوليكشن (Collections) بالدفعات (500 كحد أقصى)
+async function clearCollectionData(collectionPath) {
+    const snapshot = await db.collection(collectionPath).get();
+    if (snapshot.empty) return; // الكوليكشن فارغ أصلاً
+
+    const batches = [];
+    let currentBatch = db.batch();
+    let count = 0;
+
+    snapshot.docs.forEach((doc) => {
+        currentBatch.delete(doc.ref);
+        count++;
+        if (count === 500) {
+            batches.push(currentBatch);
+            currentBatch = db.batch();
+            count = 0;
+        }
+    });
+    
+    if (count > 0) batches.push(currentBatch);
+
+    for (let batch of batches) {
+        await batch.commit();
+    }
+}
+
+// 3. دالة رفع السجلات بالدفعات السريعة (500 كحد أقصى)
+async function uploadRowsInBatches(collectionPath, rows, type) {
+    const batches = [];
+    let currentBatch = db.batch();
+    let count = 0;
+    let totalProcessed = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const formattedId = cleanAndFormatIdClient(row.id);
+        
+        if (!formattedId) {
+            console.warn(`تخطي السطر ${i + 1}: رقم تعريف غير صالح`);
+            continue;
+        }
+
+        const docRef = db.collection(collectionPath).doc(formattedId);
+        let dataToSave = {};
+
+        // تنسيق الحقول حسب نوع القاعدة (بالضبط كما في سكريبت Node الخاص بك)
+        if (type === 'plus') {
+            dataToSave = {
+                id: formattedId,
+                name: row.name ? String(row.name).trim() : "",
+                diz: parseExcelDateClient(row.diz),
+                dtw: parseExcelDateClient(row.dtw),
+                grade: row.grade ? String(row.grade).trim() : "",
+                place: row.place ? String(row.place).trim() : "",
+                ccp: row.ccp ? String(row.ccp).trim() : "",
+                nin: row.nin ? String(row.nin).trim() : "",
+            };
+        } else if (type === 'new') {
+            dataToSave = {
+                id: formattedId,
+                name: row.name ? String(row.name).trim() : "",
+                diz: parseExcelDateClient(row.diz),
+                gnr: row.gnr ? String(row.gnr).trim() : "",
+                adrs: row.adrs ? String(row.adrs).trim() : "",
+                dtw: parseExcelDateClient(row.dtw),
+                grade: row.grade ? String(row.grade).trim() : "",
+                place: row.place ? String(row.place).trim() : "",
+                maty: row.maty ? String(row.maty).trim() : "",
+            };
+        }
+
+        // بما أننا مسحنا الكوليكشن، لا داعي لـ merge:true، نستخدم Set مباشر
+        currentBatch.set(docRef, dataToSave); 
+        count++;
+        totalProcessed++;
+
+        if (count === 500) {
+            batches.push(currentBatch);
+            currentBatch = db.batch();
+            count = 0;
+        }
+    }
+
+    if (count > 0) batches.push(currentBatch);
+
+    let batchesCompleted = 0;
+    for (let batch of batches) {
+        await batch.commit();
+        batchesCompleted++;
+        // تحديث النسبة المئوية من 40% إلى 100%
+        let progress = 40 + Math.round((batchesCompleted / batches.length) * 60);
+        updateDbProgress(progress, `جاري الرفع... (${totalProcessed} سجل)`);
+    }
+}
+
+// 4. دوال التنسيق المساعدة
+function updateDbProgress(percent, text) {
+    document.getElementById('dbProgressPercent').innerText = percent + '%';
+    document.getElementById('dbProgressBar').style.width = percent + '%';
+    document.getElementById('dbProgressText').innerText = text;
+}
+
+function cleanAndFormatIdClient(id) {
+    if (!id) return null;
+    let str = String(id).replace(/\D/g, "");
+    while (str.length < 16) str = "0" + str;
+    return str;
+}
+
+function parseExcelDateClient(value) {
+    if (!value) return null;
+    
+    // إذا قرأته المكتبة كـ Date Object (بفضل cellDates:true)
+    if (value instanceof Date) {
+        return isNaN(value.getTime()) ? null : value;
+    }
+    
+    // معالجة مشكلة الرقم التسلسلي الخاص بإكسل
+    if (typeof value === "number") {
+        return new Date((value - 25569) * 86400 * 1000);
+    }
+    
+    // محاولة المعالجة كنص قياسي
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
 }
 
 </script>
