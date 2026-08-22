@@ -235,6 +235,8 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
             <div class="user-info">
                 <h2 id="userNameDisplay">جاري التحميل...</h2>
                 <p><i class="fa-solid fa-briefcase"></i> <span id="userRankDisplay">-</span></p>
+                <!-- 🌟 إضافة حقل التخصص هنا 🌟 -->
+                <p><i class="fa-solid fa-book-open"></i> <span id="userSpecDisplay">-</span></p>
                 <p><i class="fa-solid fa-school"></i> <span id="userWorkplaceDisplay">-</span></p>
             </div>
         </div>
@@ -432,9 +434,12 @@ window.onload = async function() {
             return;
         }
 
-        // تحديث واجهة البروفايل
         document.getElementById('userNameDisplay').innerText = loggedInUser.name || 'مستخدم مجهول';
         document.getElementById('userRankDisplay').innerText = loggedInUser.grade || loggedInUser.rank || 'رتبة غير محددة';
+        // 🌟 عرض التخصص للمتكون 🌟
+        if(document.getElementById('userSpecDisplay')) {
+            document.getElementById('userSpecDisplay').innerText = loggedInUser.maty || loggedInUser.specialty || 'تخصص غير محدد';
+        }
         document.getElementById('userWorkplaceDisplay').innerText = loggedInUser.place || loggedInUser.workplace || 'مكان العمل غير محدد';
 
         // الصورة الشخصية

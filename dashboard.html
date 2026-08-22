@@ -218,6 +218,8 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
             <div class="user-info">
                 <h2 id="userNameDisplay">جاري التحميل...</h2>
                 <p><i class="fa-solid fa-briefcase"></i> <span id="userRankDisplay">-</span></p>
+                <!-- 🌟 إضافة حقل التخصص هنا 🌟 -->
+                <p><i class="fa-solid fa-book-open"></i> <span id="userSpecDisplay">-</span></p>
                 <p><i class="fa-solid fa-school"></i> <span id="userWorkplaceDisplay">-</span></p>
             </div>
         </div>
@@ -355,8 +357,11 @@ window.onload = async function() {
         
         document.getElementById('userNameDisplay').innerText = 'مدير النظام';
         document.getElementById('userRankDisplay').innerText = 'حساب الإدارة المركزية';
+        // 🌟 عرض التخصص للمدير 🌟
+        if(document.getElementById('userSpecDisplay')) {
+            document.getElementById('userSpecDisplay').innerText = 'إدارة شاملة'; 
+        }
         document.getElementById('userWorkplaceDisplay').innerText = 'مديرية التربية لولاية توقرت';
-        document.getElementById('userAvatarContainer').innerHTML = `<i class="fa-solid fa-user-shield" style="font-size:35px; color:#0FBA50;"></i>`;
         
         initSiteSettings(); 
         return;
@@ -389,6 +394,10 @@ window.onload = async function() {
         
         document.getElementById('userNameDisplay').innerText = loggedInUser.name || 'مستخدم مجهول';
         document.getElementById('userRankDisplay').innerText = loggedInUser.grade || loggedInUser.rank || 'رتبة غير محددة';
+        // 🌟 عرض التخصص للمتكون 🌟
+        if(document.getElementById('userSpecDisplay')) {
+            document.getElementById('userSpecDisplay').innerText = loggedInUser.maty || loggedInUser.specialty || 'تخصص غير محدد';
+        }
         document.getElementById('userWorkplaceDisplay').innerText = loggedInUser.place || loggedInUser.workplace || 'مكان العمل غير محدد';
 
         const avatarBox = document.getElementById('userAvatarContainer');
@@ -446,12 +455,36 @@ function forceArabicText(inputElement) {
     inputElement.value = inputElement.value.replace(/[^\u0600-\u06FF\s]/g, '');
 }
 
-// ==========================================
-// 📝 نافذة إكمال المعلومات (تظهر لمرة واحدة فقط)
-// ==========================================
+// ==========================================================================
+// 📝 نافذة إكمال المعلومات (نظام فحص ذكي للبيانات الناقصة)
+// ==========================================================================
 function checkAndFillMissingInfo() {
-    if(loggedInUser.infoCompleted === true) return;
-    showCompletionForm();
+    let isDataMissing = false;
+
+    // 1. فحص مكان الميلاد
+    if (!loggedInUser.pob || loggedInUser.pob.trim() === "" || loggedInUser.pob === "-") {
+        isDataMissing = true;
+    }
+    
+    // 2. فحص دائرة الإقامة
+    if (!loggedInUser.daira || loggedInUser.daira.trim() === "" || loggedInUser.daira === "-") {
+        isDataMissing = true;
+    }
+    
+    // 3. فحص العنوان
+    if (!loggedInUser.adrs || loggedInUser.adrs.trim() === "" || loggedInUser.adrs === "-") {
+        isDataMissing = true;
+    }
+    
+    // 4. فحص رقم الهاتف
+    if (!loggedInUser.phone || loggedInUser.phone.trim() === "" || loggedInUser.phone === "-") {
+        isDataMissing = true;
+    }
+
+    // إذا كان هناك أي بيان ناقص، أظهر النافذة الإجبارية
+    if (isDataMissing) {
+        showCompletionForm();
+    }
 }
 
 function showCompletionForm() {

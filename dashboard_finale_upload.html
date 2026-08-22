@@ -186,10 +186,10 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 
 <script>
 // ==================== 1. الحماية وإعدادات الجلسة ====================
-const userEmpId = sessionStorage.getItem("userEmpId");
-const inspectorCenter = sessionStorage.getItem("inspectorCenter");
+let userEmpId = sessionStorage.getItem("userEmpId");
+let inspectorCenter = sessionStorage.getItem("inspectorCenter");
 
-if (!userEmpId) { window.location.href = "index_2.html"; }
+// تم حذف سطر الطرد المباشر لأنه يعمل قبل التحقق من فايربيز
 
 function goBack() {
     if (userEmpId === "ADMIN_ACCESS") window.location.href = "admin_dashboard.html";
@@ -482,16 +482,22 @@ function startFadeOut() {
 
 window.onload = async function() { 
     typeWriter(); 
-    
-    // التحقق من الجلسة وسيرفرات فايربيز
-    const userEmpId = sessionStorage.getItem("userEmpId");
-    if (!userEmpId) { 
-        window.location.href = "admin095526.html"; 
-        return; 
-    }
 
+    // ننتظر تحقق سيرفر فايربيز أولاً بدلاً من التسرع في الطرد
     firebase.auth().onAuthStateChanged(async (user) => {
         if (user) {
+            // 🌟 التعرف التلقائي على حساب المديرية ومنحه الصلاحية الشاملة 🌟
+            if (user.email === "admin_directorate@system.local") {
+                userEmpId = "ADMIN_ACCESS";
+                sessionStorage.setItem("userEmpId", "ADMIN_ACCESS");
+            }
+
+            // الآن، إذا كان لا يزال مجهولاً، نقوم بطرده
+            if (!userEmpId) { 
+                window.location.href = "admin095526.html"; 
+                return; 
+            }
+
             const hasPermission = await checkUserPermissions();
             if (hasPermission) {
                 initSiteSettings();
