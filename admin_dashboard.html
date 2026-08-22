@@ -2953,8 +2953,15 @@ function deleteRecord(docId) {
     });
 }
 
-// ================= نظام إدارة حسابات رؤساء المراكز =================
-function manageCenterAdmins() {
+// ================= المتغيرات العالمية للمزامنة اللحظية للحسابات =================
+let adminsUnsub = null;
+let pendingAdminsUnsub = null;
+let officialAdminsList = [];
+let pendingAdminsList = [];
+let deepDataCache = {}; // كاش لتسريع استرجاع الصور والأسماء ومنع الوميض
+
+// 1. الدالة الرئيسية لفتح النافذة
+window.manageCenterAdmins = function() {
     Swal.fire({
         title: 'إدارة حسابات رؤساء المراكز',
         html: `
@@ -2964,14 +2971,233 @@ function manageCenterAdmins() {
                 </button>
             </div>
             <div id="admins-list-container">
-                <div style="text-align: center; color: #777;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب الحسابات المسجلة...</div>
+                <div style="text-align: center; color: #777; padding: 20px;">
+                    <i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>جاري تهيئة المزامنة اللحظية...
+                </div>
             </div>
         `,
-        // تم تكبير عرض النافذة إلى 95% لتأخذ الشاشة كاملة وتعرض الجدول براحة
         width: '95%', 
         showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#939393',
-        didOpen: () => { loadAdminsList(); }
+        didOpen: () => { 
+            startAdminsRealTime(); // تشغيل المستشعرات اللحظية عند فتح النافذة
+        },
+        willClose: () => {
+            // إغلاق الاستماع اللحظي فور إغلاق النافذة لتخفيف الضغط
+            if(adminsUnsub) { adminsUnsub(); adminsUnsub = null; }
+            if(pendingAdminsUnsub) { pendingAdminsUnsub(); pendingAdminsUnsub = null; }
+        }
     });
+}
+
+// 2. دالة تشغيل الاستماع اللحظي (Real-Time Listeners)
+window.startAdminsRealTime = function() {
+    let officialLoaded = false;
+    let pendingLoaded = false;
+
+    if(adminsUnsub) adminsUnsub();
+    if(pendingAdminsUnsub) pendingAdminsUnsub();
+
+    // استشعار تغييرات الحسابات المعتمدة
+    adminsUnsub = db.collection("center_admins").onSnapshot((snap) => {
+        officialAdminsList = [];
+        snap.forEach(doc => { 
+            let data = doc.data();
+            data.id = doc.id;
+            data.isPending = false; 
+            officialAdminsList.push(data);
+        });
+        officialLoaded = true;
+        if(pendingLoaded) renderAdminsTableInstantly();
+    });
+
+    // استشعار تغييرات الحسابات المعلقة (المضافة من طرف المفتشين)
+    pendingAdminsUnsub = db.collection("center_framers")
+        .where("role", "in", ["المسؤول الإداري", "المسؤول البيداغوجي"])
+        .onSnapshot((snap) => {
+            pendingAdminsList = [];
+            snap.forEach(doc => pendingAdminsList.push(doc.data()));
+            pendingLoaded = true;
+            if(officialLoaded) renderAdminsTableInstantly();
+        });
+}
+
+// 3. دالة بناء الجدول اللحظي
+window.renderAdminsTableInstantly = async function() {
+    const container = document.getElementById('admins-list-container');
+    if(!container) return; 
+
+    try {
+        let adminsArray = [...officialAdminsList];
+        let officialIds = new Set(officialAdminsList.map(a => extractCoreId(a.id)));
+
+        for (let fData of pendingAdminsList) {
+            let rawId = String(fData.empId).trim();
+            let safeFramerId = extractCoreId(rawId);
+
+            if (rawId && !officialIds.has(safeFramerId)) {
+                let empName = fData.name || "غير معروف";
+                let empRank = "-";
+                let finalPhotoUrl = null;
+
+                // 🌟 استخدام نظام الكاش (Cache) لتسريع الجلب ومنع وميض الصور 🌟
+                if (deepDataCache[safeFramerId]) {
+                    empName = deepDataCache[safeFramerId].name;
+                    empRank = deepDataCache[safeFramerId].rank;
+                    finalPhotoUrl = deepDataCache[safeFramerId].photoUrl;
+                } else {
+                    try {
+                        let foundData = null;
+                        let localMatch = allData.find(d => d.empId === rawId || extractCoreId(d.empId) === safeFramerId);
+                        
+                        if (localMatch) {
+                            foundData = localMatch;
+                        } else {
+                            let pSnap = await db.collection("employeescomplus").doc(rawId).get();
+                            if(!pSnap.exists) pSnap = await db.collection("employeescomplus").doc(safeFramerId).get();
+                            
+                            if (pSnap.exists) {
+                                foundData = pSnap.data();
+                            } else {
+                                let qSnap = await db.collection("employeescomplus").where("id", "==", rawId).get();
+                                if(qSnap.empty) qSnap = await db.collection("employeescomplus").where("id", "==", safeFramerId).get();
+                                if(!qSnap.empty) foundData = qSnap.docs[0].data();
+                                else {
+                                    let nSnap = await db.collection("employeescomnew").where("id", "==", safeFramerId).get();
+                                    if(!nSnap.empty) foundData = nSnap.docs[0].data();
+                                }
+                            }
+                        }
+
+                        if (foundData) {
+                            empName = foundData.name || empName;
+                            empRank = foundData.grade || foundData.rank || empRank;
+                            finalPhotoUrl = foundData.photoUrl_fb || employeePhotosMap[safeFramerId] || null;
+                            // حفظ البيانات في الكاش حتى لا نعيد جلبها مع كل تحديث لحظي
+                            deepDataCache[safeFramerId] = { name: empName, rank: empRank, photoUrl: finalPhotoUrl };
+                        }
+                    } catch(e) {}
+                }
+
+                adminsArray.push({
+                    id: rawId, safeId: safeFramerId, name: empName, rank: empRank, center: fData.center,
+                    password: "بانتظار الاعتماد", jobTitle: fData.role, disabled: false, isPending: true, preFetchedPhoto: finalPhotoUrl 
+                });
+                officialIds.add(safeFramerId); 
+            }
+        }
+
+        if(adminsArray.length === 0) {
+            container.innerHTML = '<p style="color: #777; text-align: center; font-weight: bold; padding: 20px;">لا توجد حسابات مدراء/مفتشين مسجلة أو في الانتظار حالياً.</p>';
+            return;
+        }
+        
+        // الترتيب
+        adminsArray.sort((a, b) => {
+            let centerA = a.center || ""; let centerB = b.center || "";
+            if (centerA !== centerB) return centerA.localeCompare(centerB, 'ar'); 
+            let jobA = a.jobTitle || ""; let jobB = b.jobTitle || "";
+            return jobB.localeCompare(jobA, 'ar'); 
+        });
+
+        let html = `
+        <div style="max-height: 65vh; overflow-y: auto; padding-left: 5px;">
+        <table class="admin-table" style="font-size: 15px;">
+            <thead style="position: sticky; top: 0; z-index: 10;">
+                <tr>
+                    <th style="width: 8%; text-align: center;">الصورة</th>
+                    <th style="width: 15%;">الرقم الوظيفي</th>
+                    <th style="width: 22%;">الاسم واللقب</th>
+                    <th style="width: 18%;">المركز المشرف عليه</th>
+                    <th style="width: 15%;">الرقم السري</th>
+                    <th style="width: 22%;">إجراء</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        for (let data of adminsArray) {
+            let docId = data.id;
+            let bgStyle = data.isPending ? 'background:#fff3cd;' : (data.disabled ? 'background:#f8d7da; opacity:0.8;' : '');
+            
+            let passHtml = data.isPending 
+                ? `<span style="color:#d35400; font-weight:bold; font-size:13px;"><i class="fa-solid fa-clock"></i> بانتظار الاعتماد</span><br><span style="font-size:10px; color:#777;">(أُضيف من طرف المركز)</span>` 
+                : `<span style="direction: ltr; display:inline-block; font-family: monospace; font-size: 16px;">${data.password}</span>`;
+            
+            let statusBadge = data.isPending 
+                ? '<span style="color:#ff9800; font-size:12px;"><i class="fa-solid fa-hourglass-half"></i> قيد المراجعة</span>'
+                : (data.disabled ? '<span style="color:#dc3545; font-size:12px;"><i class="fa-solid fa-circle-xmark"></i> معطل</span>' : '<span style="color:#28a745; font-size:12px;"><i class="fa-solid fa-circle-check"></i> مفعل</span>');
+
+            let photoUrl = data.preFetchedPhoto || employeePhotosMap[data.safeId || extractCoreId(docId)] || null;
+            
+            // جلب الصورة في الخلفية إن كانت مفقودة للحساب الرسمي
+            if (!data.isPending && !photoUrl && !deepDataCache[docId]) {
+                try {
+                    let picSnap = await db.collection("employeescomplus").doc(extractCoreId(docId)).get();
+                    if (picSnap.exists && picSnap.data().photoUrl_fb) {
+                        photoUrl = picSnap.data().photoUrl_fb;
+                        deepDataCache[docId] = { photoUrl: photoUrl };
+                    } else { deepDataCache[docId] = { photoUrl: null }; }
+                } catch(e) {}
+            } else if (!data.isPending && deepDataCache[docId] && deepDataCache[docId].photoUrl) {
+                photoUrl = deepDataCache[docId].photoUrl;
+            }
+
+            const photoHtml = `
+              <div class="profile-pic-container" style="width: 42px; height: 42px; margin: 0 auto; cursor: default;">
+                  ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' style=\\'font-size: 18px;\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
+              </div>
+            `;
+
+            let actionButtons = "";
+            if (data.isPending) {
+                actionButtons = `
+                    <button onclick="approvePendingAdmin('${docId}', '${data.center}', '${data.name}', '${data.rank}', '${data.jobTitle}')" style="background: #0FBA50; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px;" title="إنشاء وتفعيل الحساب">
+                        <i class="fa-solid fa-user-check"></i> اعتماد وإنشاء الحساب
+                    </button>
+                `;
+            } else {
+                let toggleIcon = data.disabled ? 'fa-toggle-off' : 'fa-toggle-on';
+                let toggleColor = data.disabled ? '#6c757d' : '#28a745';
+                actionButtons = `
+                    <button onclick="toggleAdminStatus('${docId}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="${data.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}"><i class="fa-solid ${toggleIcon}"></i></button>
+                    <button onclick="editAdminAccount('${docId}')" style="background: #ffc107; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="تعديل"><i class="fa-solid fa-pen-to-square"></i></button>
+                    <button onclick="deleteAdminAccount('${docId}')" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="حذف"><i class="fa-solid fa-trash"></i></button>
+                `;
+            }
+
+            html += `
+                <tr style="${bgStyle} transition:0.3s;">
+                    <td style="text-align:center; vertical-align: middle;">${photoHtml}</td>
+                    <td style="font-weight: bold; text-align:center; vertical-align: middle;">${docId} <br> ${statusBadge}</td>
+                    <td style="font-weight: bold; color: #1E68E8; vertical-align: middle;">
+                        ${data.name} <br>
+                        <div style="font-size: 11px; color: #d90429; font-weight: 900; background: #ffeaea; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 5px; border: 1px solid #ffc6c6;">
+                            ${data.jobTitle || 'عضو تأطير'}
+                        </div>
+                    </td>
+                    <td style="color: #0FBA50; font-weight: bold; vertical-align: middle;">${data.center}</td>
+                    <td style="text-align: center; vertical-align: middle;">${passHtml}</td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                            ${actionButtons}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch(e) {}
+}
+
+// 4. دالة التفعيل والتعطيل (أصبحت لحظية بالكامل)
+window.toggleAdminStatus = async function(docId, isDisabled) {
+    try {
+        await db.collection("center_admins").doc(docId).update({ disabled: !isDisabled });
+        // 🌟 لا نقوم باستدعاء أي شيء هنا! المزامنة اللحظية onSnapshot ستغير الزر ولونه فوراً أمامك 🌟
+    } catch (e) {
+        Swal.fire('خطأ', 'تعذر تحديث حالة الحساب', 'error');
+    }
 }
 
 
@@ -3116,8 +3342,8 @@ async function verifyAndCreateAdmin(empId) {
             if (res.isConfirmed) {
                 Swal.fire({ title: 'جاري إنشاء الحساب والمصادقة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 try {
-                    // 1. إنشاء الإيميل الوهمي الديناميكي
-                    const generatedEmail = `inspector_${userData.id}@system.local`;
+                    // 1. إنشاء الإيميل الوهمي الديناميكي (محدث لتفادي تضارب الحسابات)
+                      const generatedEmail = `inspector_${userData.id}_${Date.now()}@system.local`;
 
                     // 2. إنشاء تطبيق Firebase ثانوي لإنشاء الحساب دون طرد المدير
                     const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryApp");
@@ -3195,7 +3421,7 @@ window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle)
                 
                 <label style="font-weight:bold; color:#333;">الرقم السري (للدخول كمسؤول مركز):</label>
                 <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-                    <input type="text" id="approve-password" class="swal2-input" minlength="8" maxlength="20" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:16px; font-weight:bold;" placeholder="من 8 إلى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\\\-=\\[\\]{}:;<>?,./]/g, '')">
+                    <input type="text" id="approve-password" class="swal2-input" minlength="6" maxlength="20" style="width: 70%; margin:0; text-align:center; font-family:monospace; font-size:16px; font-weight:bold;" placeholder="من 6 الى 20 خانة" oninput="this.value = this.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+~\\\\-=\\[\\]{}:;<>?,./]/g, '')">
                     <button onclick="document.getElementById('approve-password').value = generateStrongPassword()" style="width: 30%; background: #1E68E8; color: white; border: none; border-radius: 8px; cursor: pointer; font-family:'Cairo'; padding: 11px; font-weight: bold;">
                         توليد عشوائي
                     </button>
@@ -3213,8 +3439,8 @@ window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle)
         if (res.isConfirmed) {
             Swal.fire({ title: 'جاري إنشاء الحساب واعتماده...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                // 1. إنشاء الإيميل الوهمي الديناميكي
-                const generatedEmail = `inspector_${empId}@system.local`;
+                // 1. إنشاء الإيميل الوهمي الديناميكي (محدث لتفادي مشكلة الإيميل المستخدم مسبقاً)
+                 const generatedEmail = `inspector_${empId}_${Date.now()}@system.local`;
 
                 // 2. إنشاء الحساب في Firebase Auth عبر تطبيق ثانوي
                 const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryApp2");
@@ -3254,7 +3480,7 @@ window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle)
                 // --------------------------------------------------------
                 
                 Swal.fire('تم بنجاح', 'تم اعتماد وإنشاء حساب المسؤول وتفعيل حمايته بنجاح.', 'success').then(() => {
-                    loadAdminsList(); // إعادة تحميل القائمة لاختفاء اللون البرتقالي وتحوله لحساب رسمي
+                    manageCenterAdmins();
                 }); 
             } catch (e) { 
                 Swal.fire('خطأ', 'تعذر حفظ الحساب', 'error'); 
@@ -3263,212 +3489,6 @@ window.approvePendingAdmin = async function(empId, center, name, rank, jobTitle)
     });
 };
 
-// ================= دالة جلب الحسابات (مع المطابقة العميقة والبحث الشامل) =================
-async function loadAdminsList() {
-    const container = document.getElementById('admins-list-container');
-    container.innerHTML = '<div style="text-align: center; color: #777; padding: 20px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><br>جاري جلب ومطابقة الحسابات...</div>';
-    
-    try {
-        let adminsArray = [];
-        let officialIds = new Set();
-
-        // 1. جلب الحسابات الرسمية المعتمدة
-        const snap = await db.collection("center_admins").get();
-        snap.forEach(doc => { 
-            let data = doc.data();
-            data.id = doc.id;
-            data.isPending = false; 
-            adminsArray.push(data);
-            officialIds.add(extractCoreId(doc.id));
-        });
-
-        // 2. البحث عن الحسابات المعلقة (أضافها المفتش)
-        const framersSnap = await db.collection("center_framers").where("role", "in", ["المسؤول الإداري", "المسؤول البيداغوجي"]).get();
-        let pendingFramers = [];
-        framersSnap.forEach(doc => pendingFramers.push(doc.data()));
-
-        for (let fData of pendingFramers) {
-            let rawId = String(fData.empId).trim();
-            let safeFramerId = extractCoreId(rawId);
-
-            if (rawId && !officialIds.has(safeFramerId)) {
-                
-                let empName = fData.name || "غير معروف";
-                let empRank = "-";
-                let finalPhotoUrl = null;
-
-                try {
-                    let foundData = null;
-
-                    // أ) البحث السريع جداً في البيانات المحملة مسبقاً (allData)
-                    let localMatch = allData.find(d => d.empId === rawId || extractCoreId(d.empId) === safeFramerId);
-                    
-                    if (localMatch) {
-                        foundData = localMatch;
-                    } else {
-                        // ب) البحث في قاعدة employeescomplus (باسم الوثيقة)
-                        let pSnap = await db.collection("employeescomplus").doc(rawId).get();
-                        if(!pSnap.exists) pSnap = await db.collection("employeescomplus").doc(safeFramerId).get();
-                        
-                        if (pSnap.exists) {
-                            foundData = pSnap.data();
-                        } else {
-                            // ج) 🌟 السر هنا: البحث العميق داخل الحقول (يحل مشكلة أسماء الوثائق العشوائية) 🌟
-                            let qSnap = await db.collection("employeescomplus").where("id", "==", rawId).get();
-                            if(qSnap.empty) qSnap = await db.collection("employeescomplus").where("id", "==", safeFramerId).get();
-                            
-                            if(!qSnap.empty) {
-                                foundData = qSnap.docs[0].data();
-                            } else {
-                                // د) محاولة أخيرة في قاعدة employeescomnew
-                                let nSnap = await db.collection("employeescomnew").where("id", "==", safeFramerId).get();
-                                if(!nSnap.empty) foundData = nSnap.docs[0].data();
-                            }
-                        }
-                    }
-
-                    // إذا تم العثور على البيانات بنجاح، استخرج الاسم والرتبة والصورة
-                    if (foundData) {
-                        empName = foundData.name || empName;
-                        empRank = foundData.grade || foundData.rank || empRank;
-                        finalPhotoUrl = foundData.photoUrl_fb || employeePhotosMap[safeFramerId] || null;
-                    }
-
-                } catch(e) {
-                    console.error("خطأ أثناء المطابقة العميقة:", e);
-                }
-
-                adminsArray.push({
-                    id: rawId,
-                    safeId: safeFramerId, // نمرر الرقم الصافي لاستخدامه لاحقاً
-                    name: empName,
-                    rank: empRank,
-                    center: fData.center,
-                    password: "بانتظار الاعتماد",
-                    jobTitle: fData.role,
-                    disabled: false,
-                    isPending: true,
-                    preFetchedPhoto: finalPhotoUrl // تمرير الصورة لتفادي البحث عنها مجدداً
-                });
-                officialIds.add(safeFramerId); 
-            }
-        }
-
-        if(adminsArray.length === 0) {
-            container.innerHTML = '<p style="color: #777; text-align: center; font-weight: bold; padding: 20px;">لا توجد حسابات مدراء/مفتشين مسجلة أو في الانتظار حالياً.</p>';
-            return;
-        }
-        
-        // 3. الترتيب
-        adminsArray.sort((a, b) => {
-            let centerA = a.center || "";
-            let centerB = b.center || "";
-            if (centerA !== centerB) return centerA.localeCompare(centerB, 'ar'); 
-            let jobA = a.jobTitle || "";
-            let jobB = b.jobTitle || "";
-            return jobB.localeCompare(jobA, 'ar'); 
-        });
-
-        let html = `
-        <div style="max-height: 65vh; overflow-y: auto; padding-left: 5px;">
-        <table class="admin-table" style="font-size: 15px;">
-            <thead style="position: sticky; top: 0; z-index: 10;">
-                <tr>
-                    <th style="width: 8%; text-align: center;">الصورة</th>
-                    <th style="width: 15%;">الرقم الوظيفي</th>
-                    <th style="width: 22%;">الاسم واللقب</th>
-                    <th style="width: 18%;">المركز المشرف عليه</th>
-                    <th style="width: 15%;">الرقم السري</th>
-                    <th style="width: 22%;">إجراء</th>
-                </tr>
-            </thead>
-            <tbody>
-        `;
-        
-        // 4. بناء الجدول
-        for (let data of adminsArray) {
-            let docId = data.id;
-            
-            let bgStyle = data.isPending ? 'background:#fff3cd;' : (data.disabled ? 'background:#f8d7da; opacity:0.8;' : '');
-            
-            let passHtml = data.isPending 
-                ? `<span style="color:#d35400; font-weight:bold; font-size:13px;"><i class="fa-solid fa-clock"></i> بانتظار الاعتماد</span><br><span style="font-size:10px; color:#777;">(أُضيف من طرف المركز)</span>` 
-                : `<span style="direction: ltr; display:inline-block; font-family: monospace; font-size: 16px;">${data.password}</span>`;
-            
-            let statusBadge = data.isPending 
-                ? '<span style="color:#ff9800; font-size:12px;"><i class="fa-solid fa-hourglass-half"></i> قيد المراجعة</span>'
-                : (data.disabled ? '<span style="color:#dc3545; font-size:12px;"><i class="fa-solid fa-circle-xmark"></i> معطل</span>' : '<span style="color:#28a745; font-size:12px;"><i class="fa-solid fa-circle-check"></i> مفعل</span>');
-
-            // جلب الصورة (إما من المبحوث عنه مسبقاً، أو من القائمة الرسمية)
-            let photoUrl = data.preFetchedPhoto || employeePhotosMap[data.safeId || extractCoreId(docId)] || null;
-            
-            // في حال كان حساباً رسمياً ولم نجد صورته، نبحث عنها بسرعة
-            if (!data.isPending && !photoUrl) {
-                let picSnap = await db.collection("employeescomplus").doc(extractCoreId(docId)).get();
-                if (picSnap.exists && picSnap.data().photoUrl_fb) photoUrl = picSnap.data().photoUrl_fb;
-            }
-            
-            const photoHtml = `
-              <div class="profile-pic-container" style="width: 42px; height: 42px; margin: 0 auto; cursor: default;">
-                  ${photoUrl ? `<img src="${photoUrl}" class="profile-pic-img" alt="صورة" onerror="this.outerHTML='<i class=\\'fa-solid fa-user profile-pic-placeholder\\' style=\\'font-size: 18px;\\'></i>'">` : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
-              </div>
-            `;
-
-            let actionButtons = "";
-            if (data.isPending) {
-                actionButtons = `
-                    <button onclick="approvePendingAdmin('${docId}', '${data.center}', '${data.name}', '${data.rank}', '${data.jobTitle}')" style="background: #0FBA50; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family:'Cairo'; font-weight:bold; font-size: 14px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px;" title="إنشاء وتفعيل الحساب">
-                        <i class="fa-solid fa-user-check"></i> اعتماد وإنشاء الحساب
-                    </button>
-                `;
-            } else {
-                let toggleIcon = data.disabled ? 'fa-toggle-off' : 'fa-toggle-on';
-                let toggleColor = data.disabled ? '#6c757d' : '#28a745';
-                actionButtons = `
-                    <button onclick="toggleAdminStatus('${docId}', ${!!data.disabled})" style="background: ${toggleColor}; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid ${toggleIcon}"></i></button>
-                    <button onclick="editAdminAccount('${docId}')" style="background: #ffc107; color: #000; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button onclick="deleteAdminAccount('${docId}')" style="background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 5px;"><i class="fa-solid fa-trash"></i></button>
-                `;
-            }
-
-            html += `
-                <tr style="${bgStyle} transition:0.3s;">
-                    <td style="text-align:center; vertical-align: middle;">${photoHtml}</td>
-                    <td style="font-weight: bold; text-align:center; vertical-align: middle;">${docId} <br> ${statusBadge}</td>
-                    <td style="font-weight: bold; color: #1E68E8; vertical-align: middle;">
-                        ${data.name} <br>
-                        <div style="font-size: 11px; color: #d90429; font-weight: 900; background: #ffeaea; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 5px; border: 1px solid #ffc6c6;">
-                            ${data.jobTitle || 'عضو تأطير'}
-                        </div>
-                    </td>
-                    <td style="color: #0FBA50; font-weight: bold; vertical-align: middle;">${data.center}</td>
-                    <td style="text-align: center; vertical-align: middle;">${passHtml}</td>
-                    <td style="text-align: center; vertical-align: middle;">
-                        <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
-                            ${actionButtons}
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }
-        html += '</tbody></table></div>';
-        container.innerHTML = html;
-    } catch(e) {
-        console.error(e);
-        container.innerHTML = '<p style="color: red; text-align: center;">خطأ في الاتصال بقاعدة البيانات لجلب الحسابات.</p>';
-    }
-}
-
-
-// دالة تعطيل / تفعيل الحساب
-async function toggleAdminStatus(docId, isDisabled) {
-    try {
-        await db.collection("center_admins").doc(docId).update({ disabled: !isDisabled });
-        loadAdminsList(); 
-    } catch (e) {
-        Swal.fire('خطأ', 'تعذر تحديث حالة الحساب', 'error');
-    }
-}
 
 // دالة التعديل الشامل لحساب رئيس المركز
 async function editAdminAccount(docId) {
@@ -3655,7 +3675,7 @@ function deleteAdminAccount(docId) {
                     timer: 2000, 
                     showConfirmButton: false
                 }).then(() => {
-                    loadAdminsList(); // تحديث الجدول لإخفاء السطر المحذوف
+                   manageCenterAdmins();
                 });
 
             } catch(e) { 
