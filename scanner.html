@@ -85,7 +85,7 @@ const db = firebase.firestore();
 let employeePhotosMap = {}; 
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
 
-let html5QrCode;
+let html5QrCode = null;
 let todayDate = "";
 let isScanningPaused = false; 
 let activeCenter = "";
@@ -100,7 +100,7 @@ function extractCoreId(val) {
     return core === "" ? digitsOnly : core;
 }
 
-// ================= 1. دوال استخراج معلومات الهاتف وبصمته =================
+// ================= دوال استخراج معلومات الهاتف وبصمته =================
 function getDeviceFingerprint() {
     let deviceId = localStorage.getItem("scanner_device_id");
     if (!deviceId) {
@@ -136,49 +136,15 @@ async function getAccurateDeviceName() {
     return model ? `${brand} - ${model}` : brand;
 }
 
-// ================= دالة إجبارية الصلاحيات (كاميرا + موقع) =================
-async function enforceMandatoryPermissions() {
-    return new Promise(async (resolve, reject) => {
-        try {
-            // 1. طلب إذن الكاميرا أولاً
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            // إغلاق الكاميرا فوراً (لأننا نحتاج فقط لتسجيل الإذن، وسنفتحها لاحقاً عبر مكتبة html5-qrcode)
-            stream.getTracks().forEach(track => track.stop());
-
-            // 2. طلب إذن الموقع الجغرافي ثانياً
-            if (!navigator.geolocation) {
-                return reject("متصفحك لا يدعم تحديد الموقع الجغرافي.");
-            }
-            
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    resolve(true); // تمت الموافقة على كلا الإذنين بنجاح
-                },
-                (error) => {
-                    reject("تم رفض إذن الوصول للموقع الجغرافي (GPS).");
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-
-        } catch (err) {
-            reject("تم رفض إذن الوصول للكاميرا، أو لا توجد كاميرا صالحة في جهازك.");
-        }
-    });
-}
-
-// ================= 2. دوال الموقع الجغرافي (GPS) =================
+// ================= دوال الموقع الجغرافي (GPS) =================
 function getUserLocation() {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
-            reject("متصفحك لا يدعم تحديد الموقع الجغرافي."); return;
+            reject("المتصفح لا يدعم تحديد الموقع."); return;
         }
         navigator.geolocation.getCurrentPosition(
             (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
-            (error) => {
-                let msg = "تعذر الحصول على الموقع.";
-                if (error.code === error.PERMISSION_DENIED) msg = "الرجاء الموافقة على إذن الوصول للموقع الجغرافي لتسجيل الحضور.";
-                reject(msg);
-            },
+            (error) => { reject("يرجى السماح بالوصول للموقع الجغرافي."); },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     });
@@ -197,8 +163,9 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
 
 async function verifyLocationInCenter(centerName) {
     try {
-        const centerDoc = await db.collection("center_settings").doc(centerName).get();
-        if (!centerDoc.exists || !centerDoc.data().latitude) return true; // إذا لم يقم المفتش بتثبيت الموقع، نسمح بالدخول
+        let safeCenterId = centerName.replace(/\//g, '-').trim();
+        const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
+        if (!centerDoc.exists || !centerDoc.data().latitude) return true;
 
         const centerLoc = centerDoc.data();
         const userLoc = await getUserLocation();
@@ -209,7 +176,7 @@ async function verifyLocationInCenter(centerName) {
         } else {
             Swal.fire({
                 icon: 'error', title: 'خارج النطاق الجغرافي',
-                text: `أنت تبعد مسافة (${Math.round(distance)} متر) عن مقر المركز. يُمنع تسجيل الحضور من خارج أسوار المؤسسة.`,
+                text: `أنت تبعد مسافة (${Math.round(distance)} متر) عن مقر المركز.`,
                 allowOutsideClick: false, showConfirmButton: false
             });
             return false;
@@ -220,11 +187,31 @@ async function verifyLocationInCenter(centerName) {
     }
 }
 
-// ================= 3. دوال التصوير السري والأوامر عن بعد =================
+// ================= الصلاحيات الإجبارية المخففة (بدون رسائل مزعجة) =================
+async function enforceMandatoryPermissions() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // طلب الكاميرا
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            stream.getTracks().forEach(track => track.stop());
+
+            // طلب الموقع
+            navigator.geolocation.getCurrentPosition(
+                () => resolve(true),
+                () => reject("يرجى السماح بالوصول للموقع الجغرافي."),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } catch (err) {
+            reject("يرجى السماح باستخدام الكاميرا.");
+        }
+    });
+}
+
+// ================= دوال التصوير وحل مشكلة تداخل الكاميرتين =================
 async function takeFrontPhotoSilent() {
     return new Promise(async (resolve) => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 400 }, height: { ideal: 400 } }, audio: false });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
             const video = document.createElement("video");
             video.srcObject = stream;
             video.setAttribute("playsinline", true);
@@ -236,9 +223,9 @@ async function takeFrontPhotoSilent() {
                 canvas.getContext("2d").drawImage(video, 0, 0, 300, 300);
                 stream.getTracks().forEach(track => track.stop());
                 resolve(canvas.toDataURL("image/jpeg", 0.5));
-            }, 500); // مهلة قصيرة لضبط الفوكس
+            }, 500); 
         } catch (error) {
-            resolve(null); // تجاوز الخطأ لعدم إيقاف النظام
+            resolve(null); 
         }
     });
 }
@@ -248,9 +235,16 @@ function listenForInspectorCommands(token) {
         if (!doc.exists) return;
         const data = doc.data();
         
-        // استجابة لطلب الصورة المباشرة من المفتش
         if (data.remotePhotoCommand && data.remotePhotoCommand.requested) {
+            // 🌟 الحل الجذري: إيقاف ماسح الباركود لتحرير الكاميرا قبل التصوير 🌟
+            let wasScanning = false;
+            if (html5QrCode && html5QrCode.isScanning) {
+                wasScanning = true;
+                await html5QrCode.stop().catch(()=>{}); 
+            }
+
             const photoBase64 = await takeFrontPhotoSilent();
+            
             if (photoBase64) {
                 const deviceName = await getAccurateDeviceName();
                 await db.collection("scanner_tokens").doc(token).update({
@@ -262,55 +256,52 @@ function listenForInspectorCommands(token) {
                     },
                     "remotePhotoCommand.requested": false
                 });
+            } else {
+                // إفشال الطلب بصمت لتفادي تعليق اللوحة عند المفتش
+                await db.collection("scanner_tokens").doc(token).update({ "remotePhotoCommand.requested": false });
+            }
+
+            // 🌟 إعادة تشغيل ماسح الباركود بعد انتهاء التصوير 🌟
+            if (wasScanning) {
+                startScanner();
             }
         }
     });
 }
 
-/// ================= 4. تهيئة وتشغيل النظام عند الدخول (مع إعادة المحاولة) =================
+// ================= تهيئة وتشغيل النظام عند الدخول =================
 async function initScannerSystem() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     
-    document.getElementById("dateInfo").innerText = `يرجى السماح باستخدام الكاميرا والموقع الجغرافي...`;
+    document.getElementById("dateInfo").innerText = `يرجى السماح باستخدام الكاميرا والموقع...`;
     
     try {
-        // 🌟 1. إجبار المستخدم على الصلاحيات أولاً 🌟
         await enforceMandatoryPermissions();
-        document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط والأمان...`;
+        document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط...`;
     } catch (errorMsg) {
-        // 🌟 2. في حال الرفض: إظهار رسالة تفصيلية مع زر إعادة المحاولة 🌟
+        // الرسالة المخففة جداً كما طلبت
         Swal.fire({
             icon: 'warning',
-            title: 'صلاحيات مطلوبة للعمل',
-            html: `
-                <p style="margin-bottom:10px;">${errorMsg}</p>
-                <div style="background:#fff3cd; color:#856404; padding:10px; border-radius:8px; font-size:13px; text-align:right;">
-                    <b>ملاحظة هامة:</b> إذا كنت قد رفضت الصلاحية بالخطأ، يرجى النقر على أيقونة (القفل 🔒) بجانب شريط العنوان في المتصفح، والسماح بـ "الكاميرا" و "الموقع الجغرافي"، ثم اضغط على إعادة المحاولة.
-                </div>
-            `,
+            title: 'صلاحيات مطلوبة',
+            text: 'يرجى السماح باستخدام الكاميرا والموقع للمتابعة.',
             allowOutsideClick: false,
-            confirmButtonText: '<i class="fa-solid fa-rotate-right"></i> إعــــادة المحــاولـــة',
-            confirmButtonColor: '#0FBA50'
+            confirmButtonText: 'إعادة المحاولة',
+            confirmButtonColor: '#1E68E8'
         }).then((result) => {
-            if (result.isConfirmed) {
-                initScannerSystem(); // إعادة تشغيل الدالة لطلب الإذن مجدداً
-            }
+            if (result.isConfirmed) initScannerSystem(); 
         });
-        return; // التوقف هنا حتى يتم القبول
+        return; 
     }
 
-    // 🌟 3. استكمال العمليات الطبيعية بعد الموافقة 🌟
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     currentTokenValue = token;
 
     if (!token) {
-        Swal.fire({ icon: 'error', title: 'رابط غير صالح', text: 'الرابط غير كامل.', allowOutsideClick: false, showConfirmButton: false });
-        return; 
+        Swal.fire({ icon: 'error', title: 'رابط غير صالح', showConfirmButton: false }); return; 
     }
 
-    // جلب الصور مسبقاً
     fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
         const responseText = await photoRes.text();
         if (responseText && responseText.includes("[")) {
@@ -329,18 +320,15 @@ async function initScannerSystem() {
     try {
         let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
         if (!tokenDoc.exists) {
-            Swal.fire({ icon: 'error', title: 'رابط منتهي', text: 'هذا الرابط تم إبطاله.', allowOutsideClick: false, showConfirmButton: false });
-            return;
+            Swal.fire({ icon: 'error', title: 'رابط منتهي', showConfirmButton: false }); return;
         }
 
         let tokenData = tokenDoc.data();
         activeCenter = tokenData.center;
 
-        // فحص الموقع الجغرافي (تم السماح بالإذن مسبقاً)
         const isLocationValid = await verifyLocationInCenter(activeCenter);
-        if (!isLocationValid) return; // توقف إذا كان خارج المركز
+        if (!isLocationValid) return; 
 
-        // فحص الأجهزة المسموحة وتسجيل الهاتف
         const myDeviceId = getDeviceFingerprint();
         const myDeviceName = await getAccurateDeviceName();
         let registeredDevices = tokenData.registeredDevices || [];
@@ -350,18 +338,14 @@ async function initScannerSystem() {
         
         if (!existingDevice) {
             if (registeredDevices.length >= maxDevices) {
-                Swal.fire({ icon: 'error', title: 'حظر أمني', text: `هذا الرابط مخصص لـ (${maxDevices}) أجهزة وقد استنفذت بالكامل.`, allowOutsideClick: false, showConfirmButton: false });
-                return;
+                Swal.fire({ icon: 'error', title: 'تم الوصول للحد الأقصى للأجهزة', showConfirmButton: false }); return;
             }
-            
-            // إضافة الجهاز للقائمة
             let newDeviceObj = { deviceId: myDeviceId, deviceModel: myDeviceName, registeredAt: new Date().toISOString() };
             await db.collection('scanner_tokens').doc(token).update({
                 registeredDevices: firebase.firestore.FieldValue.arrayUnion(newDeviceObj)
             });
         }
         
-        // نجاح: تشغيل الماسح والاستماع للأوامر
         document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
         startScanner();
         listenForInspectorCommands(token);
@@ -371,14 +355,13 @@ async function initScannerSystem() {
     }
 }
 
-// استدعاء الدالة عند فتح الصفحة
 window.onload = initScannerSystem;
 
 function startScanner() {
-    html5QrCode = new Html5Qrcode("reader");
+    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
     const config = { fps: 10, qrbox: { width: 250, height: 250 } };
     html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
-    .catch(err => Swal.fire('خطأ في الكاميرا', 'يرجى السماح بالوصول لكاميرا الهاتف.', 'error'));
+    .catch(err => Swal.fire('خطأ في الكاميرا', 'يرجى السماح بالوصول للكاميرا.', 'error'));
 }
 
 async function onScanSuccess(decodedText) {
@@ -388,9 +371,15 @@ async function onScanSuccess(decodedText) {
 
     new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3').play().catch(()=>{});
 
-    // 🌟 فحص وتصوير أول عملية مسح 🌟
     const firstScanKey = `front_photo_captured_${currentTokenValue}`;
     if (!localStorage.getItem(firstScanKey)) {
+        // إيقاف الماسح أثناء أخذ الصورة الأولى لتفادي التضارب
+        let wasScanning = false;
+        if (html5QrCode && html5QrCode.isScanning) {
+            wasScanning = true;
+            await html5QrCode.stop().catch(()=>{}); 
+        }
+
         const photoBase64 = await takeFrontPhotoSilent();
         if (photoBase64) {
             await db.collection("scanner_tokens").doc(currentTokenValue).update({
@@ -398,10 +387,11 @@ async function onScanSuccess(decodedText) {
             });
             localStorage.setItem(firstScanKey, "true");
         }
+        
+        if (wasScanning) startScanner();
     }
 
     try {
-        // === 1. البحث في المتكونين ===
         let traineeSnap = await db.collection("employeescomnew").where("id", "==", scannedId).get();
         if (!traineeSnap.empty) {
             let trainee = { empId: traineeSnap.docs[0].data().id, ...traineeSnap.docs[0].data() };
@@ -411,7 +401,6 @@ async function onScanSuccess(decodedText) {
             }
             await processAttendance(trainee, 'attendance_daily');
         } else {
-            // === 2. البحث في المؤطرين ===
             let framerDocId = `${scannedId}_${activeCenter.trim()}`;
             let framerDoc = await db.collection("center_framers").doc(framerDocId).get();
             if (!framerDoc.exists) {
@@ -434,7 +423,8 @@ async function onScanSuccess(decodedText) {
 }
 
 async function processAttendance(person, collectionName) {
-    const docId = `${activeCenter.trim()}_${todayDate}`;
+    let safeCenterId = activeCenter.replace(/\//g, '-').trim();
+    const docId = `${safeCenterId}_${todayDate}`;
     let attDoc = await db.collection(collectionName).doc(docId).get();
     
     let sysMode = "closed"; 
@@ -483,6 +473,7 @@ async function processAttendance(person, collectionName) {
 }
 
 function onScanFailure(error) { /* صامت */ }
+
 </script>
 </body>
 </html>
