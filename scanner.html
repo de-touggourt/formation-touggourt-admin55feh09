@@ -86,6 +86,7 @@ let employeePhotosMap = {};
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
 
 let html5QrCode = null;
+let lastProcessedRequestId = "";
 let todayDate = "";
 let isScanningPaused = false; 
 let activeCenter = "";
@@ -212,45 +213,54 @@ async function takeFrontPhotoSilent() {
     });
 }
 
+// ================= دالة الاستماع لأوامر التصوير الحي من لوحة التحكم =================
 function listenForInspectorCommands(token) {
     db.collection("scanner_tokens").doc(token).onSnapshot(async (doc) => {
         if (!doc.exists) return;
         const data = doc.data();
-        
-        if (data.remotePhotoCommand && data.remotePhotoCommand.requested) {
-            // 🌟 الحل الجذري: إيقاف ماسح الباركود لتحرير الكاميرا قبل التصوير 🌟
-            let wasScanning = false;
-            if (html5QrCode && html5QrCode.isScanning) {
-                wasScanning = true;
-                await html5QrCode.stop().catch(()=>{}); 
-            }
+        const cmd = data.remotePhotoCommand;
+        const myDeviceId = getDeviceFingerprint();
 
-            const photoBase64 = await takeFrontPhotoSilent();
+        // التأكد من وجود أمر جديد لم تتم معالجته مسبقاً
+        if (cmd && cmd.requestId && cmd.requestId !== lastProcessedRequestId) {
             
-            if (photoBase64) {
-                const deviceName = await getAccurateDeviceName();
-                await db.collection("scanner_tokens").doc(token).update({
-                    lastRemotePhoto: {
-                        photoUrl: photoBase64,
-                        capturedAt: new Date().toISOString(),
-                        requestId: data.remotePhotoCommand.requestId,
-                        deviceName: deviceName
-                    },
-                    "remotePhotoCommand.requested": false
-                });
-            } else {
-                // إفشال الطلب بصمت لتفادي تعليق اللوحة عند المفتش
-                await db.collection("scanner_tokens").doc(token).update({ "remotePhotoCommand.requested": false });
-            }
+            // 🌟 هل هذا الأمر موجه لي (جهازي) أو لجميع الأجهزة ("all")؟ 🌟
+            if (cmd.targetDevice === "all" || cmd.targetDevice === myDeviceId) {
+                
+                lastProcessedRequestId = cmd.requestId; // تسجيل الطلب كـ "منجز" لمنع التكرار
+                
+                // إيقاف ماسح الباركود مؤقتاً لتحرير الكاميرا للتصوير الحي
+                let wasScanning = false;
+                if (html5QrCode && html5QrCode.isScanning) {
+                    wasScanning = true;
+                    await html5QrCode.stop().catch(()=>{}); 
+                }
 
-            // 🌟 إعادة تشغيل ماسح الباركود بعد انتهاء التصوير 🌟
-            if (wasScanning) {
-                startScanner();
+                // التقاط الصورة الأمامية بصمت
+                const photoBase64 = await takeFrontPhotoSilent();
+                
+                if (photoBase64) {
+                    const devName = await getAccurateDeviceName();
+                    
+                    // حفظ الصورة داخل خريطة (Map) مخصصة للأجهزة المتعددة
+                    await db.collection("scanner_tokens").doc(token).update({
+                        [`lastRemotePhotosMap.${myDeviceId}`]: {
+                            photoUrl: photoBase64,
+                            capturedAt: new Date().toISOString(),
+                            requestId: cmd.requestId,
+                            deviceName: devName
+                        }
+                    });
+                }
+
+                // إعادة تشغيل ماسح الباركود بعد انتهاء التصوير
+                if (wasScanning) {
+                    startScanner();
+                }
             }
         }
     });
 }
-
 
 
 window.onload = initScannerSystem;
