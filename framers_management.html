@@ -3366,9 +3366,7 @@ window.printSingleFramerCard = function(docId) {
     printWindow.document.close();
 };
 
-// ============================================================================
-// نظام الرابط السري الموحد وإدارة أجهزة الماسح (المحدث أمنياً)
-// ============================================================================
+// ================= نظام الرابط السري الموحد وإدارة أجهزة الماسح (المحدث أمنياً) =================
 
 window.generateScannerLink = async function() {
     Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
@@ -3412,13 +3410,6 @@ window.generateScannerLink = async function() {
         Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
     }
 };
-
-function generateRandomToken(length) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let t = '';
-    for (let i = 0; i < length; i++) t += chars.charAt(Math.floor(Math.random() * chars.length));
-    return t;
-}
 
 window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "") {
     let currentPath = window.location.href;
@@ -3539,6 +3530,15 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         confirmButtonColor: '#102a43'
     });
 };
+
+function generateRandomToken(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let t = '';
+    for (let i = 0; i < length; i++) t += chars.charAt(Math.floor(Math.random() * chars.length));
+    return t;
+}
+
+
 
 window.copyScannerLink = function() {
     let copyText = document.getElementById("scannerLinkInput");
