@@ -267,42 +267,40 @@ function listenForInspectorCommands(token) {
     });
 }
 
-// ================= 4. تهيئة وتشغيل النظام عند الدخول =================
-window.onload = async function() {
+/// ================= 4. تهيئة وتشغيل النظام عند الدخول (مع إعادة المحاولة) =================
+async function initScannerSystem() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     
-    // 🌟 1. إجبار المستخدم على الصلاحيات قبل أي شيء 🌟
-    document.getElementById("dateInfo").innerText = `يجب السماح بالكاميرا والموقع...`;
+    document.getElementById("dateInfo").innerText = `يرجى السماح باستخدام الكاميرا والموقع الجغرافي...`;
     
     try {
+        // 🌟 1. إجبار المستخدم على الصلاحيات أولاً 🌟
         await enforceMandatoryPermissions();
         document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط والأمان...`;
     } catch (errorMsg) {
-        // في حال رفض أي إذن: طرد المستخدم وتفريغ الصفحة
+        // 🌟 2. في حال الرفض: إظهار رسالة تفصيلية مع زر إعادة المحاولة 🌟
         Swal.fire({
-            icon: 'error',
-            title: 'صلاحيات مفقودة',
-            text: errorMsg + ' (يجب السماح بالصلاحيات للعمل كنقطة تسجيل حضور).',
-            allowOutsideClick: false,
-            confirmButtonText: 'إغلاق',
-            confirmButtonColor: '#d90429'
-        }).then(() => {
-            // تفريغ محتوى الصفحة بالكامل لمنع أي تلاعب
-            document.body.innerHTML = `
-                <div style="text-align:center; margin-top:50px;">
-                    <i class="fa-solid fa-lock" style="font-size:80px; color:#d90429; margin-bottom:20px;"></i>
-                    <h2 style="color:white; font-family:'Cairo';">النظام مغلق</h2>
-                    <p style="color:#aaa; font-family:'Cairo';">تم رفض الصلاحيات المطلوبة للعمل.</p>
+            icon: 'warning',
+            title: 'صلاحيات مطلوبة للعمل',
+            html: `
+                <p style="margin-bottom:10px;">${errorMsg}</p>
+                <div style="background:#fff3cd; color:#856404; padding:10px; border-radius:8px; font-size:13px; text-align:right;">
+                    <b>ملاحظة هامة:</b> إذا كنت قد رفضت الصلاحية بالخطأ، يرجى النقر على أيقونة (القفل 🔒) بجانب شريط العنوان في المتصفح، والسماح بـ "الكاميرا" و "الموقع الجغرافي"، ثم اضغط على إعادة المحاولة.
                 </div>
-            `;
-            // محاولة إغلاق النافذة برمجياً
-            window.close();
+            `,
+            allowOutsideClick: false,
+            confirmButtonText: '<i class="fa-solid fa-rotate-right"></i> إعــــادة المحــاولـــة',
+            confirmButtonColor: '#0FBA50'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                initScannerSystem(); // إعادة تشغيل الدالة لطلب الإذن مجدداً
+            }
         });
-        return; // إيقاف تنفيذ الكود هنا نهائياً
+        return; // التوقف هنا حتى يتم القبول
     }
 
-    // 🌟 2. استكمال العمليات الطبيعية بعد الموافقة 🌟
+    // 🌟 3. استكمال العمليات الطبيعية بعد الموافقة 🌟
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     currentTokenValue = token;
@@ -371,7 +369,10 @@ window.onload = async function() {
     } catch (error) {
         Swal.fire('خطأ', 'تعذر التحقق من الرابط.', 'error');
     }
-};
+}
+
+// استدعاء الدالة عند فتح الصفحة
+window.onload = initScannerSystem;
 
 function startScanner() {
     html5QrCode = new Html5Qrcode("reader");

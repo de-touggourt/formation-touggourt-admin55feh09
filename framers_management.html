@@ -3378,7 +3378,7 @@ window.generateScannerLink = async function() {
         let currentToken = '';
         let oldDocId = null;
         let maxDevices = 1;
-        let registeredDevicesList = []; // مصفوفة لحفظ الأجهزة المقترنة
+        let registeredDevicesList = [];
 
         if (!snapshot.empty) {
             const data = snapshot.docs[0].data();
@@ -3390,14 +3390,22 @@ window.generateScannerLink = async function() {
             currentToken = generateRandomToken(15);
             await db.collection('scanner_tokens').doc(currentToken).set({
                 center: INSPECTOR_CENTER,
-                maxDevices: 1, // السماح لجهاز واحد مبدئياً
-                registeredDevices: [], // مصفوفة فارغة في البداية
+                maxDevices: 1, 
+                registeredDevices: [], 
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             oldDocId = currentToken;
         }
 
-        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList);
+        // 🌟 جلب الإحداثيات المحفوظة مسبقاً إن وجدت لعرضها في النافذة 🌟
+        const centerDoc = await db.collection("center_settings").doc(INSPECTOR_CENTER).get();
+        let savedLat = "", savedLng = "";
+        if (centerDoc.exists && centerDoc.data().latitude) {
+            savedLat = centerDoc.data().latitude;
+            savedLng = centerDoc.data().longitude;
+        }
+
+        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng);
 
     } catch (e) {
         console.error(e);
@@ -3412,7 +3420,7 @@ function generateRandomToken(length) {
     return t;
 }
 
-window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = []) {
+window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "") {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
     let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
@@ -3430,7 +3438,6 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         overlay.style.display = 'flex'; overlay.style.flexDirection = 'column';
         overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
         overlay.style.cursor = 'zoom-out';
-        
         overlay.onclick = function() { document.body.removeChild(overlay); };
         
         let img = document.createElement('img');
@@ -3449,7 +3456,6 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         document.body.appendChild(overlay);
     };
 
-    // تجهيز قائمة الهواتف المتصلة برمجياً
     let registeredCount = registeredDevicesList.length;
     let devicesHtml = '';
     if (registeredCount > 0) {
@@ -3497,17 +3503,33 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                 </button>
             </div>
 
-            <!-- أزرار الحماية الجغرافية والكاميرا المباشرة -->
+            <!-- 🌟 أزرار الحماية الجغرافية والكاميرا المباشرة 🌟 -->
             <div style="border-top:1px dashed #cbd5e1; padding-top:15px; display:flex; flex-direction:column; gap:8px;">
-                <button onclick="captureCenterLocation()" style="background:#8e44ad; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo';">
-                    <i class="fa-solid fa-location-dot"></i> تثبيت الموقع الجغرافي للمركز (GPS)
-                </button>
+                
+                <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 12px; text-align: right;">
+                    <label style="font-weight: bold; color: #d35400; font-size: 13px; display: block; margin-bottom: 8px;">
+                        <i class="fa-solid fa-location-dot"></i> إحداثيات المركز الجغرافية (GPS):
+                    </label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="text" id="manualLat" value="${savedLat}" placeholder="خط العرض (Latitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
+                        <input type="text" id="manualLng" value="${savedLng}" placeholder="خط الطول (Longitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="autoCaptureLocation()" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
+                            <i class="fa-solid fa-crosshairs"></i> تحديد آلي من الهاتف
+                        </button>
+                        <button onclick="saveManualLocation()" style="background:#0FBA50; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
+                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإحداثيات
+                        </button>
+                    </div>
+                </div>
+
                 <div style="display:flex; gap:8px;">
                     <button onclick="viewScannerFirstScanPhoto('${token}')" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
                         <i class="fa-solid fa-image-portrait"></i> صورة أول مستخدم
                     </button>
                     <button onclick="requestRemoteSnapshot('${token}')" style="background:#e67e22; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                        <i class="fa-solid fa-camera-rotate"></i> طلب صورة حية (مباشر)
+                        <i class="fa-solid fa-camera-rotate"></i> طلب صورة حية
                     </button>
                 </div>
             </div>
@@ -3588,20 +3610,40 @@ window.getUserLocation = function() {
     });
 };
 
-window.captureCenterLocation = async function() {
-    Swal.fire({ title: 'جاري تحديد موقع المركز...', text: 'يرجى الموافقة على إذن الوصول للموقع الجغرافي.', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+// دوال تحديد وتثبيت الموقع الجغرافي (تلقائي ويدوي)
+window.autoCaptureLocation = async function() {
+    Swal.fire({ title: 'جاري تحديد موقع المركز...', text: 'يرجى الموافقة على إذن الوصول للموقع الجغرافي في جهازك.', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     try {
-        const loc = await window.getUserLocation();
+        const loc = await window.getUserLocation(); // يجب أن تكون الدالة getUserLocation موجودة في كودك
+        document.getElementById('manualLat').value = loc.lat;
+        document.getElementById('manualLng').value = loc.lng;
+        
         await db.collection("center_settings").doc(INSPECTOR_CENTER).set({
             latitude: loc.lat, longitude: loc.lng, radiusMeters: 200 
         }, { merge: true });
-        Swal.fire({
-            icon: 'success', title: 'تم تثبيت الموقع', 
-            html: `تم تثبيت النطاق الجغرافي للمركز بنجاح.<br>أي ماسح يخرج عن نطاق 200 متر سيتوقف عن العمل.<br><br><span style="color:#1E68E8; font-family:monospace;">Lat: ${loc.lat} <br> Lng: ${loc.lng}</span>`,
-            confirmButtonColor: '#102a43'
-        });
+        
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم جلب وتثبيت الإحداثيات بنجاح', showConfirmButton: false, timer: 2000 });
     } catch (err) {
         Swal.fire('خطأ', err, 'error');
+    }
+};
+
+window.saveManualLocation = async function() {
+    let lat = parseFloat(document.getElementById('manualLat').value);
+    let lng = parseFloat(document.getElementById('manualLng').value);
+    
+    if(isNaN(lat) || isNaN(lng)) {
+        return Swal.fire('خطأ', 'يرجى إدخال إحداثيات رقمية صحيحة.', 'error');
+    }
+    
+    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        await db.collection("center_settings").doc(INSPECTOR_CENTER).set({
+            latitude: lat, longitude: lng, radiusMeters: 200 
+        }, { merge: true });
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم حفظ الإحداثيات يدوياً بنجاح', showConfirmButton: false, timer: 2000 });
+    } catch (err) {
+        Swal.fire('خطأ', 'حدث مشكل أثناء الحفظ.', 'error');
     }
 };
 
