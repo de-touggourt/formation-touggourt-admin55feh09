@@ -3776,6 +3776,9 @@ window.viewScannerFirstScanPhoto = async function(token) {
     } catch(e) { Swal.fire('خطأ', 'فشل الاتصال', 'error'); }
 };
 
+// ============================================================================
+// النظام المطور لطلب صورة حية (بدون تعليق النافذة أو اهتزاز شريط التمرير)
+// ============================================================================
 window.requestRemoteSnapshot = async function(token) {
     Swal.fire({title: 'جاري التحضير...', didOpen: () => Swal.showLoading()});
     
@@ -3803,7 +3806,8 @@ window.requestRemoteSnapshot = async function(token) {
                     ${optionsHtml}
                 </select>
             `,
-            showCancelButton: true, confirmButtonText: 'إرسال أمر الالتقاط', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22'
+            showCancelButton: true, confirmButtonText: 'إرسال أمر الالتقاط', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+            heightAuto: false // 🌟 منع النافذة من العبث بشريط التمرير
         }).then(async (result) => {
             if (result.isConfirmed) {
                 const targetDevice = document.getElementById('targetDeviceSelect').value;
@@ -3811,24 +3815,27 @@ window.requestRemoteSnapshot = async function(token) {
 
                 // 2. إرسال الأمر للجهاز/الأجهزة
                 await db.collection("scanner_tokens").doc(token).update({
-                    remotePhotoCommand: { requestId: reqId, targetDevice: targetDevice }
+                    remotePhotoCommand: { requestId: reqId, targetDevice: targetDevice, requested: true }
                 });
 
                 // 3. فتح نافذة الاستماع وانتظار وصول الصور
                 let photoListener = null;
+                let currentlyRenderedHtml = ""; // 🌟 لتخزين ما تم رسمه ومنع التكرار المزعج
 
                 Swal.fire({
                     title: 'جاري استلام الصور...',
                     html: `
-                        <div id="livePhotosGrid" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:15px; min-height:150px; align-items:center;">
-                            <div style="color:#777; font-family:'Cairo'; font-weight:bold;">
-                                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color:#e67e22; margin-bottom:10px; display:block;"></i> 
-                                بانتظار استجابة الكاميرا (يجب أن يكون هاتف الماسح مفتوحاً)...
+                        <div id="livePhotosGrid" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:15px; min-height:220px; align-items:center;">
+                            <div style="color:#777; font-family:'Cairo'; font-weight:bold; padding: 20px;">
+                                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color:#e67e22; margin-bottom:15px; display:block;"></i> 
+                                بانتظار استجابة الكاميرا (يجب أن يكون الهاتف مفتوحاً)...
                             </div>
                         </div>
                     `,
-                    width: targetDevice === 'all' ? '800px' : '500px', // تكبير النافذة إذا طلبنا جميع الأجهزة
-                    allowOutsideClick: false, showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43',
+                    width: targetDevice === 'all' ? '800px' : '400px',
+                    allowOutsideClick: false, showConfirmButton: true, confirmButtonText: 'إغلاق النافذة', confirmButtonColor: '#102a43',
+                    heightAuto: false, // 🌟 منع اهتزاز النافذة
+                    scrollbarPadding: false, // 🌟 منع إضافة هوامش للتمرير
                     didOpen: () => {
                         photoListener = db.collection("scanner_tokens").doc(token).onSnapshot(doc => {
                             if(doc.exists && doc.data().lastRemotePhotosMap) {
@@ -3844,7 +3851,7 @@ window.requestRemoteSnapshot = async function(token) {
                                             let capTime = new Date(photoData.capturedAt).toLocaleTimeString('ar-DZ');
                                             gridHtml += `
                                                 <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px; padding:10px; text-align:center; width:220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                                                    <div style="font-size:12px; font-weight:bold; color:#1E68E8; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📱 ${photoData.deviceName}</div>
+                                                    <div style="font-size:12px; font-weight:bold; color:#1E68E8; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${photoData.deviceName}">📱 ${photoData.deviceName}</div>
                                                     <img src="${photoData.photoUrl}" style="width:160px; height:160px; border-radius:10px; object-fit:cover; border:3px solid #0FBA50; margin-bottom:8px;">
                                                     <div style="font-size:12px; font-weight:bold; color:#555;"><i class="fa-solid fa-clock"></i> ${capTime}</div>
                                                 </div>
@@ -3853,8 +3860,10 @@ window.requestRemoteSnapshot = async function(token) {
                                     }
                                 }
 
-                                if (receivedCount > 0) {
+                                // 🌟 التحديث الذكي: لا نُحدث الواجهة إلا إذا وصلت صورة جديدة حقاً 🌟
+                                if (receivedCount > 0 && gridHtml !== currentlyRenderedHtml) {
                                     document.getElementById('livePhotosGrid').innerHTML = gridHtml;
+                                    currentlyRenderedHtml = gridHtml; // حفظ الحالة لمنع إعادة الرسم العشوائي
                                 }
                             }
                         });

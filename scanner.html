@@ -162,7 +162,7 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
     return R * c; 
 }
 
-// ================= دالة التحقق من الموقع (متوافقة مع النطاق المخصص) =================
+// ================= دالة التحقق من الموقع (متوافقة مع النطاق المخصص وبدون كشف الأرقام) =================
 async function verifyLocationInCenter(centerName) {
     try {
         let safeCenterId = centerName.replace(/\//g, '-').trim();
@@ -175,7 +175,7 @@ async function verifyLocationInCenter(centerName) {
         const userLoc = await getUserLocation();
         const distance = getDistanceInMeters(userLoc.lat, userLoc.lng, centerLoc.latitude, centerLoc.longitude);
         
-        // 🌟 استخراج النطاق المسموح (100 متر افتراضياً) 🌟
+        // 🌟 استخراج النطاق المسموح 🌟
         const allowedRadius = centerLoc.radiusMeters || 100;
 
         if (distance <= allowedRadius) {
@@ -184,7 +184,8 @@ async function verifyLocationInCenter(centerName) {
             Swal.fire({
                 icon: 'error', 
                 title: 'خارج النطاق الجغرافي',
-                text: `أنت تبعد مسافة (${Math.round(distance)} متر) عن مقر المركز. النطاق المسموح هو (${allowedRadius} متر) فقط.`,
+                // 🌟 تم تعديل الرسالة لتكون مبهمة أمنياً ولا تكشف الأرقام 🌟
+                text: 'أنت متواجد خارج النطاق الجغرافي المسموح به للمركز. يُمنع فتح الماسح أو تسجيل الحضور من خارج المركز.',
                 allowOutsideClick: false, 
                 showConfirmButton: false
             });
