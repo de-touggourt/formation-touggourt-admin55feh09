@@ -3395,26 +3395,38 @@ window.generateScannerLink = async function() {
             oldDocId = currentToken;
         }
 
-        // 🌟 جلب الإحداثيات المحفوظة مسبقاً إن وجدت لعرضها في النافذة 🌟
-        const centerDoc = await db.collection("center_settings").doc(INSPECTOR_CENTER).get();
-        let savedLat = "", savedLng = "";
-        if (centerDoc.exists && centerDoc.data().latitude) {
-            savedLat = centerDoc.data().latitude;
-            savedLng = centerDoc.data().longitude;
+        // 🌟 جلب الإحداثيات والنطاق المحفوظ مسبقاً 🌟
+        let savedLat = "", savedLng = "", savedRadius = 100;
+        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
+        
+        try {
+            const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
+            if (centerDoc.exists) {
+                if (centerDoc.data().latitude) {
+                    savedLat = centerDoc.data().latitude;
+                    savedLng = centerDoc.data().longitude;
+                }
+                if (centerDoc.data().radiusMeters) {
+                    savedRadius = centerDoc.data().radiusMeters; // جلب النطاق المخصص
+                }
+            }
+        } catch (gpsError) {
+            console.warn("تعذر جلب إعدادات الموقع.", gpsError);
         }
 
-        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng);
+        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng, savedRadius);
 
     } catch (e) {
-        console.error(e);
-        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+        console.error("خطأ عام في توليد الرابط:", e);
+        Swal.fire({ icon: 'error', title: 'خطأ', text: 'حدث مشكلة في جلب الرابط: ' + e.message });
     }
 };
 
-window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "") {
+window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "", savedRadius = 100) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
     let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
+
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
 
     window.enlargeQR = function() {
@@ -3446,7 +3458,7 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         document.body.appendChild(overlay);
     };
 
-    let tokenListener = null; // متغير لحفظ الاستماع اللحظي لإيقافه عند إغلاق النافذة
+    let tokenListener = null;
 
     Swal.fire({
         title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور وإدارة الماسح',
@@ -3468,7 +3480,6 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                     </div>
                 </div>
                 
-                <!-- 🌟 الإحصاء الإجمالي اللحظي 🌟 -->
                 <div style="display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;">
                     <span style="font-size: 12px; color: #102a43; font-weight: bold;"><i class="fa-solid fa-chart-simple"></i> إجمالي البطاقات الممسوحة بالمركز:</span>
                     <span id="totalScansUI" style="background: #1E68E8; color: white; padding: 2px 10px; border-radius: 12px; font-size: 14px; font-weight: 900;">0</span>
@@ -3497,20 +3508,30 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                 <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 12px; text-align: right;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <label style="font-weight: bold; color: #d35400; font-size: 13px;">
-                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز الجغرافية (GPS):
+                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز والنطاق (GPS):
                         </label>
                         <span id="gpsMsg" style="font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
                     </div>
+
+                    <!-- 🌟 الحقل الجديد للتحكم في الحيز / النطاق بالمتر 🌟 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #fff; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <span style="font-size: 12px; font-weight: bold; color: #102a43;">
+                            <i class="fa-solid fa-ruler-horizontal" style="color: #1E68E8;"></i> النطاق المسموح (بالمتر):
+                        </span>
+                        <input type="number" id="centerRadius" min="1" max="500" value="${savedRadius}" style="width: 70px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #17a2b8; outline: none;">
+                    </div>
+
                     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                         <input type="text" id="manualLat" value="${savedLat}" placeholder="خط العرض (Latitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
                         <input type="text" id="manualLng" value="${savedLng}" placeholder="خط الطول (Longitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
                     </div>
+                    
                     <div style="display: flex; gap: 8px;">
                         <button onclick="autoCaptureLocation()" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-crosshairs"></i> تحديد آلي من الهاتف
+                            <i class="fa-solid fa-crosshairs"></i> تحديد آلي (هاتف / حاسوب)
                         </button>
                         <button onclick="saveManualLocation()" style="background:#0FBA50; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإحداثيات
+                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
                         </button>
                     </div>
                 </div>
@@ -3520,7 +3541,7 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                         <i class="fa-solid fa-image-portrait"></i> صورة أول مستخدم
                     </button>
                     <button onclick="requestRemoteSnapshot('${token}')" style="background:#e67e22; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                        <i class="fa-solid fa-camera-rotate"></i> طلب صورة حية
+                        <i class="fa-solid fa-camera-rotate"></i> طلب صورة حية (مباشر)
                     </button>
                 </div>
             </div>
@@ -3529,7 +3550,6 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         confirmButtonText: 'إغلاق النافذة',
         confirmButtonColor: '#102a43',
         didOpen: () => {
-            // 🌟 تفعيل الاستماع اللحظي (Real-time) للإحصائيات والأجهزة 🌟
             tokenListener = db.collection('scanner_tokens').doc(token).onSnapshot(doc => {
                 if (doc.exists) {
                     let data = doc.data();
@@ -3537,11 +3557,9 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                     let counts = data.scanCounts || {};
                     let devices = data.registeredDevices || [];
                     
-                    // تحديث الإجمالي
                     let totalEl = document.getElementById('totalScansUI');
                     if (totalEl) totalEl.innerText = total;
 
-                    // تحديث قائمة الأجهزة وعداد كل جهاز
                     let devicesListEl = document.getElementById('devicesListUI');
                     if (devicesListEl) {
                         if (devices.length > 0) {
@@ -3549,7 +3567,7 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                             devices.forEach((dev, idx) => {
                                 let dName = (typeof dev === 'object') ? dev.deviceModel : 'جهاز غير معروف';
                                 let dTime = (typeof dev === 'object' && dev.registeredAt) ? new Date(dev.registeredAt).toLocaleTimeString('ar-DZ') : '';
-                                let devCount = counts[dev.deviceId] || 0; // سحب العداد الخاص بهذا الجهاز
+                                let devCount = counts[dev.deviceId] || 0; 
                                 
                                 dHtml += `
                                 <div style="border-bottom:1px dashed #eee; padding:6px 0; text-align:right; display:flex; justify-content:space-between; align-items:center;">
@@ -3566,7 +3584,6 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
             });
         },
         willClose: () => {
-            // إيقاف الاستماع عند إغلاق النافذة للحفاظ على أداء المتصفح
             if (tokenListener) tokenListener();
         }
     });
@@ -3624,15 +3641,6 @@ window.regenerateToken = function(oldDocId) {
 // دوال الحماية الجديدة (GPS، الأجهزة، الكاميرا الحية، وصورة الموثوقية)
 // ============================================================================
 
-// 1. تحديث عدد الأجهزة المسموحة
-window.updateTokenMaxDevices = async function(token, newMax) {
-    let val = parseInt(newMax) || 1;
-    try {
-        await db.collection('scanner_tokens').doc(token).update({ maxDevices: val });
-        if(!Swal.isLoading()) Swal.fire({toast: true, position: 'top-end', icon: 'success', title: `تم التحديث لـ ${val} أجهزة`, showConfirmButton: false, timer: 1500});
-    } catch (e) { console.error(e); }
-};
-
 // 2. دوال تحديد وتثبيت الموقع الجغرافي (GPS)
 window.getUserLocation = function() {
     return new Promise((resolve, reject) => {
@@ -3651,40 +3659,73 @@ window.getUserLocation = function() {
     });
 };
 
-// دوال تحديد وتثبيت الموقع الجغرافي (تلقائي ويدوي)
-window.autoCaptureLocation = async function() {
-    Swal.fire({ title: 'جاري تحديد موقع المركز...', text: 'يرجى الموافقة على إذن الوصول للموقع الجغرافي في جهازك.', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+window.updateTokenMaxDevices = async function(token, newMax) {
+    let val = parseInt(newMax) || 1;
+    let msgSpan = document.getElementById('maxDevMsg');
+    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
+
     try {
-        const loc = await window.getUserLocation(); // يجب أن تكون الدالة getUserLocation موجودة في كودك
+        await db.collection('scanner_tokens').doc(token).update({ maxDevices: val });
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
+    } catch (e) {
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> فشل الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
+    }
+};
+
+window.autoCaptureLocation = async function() {
+    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
+    if(radiusVal < 1) radiusVal = 1;
+    if(radiusVal > 500) radiusVal = 500;
+    document.getElementById('centerRadius').value = radiusVal; // التحديث في الواجهة لتصحيح الخطأ إن وجد
+
+    let msgSpan = document.getElementById('gpsMsg');
+    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#17a2b8;"></i> جاري الجلب...'; msgSpan.style.opacity = '1'; }
+    
+    try {
+        const loc = await window.getUserLocation(); 
         document.getElementById('manualLat').value = loc.lat;
         document.getElementById('manualLng').value = loc.lng;
         
-        await db.collection("center_settings").doc(INSPECTOR_CENTER).set({
-            latitude: loc.lat, longitude: loc.lng, radiusMeters: 200 
+        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
+        await db.collection("center_settings").doc(safeCenterId).set({
+            latitude: loc.lat, longitude: loc.lng, radiusMeters: radiusVal 
         }, { merge: true });
         
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم جلب وتثبيت الإحداثيات بنجاح', showConfirmButton: false, timer: 2000 });
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم جلب وتثبيت الإعدادات'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
     } catch (err) {
-        Swal.fire('خطأ', err, 'error');
+        if (msgSpan) { msgSpan.innerHTML = `<span style="color:#d90429;">${err}</span>`; setTimeout(() => { msgSpan.style.opacity = '0'; }, 4000); }
     }
 };
 
 window.saveManualLocation = async function() {
     let lat = parseFloat(document.getElementById('manualLat').value);
     let lng = parseFloat(document.getElementById('manualLng').value);
+    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
+    
+    // 🌟 حماية القيم المدخلة 🌟
+    if(radiusVal < 1) radiusVal = 1;
+    if(radiusVal > 500) radiusVal = 500;
+    document.getElementById('centerRadius').value = radiusVal;
+
+    let msgSpan = document.getElementById('gpsMsg');
     
     if(isNaN(lat) || isNaN(lng)) {
-        return Swal.fire('خطأ', 'يرجى إدخال إحداثيات رقمية صحيحة.', 'error');
+        if (msgSpan) { msgSpan.innerHTML = '<span style="color:#d90429;">إحداثيات غير صالحة!</span>'; msgSpan.style.opacity = '1'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
+        return;
     }
     
-    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
+    
     try {
-        await db.collection("center_settings").doc(INSPECTOR_CENTER).set({
-            latitude: lat, longitude: lng, radiusMeters: 200 
+        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
+        await db.collection("center_settings").doc(safeCenterId).set({
+            latitude: lat, longitude: lng, radiusMeters: radiusVal 
         }, { merge: true });
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم حفظ الإحداثيات يدوياً بنجاح', showConfirmButton: false, timer: 2000 });
+        
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ يدوياً بنجاح'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
     } catch (err) {
-        Swal.fire('خطأ', 'حدث مشكل أثناء الحفظ.', 'error');
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> خطأ في الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
     }
 };
 
@@ -3735,61 +3776,95 @@ window.viewScannerFirstScanPhoto = async function(token) {
     } catch(e) { Swal.fire('خطأ', 'فشل الاتصال', 'error'); }
 };
 
-// 4. إرسال أمر التقاط صورة فورية (عن بعد)
 window.requestRemoteSnapshot = async function(token) {
-    Swal.fire({
-        title: 'جاري إرسال الطلب للماسح...',
-        text: 'بانتظار استجابة الهاتف (يجب أن تكون شاشة الماسح مفتوحة أمام المكلف)...',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
-    });
-
+    Swal.fire({title: 'جاري التحضير...', didOpen: () => Swal.showLoading()});
+    
     try {
-        const tokenRef = db.collection("scanner_tokens").doc(token);
+        const docSnap = await db.collection("scanner_tokens").doc(token).get();
+        if (!docSnap.exists) return;
         
-        // إرسال أمر الالتقاط للهاتف مع ختم زمني فريد
-        await tokenRef.update({
-            remotePhotoCommand: { requested: true, requestId: Date.now().toString() }
+        let devices = docSnap.data().registeredDevices || [];
+        if (devices.length === 0) {
+            Swal.fire('تنبيه', 'لا توجد أجهزة ماسح مقترنة حالياً لطلب صورة منها.', 'info');
+            return;
+        }
+
+        let optionsHtml = '<option value="all">📸 التقاط لجميع الأجهزة معاً</option>';
+        devices.forEach((dev, idx) => {
+            optionsHtml += `<option value="${dev.deviceId}">📱 جهاز ${idx + 1}: ${dev.deviceModel}</option>`;
         });
 
-        // الاستماع اللحظي لوصول الصورة
-        const unsubscribe = tokenRef.onSnapshot((doc) => {
-            if (doc.exists && doc.data().lastRemotePhoto) {
-                const photoData = doc.data().lastRemotePhoto;
-                
-                // التأكد من أن الصورة هي استجابة للطلب الحالي
-                if (photoData.requestId === doc.data().remotePhotoCommand?.requestId && !doc.data().remotePhotoCommand?.requested) {
-                    unsubscribe(); // إيقاف الاستماع
-                    
-                    let capturedDate = new Date(photoData.capturedAt).toLocaleTimeString('ar-DZ');
-                    Swal.fire({
-                        title: '<i class="fa-solid fa-camera" style="color:#0FBA50;"></i> صورة حية مباشرة من الماسح',
-                        html: `
-                            <div style="text-align: center; font-family: 'Cairo';">
-                                <img src="${photoData.photoUrl}" style="width: 250px; height: 250px; border-radius: 15px; object-fit: cover; border: 3px solid #0FBA50; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                                <div style="font-size: 13px; color: #555; font-weight: bold; background: #f8fafc; padding: 10px; border-radius: 8px;">
-                                    <span>نوع الجهاز: <b style="color:#1E68E8;">${photoData.deviceName || 'جهاز غير معروف'}</b></span><br>
-                                    <span>التقطت الآن: <b style="color:#e67e22;">${capturedDate}</b></span>
-                                </div>
+        // 1. اختيار الجهاز
+        Swal.fire({
+            title: 'تحديد الجهاز المستهدف',
+            html: `
+                <p style="font-size:14px; text-align:right; color:#555; margin-bottom:10px;">الرجاء اختيار الجهاز الذي تريد التقاط صورة حية منه الآن:</p>
+                <select id="targetDeviceSelect" class="swal2-select" style="width:100%; font-family:'Cairo'; font-size:14px; margin:0; padding:10px;">
+                    ${optionsHtml}
+                </select>
+            `,
+            showCancelButton: true, confirmButtonText: 'إرسال أمر الالتقاط', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                const targetDevice = document.getElementById('targetDeviceSelect').value;
+                const reqId = Date.now().toString();
+
+                // 2. إرسال الأمر للجهاز/الأجهزة
+                await db.collection("scanner_tokens").doc(token).update({
+                    remotePhotoCommand: { requestId: reqId, targetDevice: targetDevice }
+                });
+
+                // 3. فتح نافذة الاستماع وانتظار وصول الصور
+                let photoListener = null;
+
+                Swal.fire({
+                    title: 'جاري استلام الصور...',
+                    html: `
+                        <div id="livePhotosGrid" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:15px; min-height:150px; align-items:center;">
+                            <div style="color:#777; font-family:'Cairo'; font-weight:bold;">
+                                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color:#e67e22; margin-bottom:10px; display:block;"></i> 
+                                بانتظار استجابة الكاميرا (يجب أن يكون هاتف الماسح مفتوحاً)...
                             </div>
-                        `,
-                        confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
-                    });
-                }
+                        </div>
+                    `,
+                    width: targetDevice === 'all' ? '800px' : '500px', // تكبير النافذة إذا طلبنا جميع الأجهزة
+                    allowOutsideClick: false, showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43',
+                    didOpen: () => {
+                        photoListener = db.collection("scanner_tokens").doc(token).onSnapshot(doc => {
+                            if(doc.exists && doc.data().lastRemotePhotosMap) {
+                                const photosMap = doc.data().lastRemotePhotosMap;
+                                let gridHtml = '';
+                                let receivedCount = 0;
+
+                                // الفرز وعرض الصور التي تتطابق مع الطلب الحالي فقط
+                                for (const [devId, photoData] of Object.entries(photosMap)) {
+                                    if (photoData.requestId === reqId) {
+                                        if (targetDevice === 'all' || targetDevice === devId) {
+                                            receivedCount++;
+                                            let capTime = new Date(photoData.capturedAt).toLocaleTimeString('ar-DZ');
+                                            gridHtml += `
+                                                <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px; padding:10px; text-align:center; width:220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                                                    <div style="font-size:12px; font-weight:bold; color:#1E68E8; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📱 ${photoData.deviceName}</div>
+                                                    <img src="${photoData.photoUrl}" style="width:160px; height:160px; border-radius:10px; object-fit:cover; border:3px solid #0FBA50; margin-bottom:8px;">
+                                                    <div style="font-size:12px; font-weight:bold; color:#555;"><i class="fa-solid fa-clock"></i> ${capTime}</div>
+                                                </div>
+                                            `;
+                                        }
+                                    }
+                                }
+
+                                if (receivedCount > 0) {
+                                    document.getElementById('livePhotosGrid').innerHTML = gridHtml;
+                                }
+                            }
+                        });
+                    },
+                    willClose: () => { if (photoListener) photoListener(); }
+                });
             }
         });
-
-        // مهلة 15 ثانية للانتظار
-        setTimeout(() => {
-            unsubscribe();
-            if (Swal.isLoading()) {
-                Swal.fire('انتهت المهلة', 'لم يستجب هاتف الماسح، قد يكون مغلقاً أو خارج التغطية.', 'warning');
-            }
-        }, 15000);
-
     } catch (e) {
-        console.error(e);
-        Swal.fire('خطأ', 'حدث مشكل أثناء إرسال الأمر.', 'error');
+        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال.', 'error');
     }
 };
 

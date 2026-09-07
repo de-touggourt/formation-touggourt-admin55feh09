@@ -4082,26 +4082,38 @@ window.generateScannerLink = async function() {
             oldDocId = currentToken;
         }
 
-        // 🌟 جلب الإحداثيات المحفوظة مسبقاً إن وجدت لعرضها في النافذة 🌟
-        const centerDoc = await db.collection("center_settings").doc(INSPECTOR_CENTER).get();
-        let savedLat = "", savedLng = "";
-        if (centerDoc.exists && centerDoc.data().latitude) {
-            savedLat = centerDoc.data().latitude;
-            savedLng = centerDoc.data().longitude;
+        // 🌟 جلب الإحداثيات والنطاق المحفوظ مسبقاً 🌟
+        let savedLat = "", savedLng = "", savedRadius = 100;
+        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
+        
+        try {
+            const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
+            if (centerDoc.exists) {
+                if (centerDoc.data().latitude) {
+                    savedLat = centerDoc.data().latitude;
+                    savedLng = centerDoc.data().longitude;
+                }
+                if (centerDoc.data().radiusMeters) {
+                    savedRadius = centerDoc.data().radiusMeters; // جلب النطاق المخصص
+                }
+            }
+        } catch (gpsError) {
+            console.warn("تعذر جلب إعدادات الموقع.", gpsError);
         }
 
-        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng);
+        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng, savedRadius);
 
     } catch (e) {
-        console.error(e);
-        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+        console.error("خطأ عام في توليد الرابط:", e);
+        Swal.fire({ icon: 'error', title: 'خطأ', text: 'حدث مشكلة في جلب الرابط: ' + e.message });
     }
 };
 
-window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "") {
+window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "", savedRadius = 100) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
     let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
+
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
 
     window.enlargeQR = function() {
@@ -4183,21 +4195,30 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                 <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 12px; text-align: right;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <label style="font-weight: bold; color: #d35400; font-size: 13px;">
-                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز الجغرافية (GPS):
+                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز والنطاق (GPS):
                         </label>
                         <span id="gpsMsg" style="font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
                     </div>
+
+                    <!-- 🌟 الحقل الجديد للتحكم في الحيز / النطاق بالمتر 🌟 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #fff; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <span style="font-size: 12px; font-weight: bold; color: #102a43;">
+                            <i class="fa-solid fa-ruler-horizontal" style="color: #1E68E8;"></i> النطاق المسموح (بالمتر):
+                        </span>
+                        <input type="number" id="centerRadius" min="1" max="500" value="${savedRadius}" style="width: 70px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #17a2b8; outline: none;">
+                    </div>
+
                     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                         <input type="text" id="manualLat" value="${savedLat}" placeholder="خط العرض (Latitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
                         <input type="text" id="manualLng" value="${savedLng}" placeholder="خط الطول (Longitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
                     </div>
+                    
                     <div style="display: flex; gap: 8px;">
-                        <!-- 🌟 تم تعديل النص هنا ليصبح (هاتف / حاسوب) 🌟 -->
                         <button onclick="autoCaptureLocation()" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
                             <i class="fa-solid fa-crosshairs"></i> تحديد آلي (هاتف / حاسوب)
                         </button>
                         <button onclick="saveManualLocation()" style="background:#0FBA50; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإحداثيات
+                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
                         </button>
                     </div>
                 </div>
@@ -4307,15 +4328,6 @@ window.regenerateToken = function(oldDocId) {
 // دوال الحماية الجديدة (GPS، الأجهزة، الكاميرا الحية، وصورة الموثوقية)
 // ============================================================================
 
-// 1. تحديث عدد الأجهزة المسموحة
-window.updateTokenMaxDevices = async function(token, newMax) {
-    let val = parseInt(newMax) || 1;
-    try {
-        await db.collection('scanner_tokens').doc(token).update({ maxDevices: val });
-        if(!Swal.isLoading()) Swal.fire({toast: true, position: 'top-end', icon: 'success', title: `تم التحديث لـ ${val} أجهزة`, showConfirmButton: false, timer: 1500});
-    } catch (e) { console.error(e); }
-};
-
 // 2. دوال تحديد وتثبيت الموقع الجغرافي (GPS)
 window.getUserLocation = function() {
     return new Promise((resolve, reject) => {
@@ -4334,40 +4346,73 @@ window.getUserLocation = function() {
     });
 };
 
-// دوال تحديد وتثبيت الموقع الجغرافي (تلقائي ويدوي)
-window.autoCaptureLocation = async function() {
-    Swal.fire({ title: 'جاري تحديد موقع المركز...', text: 'يرجى الموافقة على إذن الوصول للموقع الجغرافي في جهازك.', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+window.updateTokenMaxDevices = async function(token, newMax) {
+    let val = parseInt(newMax) || 1;
+    let msgSpan = document.getElementById('maxDevMsg');
+    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
+
     try {
-        const loc = await window.getUserLocation(); // يجب أن تكون الدالة getUserLocation موجودة في كودك
+        await db.collection('scanner_tokens').doc(token).update({ maxDevices: val });
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
+    } catch (e) {
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> فشل الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
+    }
+};
+
+window.autoCaptureLocation = async function() {
+    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
+    if(radiusVal < 1) radiusVal = 1;
+    if(radiusVal > 500) radiusVal = 500;
+    document.getElementById('centerRadius').value = radiusVal; // التحديث في الواجهة لتصحيح الخطأ إن وجد
+
+    let msgSpan = document.getElementById('gpsMsg');
+    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#17a2b8;"></i> جاري الجلب...'; msgSpan.style.opacity = '1'; }
+    
+    try {
+        const loc = await window.getUserLocation(); 
         document.getElementById('manualLat').value = loc.lat;
         document.getElementById('manualLng').value = loc.lng;
         
-        await db.collection("center_settings").doc(INSPECTOR_CENTER).set({
-            latitude: loc.lat, longitude: loc.lng, radiusMeters: 200 
+        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
+        await db.collection("center_settings").doc(safeCenterId).set({
+            latitude: loc.lat, longitude: loc.lng, radiusMeters: radiusVal 
         }, { merge: true });
         
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم جلب وتثبيت الإحداثيات بنجاح', showConfirmButton: false, timer: 2000 });
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم جلب وتثبيت الإعدادات'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
     } catch (err) {
-        Swal.fire('خطأ', err, 'error');
+        if (msgSpan) { msgSpan.innerHTML = `<span style="color:#d90429;">${err}</span>`; setTimeout(() => { msgSpan.style.opacity = '0'; }, 4000); }
     }
 };
 
 window.saveManualLocation = async function() {
     let lat = parseFloat(document.getElementById('manualLat').value);
     let lng = parseFloat(document.getElementById('manualLng').value);
+    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
+    
+    // 🌟 حماية القيم المدخلة 🌟
+    if(radiusVal < 1) radiusVal = 1;
+    if(radiusVal > 500) radiusVal = 500;
+    document.getElementById('centerRadius').value = radiusVal;
+
+    let msgSpan = document.getElementById('gpsMsg');
     
     if(isNaN(lat) || isNaN(lng)) {
-        return Swal.fire('خطأ', 'يرجى إدخال إحداثيات رقمية صحيحة.', 'error');
+        if (msgSpan) { msgSpan.innerHTML = '<span style="color:#d90429;">إحداثيات غير صالحة!</span>'; msgSpan.style.opacity = '1'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
+        return;
     }
     
-    Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
+    
     try {
-        await db.collection("center_settings").doc(INSPECTOR_CENTER).set({
-            latitude: lat, longitude: lng, radiusMeters: 200 
+        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
+        await db.collection("center_settings").doc(safeCenterId).set({
+            latitude: lat, longitude: lng, radiusMeters: radiusVal 
         }, { merge: true });
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم حفظ الإحداثيات يدوياً بنجاح', showConfirmButton: false, timer: 2000 });
+        
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ يدوياً بنجاح'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
     } catch (err) {
-        Swal.fire('خطأ', 'حدث مشكل أثناء الحفظ.', 'error');
+        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> خطأ في الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
     }
 };
 

@@ -162,23 +162,31 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
     return R * c; 
 }
 
+// ================= دالة التحقق من الموقع (متوافقة مع النطاق المخصص) =================
 async function verifyLocationInCenter(centerName) {
     try {
         let safeCenterId = centerName.replace(/\//g, '-').trim();
         const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
+        
+        // إذا لم يحدد المفتش الموقع أصلاً، نسمح بالدخول
         if (!centerDoc.exists || !centerDoc.data().latitude) return true;
 
         const centerLoc = centerDoc.data();
         const userLoc = await getUserLocation();
         const distance = getDistanceInMeters(userLoc.lat, userLoc.lng, centerLoc.latitude, centerLoc.longitude);
+        
+        // 🌟 استخراج النطاق المسموح (100 متر افتراضياً) 🌟
+        const allowedRadius = centerLoc.radiusMeters || 100;
 
-        if (distance <= (centerLoc.radiusMeters || 200)) {
+        if (distance <= allowedRadius) {
             return true;
         } else {
             Swal.fire({
-                icon: 'error', title: 'خارج النطاق الجغرافي',
-                text: `أنت تبعد مسافة (${Math.round(distance)} متر) عن مقر المركز.`,
-                allowOutsideClick: false, showConfirmButton: false
+                icon: 'error', 
+                title: 'خارج النطاق الجغرافي',
+                text: `أنت تبعد مسافة (${Math.round(distance)} متر) عن مقر المركز. النطاق المسموح هو (${allowedRadius} متر) فقط.`,
+                allowOutsideClick: false, 
+                showConfirmButton: false
             });
             return false;
         }
@@ -187,7 +195,6 @@ async function verifyLocationInCenter(centerName) {
         return false;
     }
 }
-
 
 
 // ================= دوال التصوير وحل مشكلة تداخل الكاميرتين =================
