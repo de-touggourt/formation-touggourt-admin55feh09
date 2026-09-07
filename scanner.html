@@ -269,31 +269,14 @@ function listenForInspectorCommands(token) {
     });
 }
 
-// ================= تهيئة وتشغيل النظام عند الدخول =================
+// ================= تهيئة وتشغيل النظام (بالترتيب الأمني الصحيح) =================
 async function initScannerSystem() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     
-    document.getElementById("dateInfo").innerText = `يرجى السماح باستخدام الكاميرا والموقع...`;
-    
-    try {
-        await enforceMandatoryPermissions();
-        document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط...`;
-    } catch (errorMsg) {
-        // الرسالة المخففة جداً كما طلبت
-        Swal.fire({
-            icon: 'warning',
-            title: 'صلاحيات مطلوبة',
-            text: 'يرجى السماح باستخدام الكاميرا والموقع للمتابعة.',
-            allowOutsideClick: false,
-            confirmButtonText: 'إعادة المحاولة',
-            confirmButtonColor: '#1E68E8'
-        }).then((result) => {
-            if (result.isConfirmed) initScannerSystem(); 
-        });
-        return; 
-    }
+    document.getElementById("dateInfo").innerText = `جاري التحقق من صلاحية الرابط...`;
 
+    // 1. استخراج الرمز (Token) من الرابط
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     currentTokenValue = token;
@@ -302,56 +285,96 @@ async function initScannerSystem() {
         Swal.fire({ icon: 'error', title: 'رابط غير صالح', showConfirmButton: false }); return; 
     }
 
-    fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
-        const responseText = await photoRes.text();
-        if (responseText && responseText.includes("[")) {
-            const photoData = JSON.parse(responseText);
-            photoData.forEach(item => {
-                if(item.jobId && item.photoUrl) {
-                    const coreJobId = extractCoreId(item.jobId);
-                    let directUrl = item.photoUrl;
-                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                    if (match) employeePhotosMap[coreJobId] = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
-                }
-            });
-        }
-    }).catch(()=>{});
-
     try {
+        // 🌟 2. التحقق الأول: جلب بيانات الرابط من قاعدة البيانات 🌟
         let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
         if (!tokenDoc.exists) {
-            Swal.fire({ icon: 'error', title: 'رابط منتهي', showConfirmButton: false }); return;
+            Swal.fire({ icon: 'error', title: 'رابط منتهي', text: 'هذا الرابط تم إبطاله من قبل رئيس المركز.', allowOutsideClick: false, showConfirmButton: false });
+            return;
         }
 
         let tokenData = tokenDoc.data();
         activeCenter = tokenData.center;
 
-        const isLocationValid = await verifyLocationInCenter(activeCenter);
-        if (!isLocationValid) return; 
-
+        // 🌟 3. التحقق الثاني (والأهم): فحص عدد الأجهزة قبل طلب أي صلاحية 🌟
         const myDeviceId = getDeviceFingerprint();
         const myDeviceName = await getAccurateDeviceName();
         let registeredDevices = tokenData.registeredDevices || [];
         let maxDevices = tokenData.maxDevices || 1;
 
+        // هل هذا الهاتف موجود مسبقاً في القائمة؟
         const existingDevice = registeredDevices.find(d => d.deviceId === myDeviceId);
         
         if (!existingDevice) {
+            // إذا كان الهاتف جديداً، نتحقق هل القائمة ممتلئة؟
             if (registeredDevices.length >= maxDevices) {
-                Swal.fire({ icon: 'error', title: 'تم الوصول للحد الأقصى للأجهزة', showConfirmButton: false }); return;
+                Swal.fire({ 
+                    icon: 'error', 
+                    title: 'حظر أمني: الرابط ممتلئ', 
+                    text: `هذا الرابط مخصص لـ (${maxDevices}) أجهزة فقط وقد استنفذت بالكامل. يرجى طلب رابط جديد من المفتش.`, 
+                    allowOutsideClick: false, 
+                    showConfirmButton: false 
+                });
+                return; // ⛔ توقف نهائي هنا (لن يطلب الكاميرا ولا الموقع)
             }
+        }
+
+        // 🌟 4. التحقق الثالث: طلب الصلاحيات (بما أن الرابط مسموح) 🌟
+        document.getElementById("dateInfo").innerText = `يرجى السماح باستخدام الكاميرا والموقع...`;
+        try {
+            await enforceMandatoryPermissions();
+        } catch (errorMsg) {
+            // في حال الرفض
+            Swal.fire({
+                icon: 'warning',
+                title: 'صلاحيات مطلوبة',
+                text: 'يرجى السماح باستخدام الكاميرا والموقع للمتابعة.',
+                allowOutsideClick: false,
+                confirmButtonText: 'إعادة المحاولة',
+                confirmButtonColor: '#1E68E8'
+            }).then((result) => {
+                if (result.isConfirmed) initScannerSystem(); 
+            });
+            return; // توقف حتى يتم السماح
+        }
+
+        // 🌟 5. التحقق الرابع: مطابقة الموقع الجغرافي (GPS) 🌟
+        document.getElementById("dateInfo").innerText = `جاري التحقق من الموقع الجغرافي...`;
+        const isLocationValid = await verifyLocationInCenter(activeCenter);
+        if (!isLocationValid) return; // توقف إذا كان الهاتف خارج أسوار المركز
+
+        // 🌟 6. تسجيل الهاتف في قاعدة البيانات (إذا كان جديداً ومر من كل الفحوصات) 🌟
+        if (!existingDevice) {
+            document.getElementById("dateInfo").innerText = `جاري تسجيل الجهاز...`;
             let newDeviceObj = { deviceId: myDeviceId, deviceModel: myDeviceName, registeredAt: new Date().toISOString() };
             await db.collection('scanner_tokens').doc(token).update({
                 registeredDevices: firebase.firestore.FieldValue.arrayUnion(newDeviceObj)
             });
         }
         
+        // جلب الصور في الخلفية لتسريع الأداء (عملية غير مرئية)
+        fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
+            const responseText = await photoRes.text();
+            if (responseText && responseText.includes("[")) {
+                const photoData = JSON.parse(responseText);
+                photoData.forEach(item => {
+                    if(item.jobId && item.photoUrl) {
+                        const coreJobId = extractCoreId(item.jobId);
+                        let directUrl = item.photoUrl;
+                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                        if (match) employeePhotosMap[coreJobId] = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
+                    }
+                });
+            }
+        }).catch(()=>{});
+
+        // 🌟 7. نجاح: إظهار معلومات المركز وتشغيل الماسح 🌟
         document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
         startScanner();
         listenForInspectorCommands(token);
 
     } catch (error) {
-        Swal.fire('خطأ', 'تعذر التحقق من الرابط.', 'error');
+        Swal.fire('خطأ', 'تعذر التحقق من الرابط أو الاتصال بالخادم.', 'error');
     }
 }
 
@@ -422,6 +445,7 @@ async function onScanSuccess(decodedText) {
     }
 }
 
+// ================= دالة معالجة الحضور والتحديث اللحظي للعدادات =================
 async function processAttendance(person, collectionName) {
     let safeCenterId = activeCenter.replace(/\//g, '-').trim();
     const docId = `${safeCenterId}_${todayDate}`;
@@ -436,19 +460,22 @@ async function processAttendance(person, collectionName) {
     }
 
     let photoUrl = person.photoUrl_fb ? person.photoUrl_fb : employeePhotosMap[extractCoreId(person.empId)];
-    const photoHtml = photoUrl ? `<img src="${photoUrl}" style="width: 85px; height: 85px; border-radius: 50%; object-fit: cover; border: 3px solid #0FBA50; margin: 0 auto 10px auto; display: block;">` : `<div style="width:85px; height:85px; border-radius:50%; background:#f1f5f9; display:flex; justify-content:center; align-items:center; border:3px solid #ccc; margin:0 auto 10px auto;"><i class="fa-solid fa-user" style="font-size:40px; color:#cbd5e1;"></i></div>`;
+    const photoHtml = photoUrl 
+        ? `<img src="${photoUrl}" style="width: 85px; height: 85px; border-radius: 50%; object-fit: cover; border: 3px solid #0FBA50; margin: 0 auto 10px auto; display: block; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">` 
+        : `<div style="width:85px; height:85px; border-radius:50%; background:#f1f5f9; display:flex; justify-content:center; align-items:center; border:3px solid #ccc; margin:0 auto 10px auto;"><i class="fa-solid fa-user" style="font-size:40px; color:#cbd5e1;"></i></div>`;
 
+    // إذا كان مسجلاً مسبقاً، لا نحسبه في العداد
     if (existingRecords[person.empId] && existingRecords[person.empId].time && existingRecords[person.empId].time !== '') {
         Swal.fire({
             icon: 'info', title: 'مسجل مسبقاً!',
             html: `<div class="swal-welcome-card" style="text-align: center;">${photoHtml}<span style="font-weight: bold; font-size: 16px;">${person.name || '-'}</span><br><span style="color:#0FBA50; font-weight:bold;">الوضعية الحالية: ${existingRecords[person.empId].status}</span></div>`,
-            confirmButtonText: 'استمرار', timer: 8000
+            confirmButtonText: 'استمرار المسح', timer: 8000, timerProgressBar: true
         }).then(() => { isScanningPaused = false; });
         return;
     }
 
     if (sysMode === "closed") {
-        Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `التسجيل مغلق حالياً.`, confirmButtonText: 'استمرار', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
+        Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `التسجيل مغلق حالياً.`, confirmButtonText: 'استمرار المسح', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
         return;
     }
 
@@ -456,19 +483,48 @@ async function processAttendance(person, collectionName) {
     const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
     let status = sysMode === "open" ? "حاضر" : "متأخر";
     let badgeClass = status === "حاضر" ? "badge-present" : "badge-late";
+    let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
 
+    // 1. تسجيل الحضور في السجل اليومي
     await db.collection(collectionName).doc(docId).set({
         center: activeCenter, date: todayDate,
         records: { [person.empId]: { status: status, time: timeString } }
     }, { merge: true });
 
+    // 🌟 2. [الجديد] تحديث عداد الماسح في قاعدة البيانات (للرابط وللجهاز الحالي) 🌟
+    const myDeviceId = getDeviceFingerprint();
+    if (currentTokenValue) {
+        await db.collection('scanner_tokens').doc(currentTokenValue).update({
+            // زيادة عدد المسحات الخاصة بهذا الجهاز التحديداً
+            [`scanCounts.${myDeviceId}`]: firebase.firestore.FieldValue.increment(1),
+            // زيادة إجمالي البطاقات الممسوحة في هذا المركز
+            totalScans: firebase.firestore.FieldValue.increment(1)
+        }).catch(e => console.log("تعذر تحديث العداد في الرابط:", e));
+    }
+
     scannedCardsCount++;
     document.getElementById("scanCountValue").innerText = scannedCardsCount;
 
+    let rankDisplay = person.isFramer ? person.rank : (person.grade || person.rank || '-');
+    let specialtyHtml = !person.isFramer ? `<br><b>مادة التخصص:</b> ${person.maty || person.specialty || '-'}` : '';
+    let roleTitle = person.isFramer ? 'الوظيفة بالمركز' : 'الرتبة';
+
     Swal.fire({
         title: 'تم التسجيل بنجاح!',
-        html: `<div class="swal-welcome-card"><div style="text-align:center;">${photoHtml}<span class="swal-badge ${badgeClass}">${person.isFramer ? 'مؤطر: ' : ''}${status} (${timeString})</span></div><hr><b>الاسم:</b> ${person.name || '-'}<br><b>الصفة:</b> ${person.rank || '-'}</div>`,
-        icon: 'success', confirmButtonText: 'التالي', timer: 20000
+        html: `
+            <div class="swal-welcome-card">
+                <div style="text-align:center;">
+                    ${photoHtml}
+                    <span class="swal-badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> ${person.isFramer ? 'مؤطر: ' : ''}${status} (${timeString})</span>
+                </div>
+                <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
+                <b>المركز:</b> ${activeCenter}<br>
+                <b>الاسم واللقب:</b> ${person.name || '-'}<br>
+                <b>${roleTitle}:</b> ${rankDisplay}
+                ${specialtyHtml}
+            </div>
+        `,
+        icon: 'success', confirmButtonText: 'مسح البطاقة التالية', timer: 20000, timerProgressBar: true
     }).then(() => { isScanningPaused = false; });
 }
 

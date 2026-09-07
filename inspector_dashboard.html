@@ -4102,7 +4102,6 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
     let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
-
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
 
     window.enlargeQR = function() {
@@ -4134,21 +4133,7 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         document.body.appendChild(overlay);
     };
 
-    let registeredCount = registeredDevicesList.length;
-    let devicesHtml = '';
-    if (registeredCount > 0) {
-        devicesHtml = '<div style="margin-top:10px; font-size:12px; max-height:90px; overflow-y:auto; background:#fff; border:1px solid #ccc; padding:5px; border-radius:5px;">';
-        registeredDevicesList.forEach((dev, idx) => {
-            let dName = (typeof dev === 'object') ? dev.deviceModel : 'جهاز غير معروف';
-            let dTime = (typeof dev === 'object' && dev.registeredAt) ? dev.registeredAt : '';
-            devicesHtml += `<div style="border-bottom:1px dashed #eee; padding:4px 0; text-align:right;">
-                📱 ${idx+1}. <b style="color:#1E68E8;">${dName}</b> <span style="color:#777; font-size:10px;">(${dTime})</span>
-            </div>`;
-        });
-        devicesHtml += '</div>';
-    } else {
-        devicesHtml = '<div style="margin-top:10px; font-size:12px; color:#777; text-align:center;">لا توجد هواتف مقترنة حالياً.</div>';
-    }
+    let tokenListener = null; // متغير لحفظ الاستماع اللحظي لإيقافه عند إغلاق النافذة
 
     Swal.fire({
         title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور وإدارة الماسح',
@@ -4160,14 +4145,26 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
             </div>
 
             <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 15px; text-align: right;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <label style="font-weight: bold; color: #102a43; font-size: 13px;">
                         <i class="fa-solid fa-mobile-screen-button" style="color: #1E68E8;"></i> الأجهزة المسموحة لفتح الرابط:
                     </label>
-                    <input type="number" min="1" max="10" value="${maxDevices}" style="width: 60px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #0FBA50; outline: none;" onchange="updateTokenMaxDevices('${token}', this.value)">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span id="maxDevMsg" style="font-size: 12px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
+                        <input type="number" min="1" max="10" value="${maxDevices}" style="width: 60px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #0FBA50; outline: none;" onchange="updateTokenMaxDevices('${token}', this.value)">
+                    </div>
                 </div>
-                <div style="font-size: 12px; color: #64748b;">الهواتف المقترنة (<b style="color:#0FBA50;">${registeredCount}</b> / <b>${maxDevices}</b>):</div>
-                ${devicesHtml}
+                
+                <!-- 🌟 الإحصاء الإجمالي اللحظي 🌟 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;">
+                    <span style="font-size: 12px; color: #102a43; font-weight: bold;"><i class="fa-solid fa-chart-simple"></i> إجمالي البطاقات الممسوحة بالمركز:</span>
+                    <span id="totalScansUI" style="background: #1E68E8; color: white; padding: 2px 10px; border-radius: 12px; font-size: 14px; font-weight: 900;">0</span>
+                </div>
+
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">الهواتف المقترنة وعدد عمليات المسح لكل جهاز:</div>
+                <div id="devicesListUI" style="font-size:12px; max-height:110px; overflow-y:auto; background:#fff; border:1px solid #ccc; padding:5px; border-radius:5px;">
+                    <div style="text-align:center; color:#777;">جاري التحميل...</div>
+                </div>
             </div>
             
             <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:12px; background:#f1f5f9; color:#102a43; outline:none;">
@@ -4181,13 +4178,16 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
                 </button>
             </div>
 
-            <!-- 🌟 أزرار الحماية الجغرافية والكاميرا المباشرة 🌟 -->
+            <!-- أزرار الحماية الجغرافية والكاميرا المباشرة -->
             <div style="border-top:1px dashed #cbd5e1; padding-top:15px; display:flex; flex-direction:column; gap:8px;">
                 
                 <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 12px; text-align: right;">
-                    <label style="font-weight: bold; color: #d35400; font-size: 13px; display: block; margin-bottom: 8px;">
-                        <i class="fa-solid fa-location-dot"></i> إحداثيات المركز الجغرافية (GPS):
-                    </label>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="font-weight: bold; color: #d35400; font-size: 13px;">
+                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز الجغرافية (GPS):
+                        </label>
+                        <span id="gpsMsg" style="font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
+                    </div>
                     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                         <input type="text" id="manualLat" value="${savedLat}" placeholder="خط العرض (Latitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
                         <input type="text" id="manualLng" value="${savedLng}" placeholder="خط الطول (Longitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
@@ -4214,7 +4214,48 @@ window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevic
         `,
         showConfirmButton: true,
         confirmButtonText: 'إغلاق النافذة',
-        confirmButtonColor: '#102a43'
+        confirmButtonColor: '#102a43',
+        didOpen: () => {
+            // 🌟 تفعيل الاستماع اللحظي (Real-time) للإحصائيات والأجهزة 🌟
+            tokenListener = db.collection('scanner_tokens').doc(token).onSnapshot(doc => {
+                if (doc.exists) {
+                    let data = doc.data();
+                    let total = data.totalScans || 0;
+                    let counts = data.scanCounts || {};
+                    let devices = data.registeredDevices || [];
+                    
+                    // تحديث الإجمالي
+                    let totalEl = document.getElementById('totalScansUI');
+                    if (totalEl) totalEl.innerText = total;
+
+                    // تحديث قائمة الأجهزة وعداد كل جهاز
+                    let devicesListEl = document.getElementById('devicesListUI');
+                    if (devicesListEl) {
+                        if (devices.length > 0) {
+                            let dHtml = '';
+                            devices.forEach((dev, idx) => {
+                                let dName = (typeof dev === 'object') ? dev.deviceModel : 'جهاز غير معروف';
+                                let dTime = (typeof dev === 'object' && dev.registeredAt) ? new Date(dev.registeredAt).toLocaleTimeString('ar-DZ') : '';
+                                let devCount = counts[dev.deviceId] || 0; // سحب العداد الخاص بهذا الجهاز
+                                
+                                dHtml += `
+                                <div style="border-bottom:1px dashed #eee; padding:6px 0; text-align:right; display:flex; justify-content:space-between; align-items:center;">
+                                    <div>📱 ${idx+1}. <b style="color:#1E68E8;">${dName}</b> <span style="color:#777; font-size:10px;">(${dTime})</span></div>
+                                    <div style="background:#e8fbf0; color:#0FBA50; padding:2px 8px; border-radius:10px; font-weight:bold; font-size:12px; border:1px solid #0FBA50;">${devCount} مسح</div>
+                                </div>`;
+                            });
+                            devicesListEl.innerHTML = dHtml;
+                        } else {
+                            devicesListEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#777; text-align:center;">لا توجد هواتف مقترنة حالياً.</div>';
+                        }
+                    }
+                }
+            });
+        },
+        willClose: () => {
+            // إيقاف الاستماع عند إغلاق النافذة للحفاظ على أداء المتصفح
+            if (tokenListener) tokenListener();
+        }
     });
 };
 
