@@ -269,7 +269,7 @@ function requestGPSPermission() {
     });
 }
 
-// ================= تهيئة وتشغيل النظام (بدون تداخل وبسرعة عالية) =================
+// ================= تهيئة وتشغيل النظام (مع المسح التلقائي للكاش للروابط الجديدة) =================
 async function initScannerSystem() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -283,12 +283,26 @@ async function initScannerSystem() {
         return; 
     }
 
+    // 🌟 [الجديد]: نظام الفرمتة الذاتية (مسح الكاش عند دخول رابط جديد) 🌟
+    const lastUsedToken = localStorage.getItem('last_used_scanner_token');
+    if (lastUsedToken && lastUsedToken !== token) {
+        // إذا كان الرابط جديداً ومختلفاً عن القديم، نمسح كل بيانات الهاتف المحلية!
+        localStorage.clear();
+        console.log("تم مسح الكاش وبصمة الجهاز القديمة لأن الرابط جديد.");
+        // نعيد حفظ الرابط الجديد لكي لا يمسح الكاش في كل مرة نحدث فيها نفس الصفحة
+        localStorage.setItem('last_used_scanner_token', token);
+    } else if (!lastUsedToken) {
+        // أول مرة يفتح فيها النظام تماماً
+        localStorage.setItem('last_used_scanner_token', token);
+    }
+    // ==============================================================================
+
     try {
-        // 🌟 1. طلب إذن الموقع الجغرافي أولاً بهدوء 🌟
+        // 1. طلب إذن الموقع الجغرافي أولاً بهدوء
         document.getElementById("dateInfo").innerText = `يرجى السماح بالوصول للموقع الجغرافي...`;
         await requestGPSPermission(); 
 
-        // 🌟 2. التحقق من الرابط والأجهزة (عمليات سريعة) 🌟
+        // 2. التحقق من الرابط والأجهزة (عمليات سريعة)
         document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط...`;
         let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
         if (!tokenDoc.exists) {
@@ -302,6 +316,7 @@ async function initScannerSystem() {
         const isLocationValid = await verifyLocationInCenter(activeCenter);
         if (!isLocationValid) return; 
 
+        // دالة getDeviceFingerprint ستولد بصمة جديدة الآن لأننا مسحنا الكاش!
         const myDeviceId = getDeviceFingerprint();
         const myDeviceName = await getAccurateDeviceName();
         let registeredDevices = tokenData.registeredDevices || [];
@@ -335,7 +350,7 @@ async function initScannerSystem() {
             }
         }).catch(()=>{});
 
-        // 🌟 3. تشغيل الكاميرا 🌟
+        // 3. تشغيل الكاميرا
         document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
         startScanner();
         listenForInspectorCommands(token);
