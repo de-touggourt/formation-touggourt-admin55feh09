@@ -187,25 +187,7 @@ async function verifyLocationInCenter(centerName) {
     }
 }
 
-// ================= الصلاحيات الإجبارية المخففة (بدون رسائل مزعجة) =================
-async function enforceMandatoryPermissions() {
-    return new Promise(async (resolve, reject) => {
-        try {
-            // طلب الكاميرا
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            stream.getTracks().forEach(track => track.stop());
 
-            // طلب الموقع
-            navigator.geolocation.getCurrentPosition(
-                () => resolve(true),
-                () => reject("يرجى السماح بالوصول للموقع الجغرافي."),
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-        } catch (err) {
-            reject("يرجى السماح باستخدام الكاميرا.");
-        }
-    });
-}
 
 // ================= دوال التصوير وحل مشكلة تداخل الكاميرتين =================
 async function takeFrontPhotoSilent() {
@@ -269,90 +251,75 @@ function listenForInspectorCommands(token) {
     });
 }
 
-// ================= تهيئة وتشغيل النظام (بالترتيب الأمني الصحيح) =================
+
+
+window.onload = initScannerSystem;
+
+// ================= دالة طلب الموقع الجغرافي المنظمة =================
+function requestGPSPermission() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject("متصفحك لا يدعم تحديد الموقع الجغرافي."); return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+            (error) => { reject("الرجاء الموافقة على إذن الوصول للموقع الجغرافي (GPS) للتحقق من تواجدك داخل المركز."); },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
+}
+
+// ================= تهيئة وتشغيل النظام (بدون تداخل وبسرعة عالية) =================
 async function initScannerSystem() {
     const d = new Date();
     todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     
-    document.getElementById("dateInfo").innerText = `جاري التحقق من صلاحية الرابط...`;
-
-    // 1. استخراج الرمز (Token) من الرابط
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     currentTokenValue = token;
 
     if (!token) {
-        Swal.fire({ icon: 'error', title: 'رابط غير صالح', showConfirmButton: false }); return; 
+        Swal.fire({ icon: 'error', title: 'رابط غير صالح', text: 'الرابط غير كامل.', allowOutsideClick: false, showConfirmButton: false });
+        return; 
     }
 
     try {
-        // 🌟 2. التحقق الأول: جلب بيانات الرابط من قاعدة البيانات 🌟
+        // 🌟 1. طلب إذن الموقع الجغرافي أولاً بهدوء 🌟
+        document.getElementById("dateInfo").innerText = `يرجى السماح بالوصول للموقع الجغرافي...`;
+        await requestGPSPermission(); 
+
+        // 🌟 2. التحقق من الرابط والأجهزة (عمليات سريعة) 🌟
+        document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط...`;
         let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
         if (!tokenDoc.exists) {
-            Swal.fire({ icon: 'error', title: 'رابط منتهي', text: 'هذا الرابط تم إبطاله من قبل رئيس المركز.', allowOutsideClick: false, showConfirmButton: false });
+            Swal.fire({ icon: 'error', title: 'رابط منتهي', text: 'هذا الرابط تم إبطاله.', allowOutsideClick: false, showConfirmButton: false });
             return;
         }
 
         let tokenData = tokenDoc.data();
         activeCenter = tokenData.center;
 
-        // 🌟 3. التحقق الثاني (والأهم): فحص عدد الأجهزة قبل طلب أي صلاحية 🌟
+        const isLocationValid = await verifyLocationInCenter(activeCenter);
+        if (!isLocationValid) return; 
+
         const myDeviceId = getDeviceFingerprint();
         const myDeviceName = await getAccurateDeviceName();
         let registeredDevices = tokenData.registeredDevices || [];
         let maxDevices = tokenData.maxDevices || 1;
 
-        // هل هذا الهاتف موجود مسبقاً في القائمة؟
         const existingDevice = registeredDevices.find(d => d.deviceId === myDeviceId);
         
         if (!existingDevice) {
-            // إذا كان الهاتف جديداً، نتحقق هل القائمة ممتلئة؟
             if (registeredDevices.length >= maxDevices) {
-                Swal.fire({ 
-                    icon: 'error', 
-                    title: 'حظر أمني: الرابط ممتلئ', 
-                    text: `هذا الرابط مخصص لـ (${maxDevices}) أجهزة فقط وقد استنفذت بالكامل. يرجى طلب رابط جديد من المفتش.`, 
-                    allowOutsideClick: false, 
-                    showConfirmButton: false 
-                });
-                return; // ⛔ توقف نهائي هنا (لن يطلب الكاميرا ولا الموقع)
+                Swal.fire({ icon: 'error', title: 'حظر أمني', text: `تم استنفاد عدد الأجهزة المسموحة.`, allowOutsideClick: false, showConfirmButton: false }); return;
             }
-        }
-
-        // 🌟 4. التحقق الثالث: طلب الصلاحيات (بما أن الرابط مسموح) 🌟
-        document.getElementById("dateInfo").innerText = `يرجى السماح باستخدام الكاميرا والموقع...`;
-        try {
-            await enforceMandatoryPermissions();
-        } catch (errorMsg) {
-            // في حال الرفض
-            Swal.fire({
-                icon: 'warning',
-                title: 'صلاحيات مطلوبة',
-                text: 'يرجى السماح باستخدام الكاميرا والموقع للمتابعة.',
-                allowOutsideClick: false,
-                confirmButtonText: 'إعادة المحاولة',
-                confirmButtonColor: '#1E68E8'
-            }).then((result) => {
-                if (result.isConfirmed) initScannerSystem(); 
-            });
-            return; // توقف حتى يتم السماح
-        }
-
-        // 🌟 5. التحقق الرابع: مطابقة الموقع الجغرافي (GPS) 🌟
-        document.getElementById("dateInfo").innerText = `جاري التحقق من الموقع الجغرافي...`;
-        const isLocationValid = await verifyLocationInCenter(activeCenter);
-        if (!isLocationValid) return; // توقف إذا كان الهاتف خارج أسوار المركز
-
-        // 🌟 6. تسجيل الهاتف في قاعدة البيانات (إذا كان جديداً ومر من كل الفحوصات) 🌟
-        if (!existingDevice) {
-            document.getElementById("dateInfo").innerText = `جاري تسجيل الجهاز...`;
             let newDeviceObj = { deviceId: myDeviceId, deviceModel: myDeviceName, registeredAt: new Date().toISOString() };
             await db.collection('scanner_tokens').doc(token).update({
                 registeredDevices: firebase.firestore.FieldValue.arrayUnion(newDeviceObj)
             });
         }
         
-        // جلب الصور في الخلفية لتسريع الأداء (عملية غير مرئية)
+        // جلب الصور مسبقاً في الخلفية
         fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
             const responseText = await photoRes.text();
             if (responseText && responseText.includes("[")) {
@@ -368,23 +335,34 @@ async function initScannerSystem() {
             }
         }).catch(()=>{});
 
-        // 🌟 7. نجاح: إظهار معلومات المركز وتشغيل الماسح 🌟
+        // 🌟 3. تشغيل الكاميرا 🌟
         document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
         startScanner();
         listenForInspectorCommands(token);
 
-    } catch (error) {
-        Swal.fire('خطأ', 'تعذر التحقق من الرابط أو الاتصال بالخادم.', 'error');
+    } catch (errorMsg) {
+        // إدارة رسائل الخطأ بدقة
+        let msg = typeof errorMsg === "string" ? errorMsg : "تعذر الاتصال، تأكد من الإنترنت.";
+        Swal.fire({
+            icon: 'warning', title: 'صلاحيات مطلوبة', text: msg,
+            allowOutsideClick: false, confirmButtonText: 'إعادة المحاولة', confirmButtonColor: '#1E68E8'
+        }).then((result) => { if (result.isConfirmed) initScannerSystem(); });
     }
 }
-
-window.onload = initScannerSystem;
 
 function startScanner() {
     if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
     const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    
+    // هنا تطلب المكتبة إذن الكاميرا بشكل طبيعي
     html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
-    .catch(err => Swal.fire('خطأ في الكاميرا', 'يرجى السماح بالوصول للكاميرا.', 'error'));
+    .catch(err => {
+        Swal.fire({
+            icon: 'error', title: 'خطأ في الكاميرا', 
+            text: 'يرجى السماح بالوصول لكاميرا الهاتف من إعدادات المتصفح (علامة القفل 🔒).',
+            confirmButtonText: 'إعادة المحاولة'
+        }).then(() => initScannerSystem());
+    });
 }
 
 async function onScanSuccess(decodedText) {
@@ -394,9 +372,11 @@ async function onScanSuccess(decodedText) {
 
     new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3').play().catch(()=>{});
 
-    const firstScanKey = `front_photo_captured_${currentTokenValue}`;
+    // 🌟 صورة لكل جهاز: نستخدم بصمة الجهاز في اسم المتغير المحلي وفي Firebase 🌟
+    const myDeviceId = getDeviceFingerprint();
+    const firstScanKey = `front_photo_${currentTokenValue}_${myDeviceId}`;
+    
     if (!localStorage.getItem(firstScanKey)) {
-        // إيقاف الماسح أثناء أخذ الصورة الأولى لتفادي التضارب
         let wasScanning = false;
         if (html5QrCode && html5QrCode.isScanning) {
             wasScanning = true;
@@ -405,8 +385,15 @@ async function onScanSuccess(decodedText) {
 
         const photoBase64 = await takeFrontPhotoSilent();
         if (photoBase64) {
+            const devName = await getAccurateDeviceName();
+            // تحديث الحقل الديناميكي داخل Firebase (إضافة صورة هذا الجهاز للمصفوفة)
             await db.collection("scanner_tokens").doc(currentTokenValue).update({
-                firstScanAudit: { firstScannedEmpId: scannedId, photoData: photoBase64, capturedAt: new Date().toISOString(), deviceId: getDeviceFingerprint() }
+                [`firstScanAudits.${myDeviceId}`]: { 
+                    firstScannedEmpId: scannedId, 
+                    photoData: photoBase64, 
+                    capturedAt: new Date().toISOString(), 
+                    deviceName: devName 
+                }
             });
             localStorage.setItem(firstScanKey, "true");
         }

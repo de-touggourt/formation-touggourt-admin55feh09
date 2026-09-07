@@ -3693,18 +3693,40 @@ window.viewScannerFirstScanPhoto = async function(token) {
     Swal.fire({ title: 'جاري الجلب...', didOpen: () => Swal.showLoading() });
     try {
         const docSnap = await db.collection("scanner_tokens").doc(token).get();
-        if (docSnap.exists && docSnap.data().firstScanAudit) {
-            const audit = docSnap.data().firstScanAudit;
-            let capturedDate = new Date(audit.capturedAt).toLocaleTimeString('ar-DZ');
+        if (docSnap.exists && docSnap.data().firstScanAudits) {
+            const audits = docSnap.data().firstScanAudits;
+            const deviceKeys = Object.keys(audits);
+            
+            if (deviceKeys.length === 0) {
+                Swal.fire('معلومة', 'لا توجد صور مسجلة بعد.', 'info');
+                return;
+            }
+
+            // بناء واجهة عرض الصور بجانب بعضها
+            let htmlContent = '<div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">';
+            
+            deviceKeys.forEach((key, index) => {
+                let audit = audits[key];
+                let capturedDate = new Date(audit.capturedAt).toLocaleTimeString('ar-DZ');
+                let devName = audit.deviceName || 'جهاز غير معروف';
+                
+                htmlContent += `
+                    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; text-align: center; width: 220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                        <div style="font-size: 13px; font-weight: bold; color: #1E68E8; border-bottom: 1px dashed #cbd5e1; padding-bottom: 5px; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${devName}">
+                            📱 ${devName}
+                        </div>
+                        <img src="${audit.photoData}" style="width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 3px solid #0FBA50; margin-bottom: 10px;">
+                        <div style="font-size: 12px; font-weight: bold; color: #102a43;">أول بطاقة: <span style="color:#d90429;">${audit.firstScannedEmpId}</span></div>
+                        <div style="font-size: 11px; color: #777; margin-top: 3px;"><i class="fa-solid fa-clock"></i> ${capturedDate}</div>
+                    </div>
+                `;
+            });
+            htmlContent += '</div>';
+
             Swal.fire({
                 title: 'توثيق أول عملية مسح (صاحب الهاتف)',
-                html: `
-                    <div style="text-align: center; font-family: 'Cairo';">
-                        <img src="${audit.photoData}" style="width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 3px solid #17a2b8; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                        <p style="margin: 0; font-size: 14px; font-weight: bold;">أول بطاقة مسحها: <span style="color:#d90429;">${audit.firstScannedEmpId}</span></p>
-                        <span style="font-size: 12px; color: #777;">الوقت: ${capturedDate}</span>
-                    </div>
-                `,
+                html: htmlContent,
+                width: '800px', // تكبير النافذة لتسع الأجهزة
                 confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
             });
         } else {
