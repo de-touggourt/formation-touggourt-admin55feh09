@@ -452,7 +452,7 @@ window.removeBrokenImage = async function(docId, cardType = 'info') {
 
                 // 1. مسح الرابط من القاعدتين
                 await db.collection("employeescomnew").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
-                await db.collection("employeescomplus").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                
                 
                 // 2. تحديث الكاش المحلي لمنع الوميض
                 if (f && f.baseInfo) f.baseInfo.photoUrl_fb = null;
@@ -534,6 +534,11 @@ async function initializeSystem() {
     db.collection("site_settings").doc("main").onSnapshot((stDoc) => {
         if (stDoc.exists) {
             let settingsData = stDoc.data();
+			
+			// 🌟 حفظ بيانات وثيقة المقرر القادمة من المديرية لحظياً 🌟
+            if (settingsData.DECISION_CONFIG) {
+                window.globalDecisionConfig = settingsData.DECISION_CONFIG;
+            }
             
             // 1. تحديث الحجم الساعي
             if (settingsData.HOURLY_VOLUME) {
@@ -584,6 +589,8 @@ async function initializeSystem() {
                     filterFramersTable();
                 }
             }
+			
+			
         }
     }, (error) => {
         console.warn("تعذر الاستماع لإعدادات المديرية اللحظية:", error);
@@ -957,8 +964,9 @@ const deleteBtn = (f.isProtected || !canCenterDeleteFramer) ? '' : `<button oncl
         const s2Badge = `<span class="session-badge ${f.s2 ? 'active' : ''}"><i class="fa-solid ${f.s2 ? 'fa-check' : 'fa-minus'}"></i></span>`;
         const s3Badge = `<span class="session-badge ${f.s3 ? 'active' : ''}"><i class="fa-solid ${f.s3 ? 'fa-check' : 'fa-minus'}"></i></span>`;
 
-        const actionButtons = `
+                const actionButtons = `
             <div style="display:flex; gap:5px; justify-content:center;">
+                <button onclick="window.printSingleFramerDecision('${f.docId}')" class="btn-action" style="background:#e67e22;" title="طباعة المقرر"><i class="fa-solid fa-file-signature"></i> مقرر</button>
                 <button onclick="window.printSingleFramerCard('${f.docId}')" class="btn-action" style="background:#0FBA50;" title="طباعة البطاقة"><i class="fa-solid fa-print"></i></button>
                 <button onclick="window.viewFramer('${f.docId}')" class="btn-action" style="background:#17a2b8;" title="عرض"><i class="fa-solid fa-address-card"></i> عرض</button>
                 <button onclick="window.editFramer('${f.docId}')" class="btn-action" style="background:#ffc107; color:black;" title="تعديل"><i class="fa-solid fa-pen"></i> تعديل</button>
@@ -3366,227 +3374,35 @@ window.printSingleFramerCard = function(docId) {
     printWindow.document.close();
 };
 
-// ================= نظام الرابط السري الموحد وإدارة أجهزة الماسح (المحدث أمنياً) =================
-
+// ================= نظام الرابط السري الموحد للماسح =================
 window.generateScannerLink = async function() {
     Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     
     try {
+        // البحث عن رابط (Token) فعال لهذا المركز
         const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
         let currentToken = '';
         let oldDocId = null;
-        let maxDevices = 1;
-        let registeredDevicesList = [];
 
         if (!snapshot.empty) {
-            const data = snapshot.docs[0].data();
-            currentToken = snapshot.docs[0].id;
+            currentToken = snapshot.docs[0].id; // الرمز هو نفسه اسم الوثيقة
             oldDocId = currentToken;
-            maxDevices = data.maxDevices || 1;
-            registeredDevicesList = data.registeredDevices || [];
         } else {
+            // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
             currentToken = generateRandomToken(15);
             await db.collection('scanner_tokens').doc(currentToken).set({
                 center: INSPECTOR_CENTER,
-                maxDevices: 1, 
-                registeredDevices: [], 
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             oldDocId = currentToken;
         }
 
-        // 🌟 جلب الإحداثيات والنطاق المحفوظ مسبقاً 🌟
-        let savedLat = "", savedLng = "", savedRadius = 100;
-        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
-        
-        try {
-            const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
-            if (centerDoc.exists) {
-                if (centerDoc.data().latitude) {
-                    savedLat = centerDoc.data().latitude;
-                    savedLng = centerDoc.data().longitude;
-                }
-                if (centerDoc.data().radiusMeters) {
-                    savedRadius = centerDoc.data().radiusMeters; // جلب النطاق المخصص
-                }
-            }
-        } catch (gpsError) {
-            console.warn("تعذر جلب إعدادات الموقع.", gpsError);
-        }
-
-        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng, savedRadius);
+        window.showLinkModal(currentToken, oldDocId);
 
     } catch (e) {
-        console.error("خطأ عام في توليد الرابط:", e);
-        Swal.fire({ icon: 'error', title: 'خطأ', text: 'حدث مشكلة في جلب الرابط: ' + e.message });
+        console.error(e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
     }
-};
-
-window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "", savedRadius = 100) {
-    let currentPath = window.location.href;
-    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
-
-    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
-
-    window.enlargeQR = function() {
-        let overlay = document.createElement('div');
-        overlay.id = 'qr-fullscreen-overlay';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0'; overlay.style.left = '0';
-        overlay.style.width = '100vw'; overlay.style.height = '100vh';
-        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)';
-        overlay.style.backdropFilter = 'blur(5px)'; overlay.style.zIndex = '999999';
-        overlay.style.display = 'flex'; overlay.style.flexDirection = 'column';
-        overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
-        overlay.style.cursor = 'zoom-out';
-        overlay.onclick = function() { document.body.removeChild(overlay); };
-        
-        let img = document.createElement('img');
-        img.src = qrCodeUrl;
-        img.style.width = '400px'; img.style.height = '400px';
-        img.style.maxWidth = '90vw'; img.style.maxHeight = '90vw';
-        img.style.backgroundColor = 'white'; img.style.padding = '20px';
-        img.style.borderRadius = '20px'; img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
-        
-        let text = document.createElement('div');
-        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
-        text.style.color = 'white'; text.style.marginTop = '25px';
-        text.style.fontFamily = 'Cairo'; text.style.fontSize = '18px'; text.style.fontWeight = 'bold';
-        
-        overlay.appendChild(img); overlay.appendChild(text);
-        document.body.appendChild(overlay);
-    };
-
-    let tokenListener = null;
-
-    Swal.fire({
-        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور وإدارة الماسح',
-        html: `
-            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
-                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;">
-                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 130px; height: 130px; display: block; border-radius: 8px;">
-                </div>
-            </div>
-
-            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 15px; text-align: right;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label style="font-weight: bold; color: #102a43; font-size: 13px;">
-                        <i class="fa-solid fa-mobile-screen-button" style="color: #1E68E8;"></i> الأجهزة المسموحة لفتح الرابط:
-                    </label>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span id="maxDevMsg" style="font-size: 12px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
-                        <input type="number" min="1" max="10" value="${maxDevices}" style="width: 60px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #0FBA50; outline: none;" onchange="updateTokenMaxDevices('${token}', this.value)">
-                    </div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;">
-                    <span style="font-size: 12px; color: #102a43; font-weight: bold;"><i class="fa-solid fa-chart-simple"></i> إجمالي البطاقات الممسوحة بالمركز:</span>
-                    <span id="totalScansUI" style="background: #1E68E8; color: white; padding: 2px 10px; border-radius: 12px; font-size: 14px; font-weight: 900;">0</span>
-                </div>
-
-                <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">الهواتف المقترنة وعدد عمليات المسح لكل جهاز:</div>
-                <div id="devicesListUI" style="font-size:12px; max-height:110px; overflow-y:auto; background:#fff; border:1px solid #ccc; padding:5px; border-radius:5px;">
-                    <div style="text-align:center; color:#777;">جاري التحميل...</div>
-                </div>
-            </div>
-            
-            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:12px; background:#f1f5f9; color:#102a43; outline:none;">
-            
-            <div style="display:flex; gap:10px; justify-content:center; margin-bottom:15px;">
-                <button onclick="copyScannerLink()" style="background:#102a43; color:white; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                    <i class="fa-solid fa-copy"></i> نسخ الرابط
-                </button>
-                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                    <i class="fa-solid fa-arrows-rotate"></i> إبطال وتوليد
-                </button>
-            </div>
-
-            <!-- أزرار الحماية الجغرافية والكاميرا المباشرة -->
-            <div style="border-top:1px dashed #cbd5e1; padding-top:15px; display:flex; flex-direction:column; gap:8px;">
-                
-                <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 12px; text-align: right;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <label style="font-weight: bold; color: #d35400; font-size: 13px;">
-                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز والنطاق (GPS):
-                        </label>
-                        <span id="gpsMsg" style="font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
-                    </div>
-
-                    <!-- 🌟 الحقل الجديد للتحكم في الحيز / النطاق بالمتر 🌟 -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #fff; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <span style="font-size: 12px; font-weight: bold; color: #102a43;">
-                            <i class="fa-solid fa-ruler-horizontal" style="color: #1E68E8;"></i> النطاق المسموح (بالمتر):
-                        </span>
-                        <input type="number" id="centerRadius" min="1" max="500" value="${savedRadius}" style="width: 70px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #17a2b8; outline: none;">
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <input type="text" id="manualLat" value="${savedLat}" placeholder="خط العرض (Latitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
-                        <input type="text" id="manualLng" value="${savedLng}" placeholder="خط الطول (Longitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
-                    </div>
-                    
-                    <div style="display: flex; gap: 8px;">
-                        <button onclick="autoCaptureLocation()" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-crosshairs"></i> تحديد آلي (هاتف / حاسوب)
-                        </button>
-                        <button onclick="saveManualLocation()" style="background:#0FBA50; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
-                        </button>
-                    </div>
-                </div>
-
-                <div style="display:flex; gap:8px;">
-                    <button onclick="viewScannerFirstScanPhoto('${token}')" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                        <i class="fa-solid fa-image-portrait"></i> صورة أول مستخدم
-                    </button>
-                    <button onclick="requestRemoteSnapshot('${token}')" style="background:#e67e22; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                        <i class="fa-solid fa-camera-rotate"></i> طلب صورة حية (مباشر)
-                    </button>
-                </div>
-            </div>
-        `,
-        showConfirmButton: true,
-        confirmButtonText: 'إغلاق النافذة',
-        confirmButtonColor: '#102a43',
-        didOpen: () => {
-            tokenListener = db.collection('scanner_tokens').doc(token).onSnapshot(doc => {
-                if (doc.exists) {
-                    let data = doc.data();
-                    let total = data.totalScans || 0;
-                    let counts = data.scanCounts || {};
-                    let devices = data.registeredDevices || [];
-                    
-                    let totalEl = document.getElementById('totalScansUI');
-                    if (totalEl) totalEl.innerText = total;
-
-                    let devicesListEl = document.getElementById('devicesListUI');
-                    if (devicesListEl) {
-                        if (devices.length > 0) {
-                            let dHtml = '';
-                            devices.forEach((dev, idx) => {
-                                let dName = (typeof dev === 'object') ? dev.deviceModel : 'جهاز غير معروف';
-                                let dTime = (typeof dev === 'object' && dev.registeredAt) ? new Date(dev.registeredAt).toLocaleTimeString('ar-DZ') : '';
-                                let devCount = counts[dev.deviceId] || 0; 
-                                
-                                dHtml += `
-                                <div style="border-bottom:1px dashed #eee; padding:6px 0; text-align:right; display:flex; justify-content:space-between; align-items:center;">
-                                    <div>📱 ${idx+1}. <b style="color:#1E68E8;">${dName}</b> <span style="color:#777; font-size:10px;">(${dTime})</span></div>
-                                    <div style="background:#e8fbf0; color:#0FBA50; padding:2px 8px; border-radius:10px; font-weight:bold; font-size:12px; border:1px solid #0FBA50;">${devCount} مسح</div>
-                                </div>`;
-                            });
-                            devicesListEl.innerHTML = dHtml;
-                        } else {
-                            devicesListEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#777; text-align:center;">لا توجد هواتف مقترنة حالياً.</div>';
-                        }
-                    }
-                }
-            });
-        },
-        willClose: () => {
-            if (tokenListener) tokenListener();
-        }
-    });
 };
 
 function generateRandomToken(length) {
@@ -3596,288 +3412,97 @@ function generateRandomToken(length) {
     return t;
 }
 
+window.showLinkModal = function(token, oldDocId) {
+    let currentPath = window.location.href;
+    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
 
+    // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
+    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
 
-window.copyScannerLink = function() {
-    let copyText = document.getElementById("scannerLinkInput");
-    copyText.select();
-    copyText.setSelectionRange(0, 99999); 
-    navigator.clipboard.writeText(copyText.value).then(() => {
-        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم نسخ الرابط بنجاح!', showConfirmButton: false, timer: 2000});
-    });
-};
+    // === الجديد: دالة تكبير الـ QR Code (تعمل بملء الشاشة) ===
+    window.enlargeQR = function() {
+        let overlay = document.createElement('div');
+        overlay.id = 'qr-fullscreen-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)'; // لون داكن يطابق ألوان لوحة المفتش
+        overlay.style.backdropFilter = 'blur(5px)'; // تشويش الخلفية
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.cursor = 'zoom-out';
+        
+        // إغلاق التكبير عند الضغط
+        overlay.onclick = function() { document.body.removeChild(overlay); };
+        
+        // تصميم الصورة المكبرة
+        let img = document.createElement('img');
+        img.src = qrCodeUrl;
+        img.style.width = '400px';
+        img.style.height = '400px';
+        img.style.maxWidth = '90vw';
+        img.style.maxHeight = '90vw';
+        img.style.backgroundColor = 'white';
+        img.style.padding = '20px';
+        img.style.borderRadius = '20px';
+        img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+        
+        // نص توجيهي للإغلاق
+        let text = document.createElement('div');
+        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
+        text.style.color = 'white';
+        text.style.marginTop = '25px';
+        text.style.fontFamily = 'Cairo';
+        text.style.fontSize = '18px';
+        text.style.fontWeight = 'bold';
+        
+        overlay.appendChild(img);
+        overlay.appendChild(text);
+        document.body.appendChild(overlay);
+    };
 
-window.regenerateToken = function(oldDocId) {
     Swal.fire({
-        title: 'تأكيد التغيير والإبطال',
-        text: 'الرابط القديم وجميع الأجهزة المقترنة به ستتوقف عن العمل فوراً. هل أنت متأكد؟',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d90429', cancelButtonColor: '#102a43',
-        confirmButtonText: 'نعم، أبطِل الرابط', cancelButtonText: 'إلغاء'
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            try {
-                if (oldDocId) await db.collection('scanner_tokens').doc(oldDocId).delete();
-                let currentToken = generateRandomToken(15);
-                await db.collection('scanner_tokens').doc(currentToken).set({
-                    center: INSPECTOR_CENTER, maxDevices: 1, registeredDevices: [],
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                window.showLinkModal(currentToken, currentToken, 1, []);
-                Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
-            } catch (e) {
-                console.error(e);
-                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
-            }
-        } else {
-            window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة
-        }
+        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
+        html: `
+            <!-- === واجهة الـ QR المصغرة في النافذة === -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;" onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#0FBA50';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#e2e8f0';">
+                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; display: block; border-radius: 8px;">
+                </div>
+                <span style="font-size: 13px; color: #1E68E8; margin-top: 12px; font-weight: 800; background: #eff6ff; padding: 6px 15px; border-radius: 20px; cursor: pointer;" onclick="enlargeQR()">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i> اضغط لتكبير الباركود
+                </span>
+            </div>
+
+            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.6; text-align: right;">
+                هذا هو الرابط <b>الموحد</b> لمركزك.<br>
+                <div style="background:#e8fbf0; border:1px solid #0FBA50; padding:8px; border-radius:6px; margin: 8px 0;">
+                    <span style="color:#0FBA50; font-size:13px;"><i class="fa-solid fa-shield-halved"></i> <b>حماية قفل الجهاز:</b> هذا الرابط سيقفل تلقائياً على <b>أول هاتف</b> يفتحه.</span>
+                </div>
+            </div>
+            
+            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:15px; background:#f8fafc; color:#102a43; outline:none;">
+            
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="copyScannerLink()" style="background:#0FBA50; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-copy"></i> نسخ الرابط
+                </button>
+                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-arrows-rotate"></i> تغيير وإبطال
+                </button>
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
     });
 };
-
-// ============================================================================
-// دوال الحماية الجديدة (GPS، الأجهزة، الكاميرا الحية، وصورة الموثوقية)
-// ============================================================================
-
-// 2. دوال تحديد وتثبيت الموقع الجغرافي (GPS)
-window.getUserLocation = function() {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject("متصفحك لا يدعم تحديد الموقع الجغرافي."); return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (position) => { resolve({ lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy }); },
-            (error) => {
-                let msg = "تعذر الحصول على الموقع.";
-                if (error.code === error.PERMISSION_DENIED) msg = "لقد قمت برفض إذن الوصول للموقع الجغرافي. (تأكد من إعدادات المتصفح).";
-                reject(msg);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    });
-};
-
-
-window.updateTokenMaxDevices = async function(token, newMax) {
-    let val = parseInt(newMax) || 1;
-    let msgSpan = document.getElementById('maxDevMsg');
-    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
-
-    try {
-        await db.collection('scanner_tokens').doc(token).update({ maxDevices: val });
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
-    } catch (e) {
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> فشل الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-    }
-};
-
-window.autoCaptureLocation = async function() {
-    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
-    if(radiusVal < 1) radiusVal = 1;
-    if(radiusVal > 500) radiusVal = 500;
-    document.getElementById('centerRadius').value = radiusVal; // التحديث في الواجهة لتصحيح الخطأ إن وجد
-
-    let msgSpan = document.getElementById('gpsMsg');
-    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#17a2b8;"></i> جاري الجلب...'; msgSpan.style.opacity = '1'; }
-    
-    try {
-        const loc = await window.getUserLocation(); 
-        document.getElementById('manualLat').value = loc.lat;
-        document.getElementById('manualLng').value = loc.lng;
-        
-        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
-        await db.collection("center_settings").doc(safeCenterId).set({
-            latitude: loc.lat, longitude: loc.lng, radiusMeters: radiusVal 
-        }, { merge: true });
-        
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم جلب وتثبيت الإعدادات'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-    } catch (err) {
-        if (msgSpan) { msgSpan.innerHTML = `<span style="color:#d90429;">${err}</span>`; setTimeout(() => { msgSpan.style.opacity = '0'; }, 4000); }
-    }
-};
-
-window.saveManualLocation = async function() {
-    let lat = parseFloat(document.getElementById('manualLat').value);
-    let lng = parseFloat(document.getElementById('manualLng').value);
-    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
-    
-    // 🌟 حماية القيم المدخلة 🌟
-    if(radiusVal < 1) radiusVal = 1;
-    if(radiusVal > 500) radiusVal = 500;
-    document.getElementById('centerRadius').value = radiusVal;
-
-    let msgSpan = document.getElementById('gpsMsg');
-    
-    if(isNaN(lat) || isNaN(lng)) {
-        if (msgSpan) { msgSpan.innerHTML = '<span style="color:#d90429;">إحداثيات غير صالحة!</span>'; msgSpan.style.opacity = '1'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-        return;
-    }
-    
-    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
-    
-    try {
-        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
-        await db.collection("center_settings").doc(safeCenterId).set({
-            latitude: lat, longitude: lng, radiusMeters: radiusVal 
-        }, { merge: true });
-        
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ يدوياً بنجاح'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
-    } catch (err) {
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> خطأ في الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-    }
-};
-
-// 3. عرض صورة أول مستخدم فتح الرابط
-window.viewScannerFirstScanPhoto = async function(token) {
-    Swal.fire({ title: 'جاري الجلب...', didOpen: () => Swal.showLoading() });
-    try {
-        const docSnap = await db.collection("scanner_tokens").doc(token).get();
-        if (docSnap.exists && docSnap.data().firstScanAudits) {
-            const audits = docSnap.data().firstScanAudits;
-            const deviceKeys = Object.keys(audits);
-            
-            if (deviceKeys.length === 0) {
-                Swal.fire('معلومة', 'لا توجد صور مسجلة بعد.', 'info');
-                return;
-            }
-
-            // بناء واجهة عرض الصور بجانب بعضها
-            let htmlContent = '<div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">';
-            
-            deviceKeys.forEach((key, index) => {
-                let audit = audits[key];
-                let capturedDate = new Date(audit.capturedAt).toLocaleTimeString('ar-DZ');
-                let devName = audit.deviceName || 'جهاز غير معروف';
-                
-                htmlContent += `
-                    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; text-align: center; width: 220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                        <div style="font-size: 13px; font-weight: bold; color: #1E68E8; border-bottom: 1px dashed #cbd5e1; padding-bottom: 5px; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${devName}">
-                            📱 ${devName}
-                        </div>
-                        <img src="${audit.photoData}" style="width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 3px solid #0FBA50; margin-bottom: 10px;">
-                        <div style="font-size: 12px; font-weight: bold; color: #102a43;">أول بطاقة: <span style="color:#d90429;">${audit.firstScannedEmpId}</span></div>
-                        <div style="font-size: 11px; color: #777; margin-top: 3px;"><i class="fa-solid fa-clock"></i> ${capturedDate}</div>
-                    </div>
-                `;
-            });
-            htmlContent += '</div>';
-
-            Swal.fire({
-                title: 'توثيق أول عملية مسح (صاحب الهاتف)',
-                html: htmlContent,
-                width: '800px', // تكبير النافذة لتسع الأجهزة
-                confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
-            });
-        } else {
-            Swal.fire('معلومة', 'لم يتم تسجيل أي عملية مسح أو صورة على هذا الرابط بعد.', 'info');
-        }
-    } catch(e) { Swal.fire('خطأ', 'فشل الاتصال', 'error'); }
-};
-
-// ============================================================================
-// النظام المطور لطلب صورة حية (بدون تعليق النافذة أو اهتزاز شريط التمرير)
-// ============================================================================
-window.requestRemoteSnapshot = async function(token) {
-    Swal.fire({title: 'جاري التحضير...', didOpen: () => Swal.showLoading()});
-    
-    try {
-        const docSnap = await db.collection("scanner_tokens").doc(token).get();
-        if (!docSnap.exists) return;
-        
-        let devices = docSnap.data().registeredDevices || [];
-        if (devices.length === 0) {
-            Swal.fire('تنبيه', 'لا توجد أجهزة ماسح مقترنة حالياً لطلب صورة منها.', 'info');
-            return;
-        }
-
-        let optionsHtml = '<option value="all">📸 التقاط لجميع الأجهزة معاً</option>';
-        devices.forEach((dev, idx) => {
-            optionsHtml += `<option value="${dev.deviceId}">📱 جهاز ${idx + 1}: ${dev.deviceModel}</option>`;
-        });
-
-        // 1. اختيار الجهاز
-        Swal.fire({
-            title: 'تحديد الجهاز المستهدف',
-            html: `
-                <p style="font-size:14px; text-align:right; color:#555; margin-bottom:10px;">الرجاء اختيار الجهاز الذي تريد التقاط صورة حية منه الآن:</p>
-                <select id="targetDeviceSelect" class="swal2-select" style="width:100%; font-family:'Cairo'; font-size:14px; margin:0; padding:10px;">
-                    ${optionsHtml}
-                </select>
-            `,
-            showCancelButton: true, confirmButtonText: 'إرسال أمر الالتقاط', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
-            heightAuto: false // 🌟 منع النافذة من العبث بشريط التمرير
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                const targetDevice = document.getElementById('targetDeviceSelect').value;
-                const reqId = Date.now().toString();
-
-                // 2. إرسال الأمر للجهاز/الأجهزة
-                await db.collection("scanner_tokens").doc(token).update({
-                    remotePhotoCommand: { requestId: reqId, targetDevice: targetDevice, requested: true }
-                });
-
-                // 3. فتح نافذة الاستماع وانتظار وصول الصور
-                let photoListener = null;
-                let currentlyRenderedHtml = ""; // 🌟 لتخزين ما تم رسمه ومنع التكرار المزعج
-
-                Swal.fire({
-                    title: 'جاري استلام الصور...',
-                    html: `
-                        <div id="livePhotosGrid" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:15px; min-height:220px; align-items:center;">
-                            <div style="color:#777; font-family:'Cairo'; font-weight:bold; padding: 20px;">
-                                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color:#e67e22; margin-bottom:15px; display:block;"></i> 
-                                بانتظار استجابة الكاميرا (يجب أن يكون الهاتف مفتوحاً)...
-                            </div>
-                        </div>
-                    `,
-                    width: targetDevice === 'all' ? '800px' : '400px',
-                    allowOutsideClick: false, showConfirmButton: true, confirmButtonText: 'إغلاق النافذة', confirmButtonColor: '#102a43',
-                    heightAuto: false, // 🌟 منع اهتزاز النافذة
-                    scrollbarPadding: false, // 🌟 منع إضافة هوامش للتمرير
-                    didOpen: () => {
-                        photoListener = db.collection("scanner_tokens").doc(token).onSnapshot(doc => {
-                            if(doc.exists && doc.data().lastRemotePhotosMap) {
-                                const photosMap = doc.data().lastRemotePhotosMap;
-                                let gridHtml = '';
-                                let receivedCount = 0;
-
-                                // الفرز وعرض الصور التي تتطابق مع الطلب الحالي فقط
-                                for (const [devId, photoData] of Object.entries(photosMap)) {
-                                    if (photoData.requestId === reqId) {
-                                        if (targetDevice === 'all' || targetDevice === devId) {
-                                            receivedCount++;
-                                            let capTime = new Date(photoData.capturedAt).toLocaleTimeString('ar-DZ');
-                                            gridHtml += `
-                                                <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px; padding:10px; text-align:center; width:220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                                                    <div style="font-size:12px; font-weight:bold; color:#1E68E8; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${photoData.deviceName}">📱 ${photoData.deviceName}</div>
-                                                    <img src="${photoData.photoUrl}" style="width:160px; height:160px; border-radius:10px; object-fit:cover; border:3px solid #0FBA50; margin-bottom:8px;">
-                                                    <div style="font-size:12px; font-weight:bold; color:#555;"><i class="fa-solid fa-clock"></i> ${capTime}</div>
-                                                </div>
-                                            `;
-                                        }
-                                    }
-                                }
-
-                                // 🌟 التحديث الذكي: لا نُحدث الواجهة إلا إذا وصلت صورة جديدة حقاً 🌟
-                                if (receivedCount > 0 && gridHtml !== currentlyRenderedHtml) {
-                                    document.getElementById('livePhotosGrid').innerHTML = gridHtml;
-                                    currentlyRenderedHtml = gridHtml; // حفظ الحالة لمنع إعادة الرسم العشوائي
-                                }
-                            }
-                        });
-                    },
-                    willClose: () => { if (photoListener) photoListener(); }
-                });
-            }
-        });
-    } catch (e) {
-        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال.', 'error');
-    }
-};
-
-
 
 window.copyScannerLink = function() {
     let copyText = document.getElementById("scannerLinkInput");
@@ -4271,6 +3896,669 @@ window.promptPrintParticipationCerts = async function() {
     document.body.classList.remove('swal2-shown', 'swal2-height-auto');
     document.body.style.overflow = 'auto';
     document.body.style.paddingRight = '';
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ============================================================================
+// دالة استخراج وطباعة مقرر المؤطر الفردي (استدعاء ديناميكي حسب الدورة المختارة)
+// ============================================================================
+window.printSingleFramerDecision = async function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) return Swal.fire('خطأ', 'لم يتم العثور على بيانات المؤطر.', 'error');
+
+    // 1. تحديد الدورة
+    let session = currentTab;
+    if (session === 'all') {
+        let activeSessions = [];
+        if (f.s1) activeSessions.push({ id: 's1', name: 'الدورة الأولى' });
+        if (f.s2) activeSessions.push({ id: 's2', name: 'الدورة الثانية' });
+        if (f.s3) activeSessions.push({ id: 's3', name: 'الدورة الثالثة' });
+
+        if (activeSessions.length === 0) {
+            session = 's1';
+        } else if (activeSessions.length === 1) {
+            session = activeSessions[0].id;
+        } else {
+            let framerName = (f.baseInfo && f.baseInfo.name) ? f.baseInfo.name : 'المؤطر';
+            let framerRole = f.role || 'مؤطر بالمركز';
+
+            // بطاقات اختيار الدورة التفاعلية (بدون شريط تمرير)
+            let cardsHtml = activeSessions.map((s, idx) => `
+                <label style="cursor: pointer; position: relative; margin: 0; display: block; flex: 1;">
+                    <input type="radio" name="swalSessionRadio" value="${s.id}" ${idx === 0 ? 'checked' : ''} style="position: absolute; opacity: 0;" onchange="
+                        document.querySelectorAll('.session-choice-box').forEach(el => {
+                            el.style.borderColor='#cbd5e1'; el.style.background='#fff'; el.style.boxShadow='none';
+                            el.querySelector('.choice-check').style.display='none';
+                        });
+                        this.closest('label').querySelector('.session-choice-box').style.borderColor='#e67e22';
+                        this.closest('label').querySelector('.session-choice-box').style.background='#fff8f3';
+                        this.closest('label').querySelector('.session-choice-box').style.boxShadow='0 4px 12px rgba(230,126,34,0.2)';
+                        this.closest('label').querySelector('.choice-check').style.display='block';
+                    ">
+                    <div class="session-choice-box" style="border: 2px solid ${idx === 0 ? '#e67e22' : '#cbd5e1'}; background: ${idx === 0 ? '#fff8f3' : '#fff'}; border-radius: 12px; padding: 14px 10px; text-align: center; transition: all 0.25s ease; position: relative; box-shadow: ${idx === 0 ? '0 4px 12px rgba(230,126,34,0.2)' : 'none'};">
+                        <div class="choice-check" style="display: ${idx === 0 ? 'block' : 'none'}; position: absolute; top: 8px; left: 8px; color: #e67e22; font-size: 14px;"><i class="fa-solid fa-circle-check"></i></div>
+                        <div style="font-size: 24px; color: #e67e22; margin-bottom: 6px;"><i class="fa-solid fa-calendar-check"></i></div>
+                        <div style="font-size: 15px; font-weight: 900; color: #102a43;">${s.name}</div>
+                        <div style="font-size: 11px; color: #64748b; font-weight: 700; margin-top: 3px;">طباعة المقرر</div>
+                    </div>
+                </label>
+            `).join('');
+
+            const { value: selectedSess } = await Swal.fire({
+                title: '<i class="fa-solid fa-calendar-days" style="color:#e67e22; margin-left:8px;"></i> اختيار الدورة التكوينية',
+                width: '490px',
+                padding: '20px',
+                customClass: { popup: 'swal-modal-custom' },
+                html: `
+                    <div style="font-family:'Cairo', sans-serif; text-align:right;">
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 15px; margin-bottom:18px; display:flex; align-items:center; gap:12px;">
+                            <div style="width:42px; height:42px; border-radius:50%; background:#fff3e0; color:#e67e22; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; border:1.5px solid #ffcc80;"><i class="fa-solid fa-user-tie"></i></div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:15px; font-weight:900; color:#102a43; line-height:1.3;">${framerName}</div>
+                                <div style="font-size:12px; color:#64748b; font-weight:bold; margin-top:2px;"><span style="color:#e67e22;">${framerRole}</span> • مسجل في عدة دورات</div>
+                            </div>
+                        </div>
+                        <label style="display:block; font-size:13px; font-weight:800; color:#475569; margin-bottom:10px;">اختر الدورة المراد طباعة مقررها:</label>
+                        <div style="display:flex; gap:12px; justify-content:center; margin-bottom:5px;">
+                            ${cardsHtml}
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-print"></i> متابعة للطباعة',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#e67e22',
+                cancelButtonColor: '#64748b',
+                preConfirm: () => {
+                    const checkedRadio = document.querySelector('input[name="swalSessionRadio"]:checked');
+                    return checkedRadio ? checkedRadio.value : 's1';
+                }
+            });
+
+            if (!selectedSess) return;
+            session = selectedSess;
+        }
+    }
+
+    // 🌟 2. جلب إعدادات المقرر الخاصة بهذه الدورة تحديداً من المديرية 🌟
+    let allConfigs = window.globalDecisionConfig;
+    if (!allConfigs) {
+        try {
+            const setDoc = await db.collection("site_settings").doc("main").get();
+            if (setDoc.exists && setDoc.data().DECISION_CONFIG) {
+                allConfigs = setDoc.data().DECISION_CONFIG;
+                window.globalDecisionConfig = allConfigs;
+            }
+        } catch(e) {}
+    }
+    allConfigs = allConfigs || {};
+    
+    // جلب كائن الدورة المختارة (s1 أو s2 أو s3) مع دعم التوافق التلقائي
+    let dConfig = allConfigs[session] || (allConfigs.circNum ? allConfigs : {});
+
+    let circNum = dConfig.circNum || "..........";
+    let circYear = dConfig.circYear || "..........";
+    let type = dConfig.type || "التكوين البيداغوجي";
+    let year = dConfig.year || "2026/2025";
+    let startD = dConfig.start || ".........."; // تاريخ بداية هذه الدورة بالتحديد
+    let date = dConfig.date || "..........";       // تاريخ تحرير هذه الدورة بالتحديد
+
+    // 🌟 السنة الحالية المعتمدة دائماً لرقم المقرر في الأعلى ولقسيمة الاستلام 🌟
+    const currentYear = new Date().getFullYear();
+
+    // 3. استخراج رقم المقرر للدورة المحددة
+    let fieldName = 'decisionNumber_' + session;
+    let currentNum = f[fieldName];
+    if (currentNum === undefined && session === 's1' && f.decisionNumber) {
+        currentNum = f.decisionNumber;
+    }
+    let decNum = (currentNum !== undefined && currentNum !== null && currentNum !== "") ? currentNum : '..........';
+
+    // 4. جلب إحداثيات موقع المركز للـ QR
+    let centerName = (f.center || INSPECTOR_CENTER || '').trim();
+    let mapUrl = "";
+    
+    if (window.inspectorCenterLocation && window.inspectorCenterLocation.latitude && window.inspectorCenterLocation.longitude) {
+        mapUrl = `https://maps.google.com/?q=${window.inspectorCenterLocation.latitude},${window.inspectorCenterLocation.longitude}`;
+    } else {
+        mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(centerName + " توقرت")}`;
+    }
+    let centerQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mapUrl)}`;
+
+    const sealUrl = "https://lh3.googleusercontent.com/d/19RIAk1hOJzRoOmQq46CE3amYzdHkNUJt";
+
+    let b = f.baseInfo || {};
+    let name = b.name || '.............................................';
+    let rank = b.grade || b.rank || '.............................................';
+    let role = f.role || '.............................................';
+
+    let printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        return Swal.fire('تنبيه', 'يرجى السماح بالنوافذ المنبثقة للمتصفح للطباعة.', 'warning');
+    }
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>مقرر تأطير - ${name}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+        
+        <style>
+            @page { 
+                size: A4 portrait; 
+                margin: 5mm 8mm; 
+            }
+            * { 
+                box-sizing: border-box; 
+                font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; 
+            }
+            body { 
+                background: #fff; 
+                margin: 0; 
+                padding: 0; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+                color: #0f172a; 
+            }
+            
+            .page-container { 
+                width: 100%; 
+                height: 280mm;
+                max-height: 280mm;
+                box-sizing: border-box; 
+                page-break-after: always; 
+                break-after: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                overflow: hidden;
+                background: #fff;
+            }
+
+            .decision-card {
+                border: 2px solid #0f172a;
+                border-radius: 4px;
+                padding: 5mm 8mm 3mm 8mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                background: #fff;
+            }
+
+            .header-top { 
+                text-align: center; 
+                font-weight: 800; 
+                font-size: 14px; 
+                line-height: 1.35; 
+                margin-bottom: 5px;
+                color: #0f172a;
+            }
+            .header-cols { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: flex-start;
+                font-size: 13px; 
+                line-height: 1.4;
+                margin-bottom: 4px;
+            }
+            .header-right { 
+                text-align: right; 
+                font-weight: 700;
+            }
+            .header-left { 
+                text-align: left; 
+                font-weight: 800;
+                white-space: nowrap;
+                position: relative;
+            }
+
+            .copy-watermark {
+                position: absolute;
+                top: 36px;
+                left: 4px;
+                font-size: 20px;
+                font-weight: 900;
+                color: #c0392b;
+                border: 2px dashed #c0392b;
+                background: rgba(254, 242, 242, 0.75);
+                opacity: 0.85;
+                border-radius: 4px;
+                padding: 1px 15px;
+                transform: rotate(-10deg);
+                letter-spacing: 5px;
+                line-height: 1.3;
+                pointer-events: none;
+                user-select: none;
+                box-shadow: 0 1px 3px rgba(192, 57, 43, 0.15);
+            }
+
+            .main-title-wrap {
+                text-align: center;
+                margin: 2px 0 6px 0;
+            }
+            .main-title { 
+                display: inline-block;
+                font-size: 26px; 
+                font-weight: 900; 
+                letter-spacing: 5px;
+                padding: 1px 40px;
+                border-top: 2px solid #0f172a;
+                border-bottom: 2px solid #0f172a;
+                background: #f8fafc;
+                border-radius: 4px;
+                line-height: 1.2;
+                color: #0f172a;
+            }
+
+            .legal-text { 
+                font-size: 12.5px; 
+                font-weight: 600;
+                line-height: 1.5; 
+                text-align: justify; 
+                text-justify: inter-word;
+                margin-bottom: 4px; 
+                padding: 0 4px;
+                color: #1e293b;
+            }
+            .legal-item { 
+                margin-bottom: 2px; 
+                text-indent: -13px;
+                padding-right: 13px;
+            }
+            .proposal {
+                text-align: center; 
+                font-weight: 800; 
+                font-size: 13px; 
+                margin: 5px 0 3px 0;
+                letter-spacing: 0.5px;
+                color: #0f172a;
+            }
+
+            .decides-wrap { 
+                text-align: center; 
+                margin: 3px 0 5px 0; 
+            }
+            .decides { 
+                display: inline-block;
+                font-size: 20px; 
+                font-weight: 900; 
+                letter-spacing: 4px;
+                padding: 0 25px;
+                border-bottom: 2px solid #0f172a;
+                color: #0f172a;
+            }
+
+            .articles-container {
+                margin: 4px 0 6px 0;
+                padding: 6px 12px;
+                background: #f8fafc;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+            }
+            .article-row {
+                display: flex;
+                align-items: center;
+                font-size: 14px;
+                margin-bottom: 3px;
+                line-height: 1.5;
+            }
+            .article-row:last-child {
+                margin-bottom: 0;
+            }
+            .art-title {
+                width: 85px;
+                min-width: 85px;
+                font-weight: 700;
+                text-decoration: underline;
+                text-underline-offset: 3px;
+                color: #0f172a;
+            }
+            .art-title-spacer {
+                width: 85px;
+                min-width: 85px;
+            }
+            .art-label {
+                width: 175px;
+                min-width: 175px;
+                font-weight: 600;
+                color: #334155;
+            }
+            .art-val {
+                font-weight: 700;
+                font-size: 14.5px;
+                color: #0f172a;
+            }
+            .art-center-val {
+                font-weight: 700;
+                font-size: 15px;
+                color: #0f172a;
+            }
+
+            table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 6px 0; 
+                text-align: center; 
+            }
+            th, td { 
+                border: 1.5px solid #0f172a; 
+                padding: 6px 8px; 
+                font-size: 13.5px; 
+                font-weight: 700; 
+                vertical-align: middle;
+            }
+            th { 
+                background-color: #f1f5f9; 
+                font-weight: 800;
+                font-size: 14px;
+                color: #0f172a;
+            }
+
+            .signature-container { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: flex-start;
+                padding: 0 4%; 
+                margin-top: 6px;
+                min-height: 105px;
+            }
+
+            .qr-box {
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: 130px;
+            }
+            .qr-title {
+                font-size: 11.5px;
+                font-weight: 800;
+                color: #0f172a;
+                margin-bottom: 2px;
+            }
+            .qr-slot {
+                width: 76px;
+                height: 76px;
+                background: #fff;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                padding: 2px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            }
+            .qr-img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            }
+            .qr-desc {
+                font-size: 9px;
+                font-weight: 700;
+                color: #64748b;
+                margin-top: 2px;
+            }
+
+            .signature-box { 
+                text-align: center; 
+                position: relative; 
+                width: 290px;
+                min-height: 105px;
+            }
+            .signature-title { 
+                font-weight: 800; 
+                font-size: 16px; 
+                color: #0f172a; 
+                margin-bottom: 2px; 
+            }
+            .seal-img { 
+                width: 280px; 
+                max-width: 100%;
+                height: auto; 
+                object-fit: contain; 
+                mix-blend-mode: multiply; 
+                margin-top: -10px;
+            }
+
+            .card-bottom-bar {
+                margin-top: 6px;
+                padding-top: 4px;
+                border-top: 1px dashed #cbd5e1;
+                display: flex;
+                justify-content: flex-start;
+                align-items: center;
+                padding-right: 6px;
+            }
+            .card-bottom-text {
+                font-size: 11.5px;
+                font-weight: 800;
+                color: #1e293b;
+                letter-spacing: 0.5px;
+            }
+
+            .cut-divider {
+                position: relative;
+                text-align: center;
+                margin: 6px 0; 
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .cut-divider-line {
+                position: absolute;
+                width: 100%;
+                top: 50%;
+                left: 0;
+                border-top: 1.5px dashed #475569;
+                z-index: 1;
+            }
+            .cut-badge {
+                position: relative;
+                z-index: 2;
+                background: #fff;
+                padding: 1px 12px;
+                font-size: 11px;
+                font-weight: 700;
+                color: #475569;
+                border: 1px dashed #94a3b8;
+                border-radius: 12px;
+            }
+
+            .receipt-card {
+                border: 2px solid #0f172a;
+                border-radius: 4px;
+                background: #fafafa;
+                padding: 4px 12px 6px 12px;
+                font-size: 13px; 
+                line-height: 1.45; 
+                text-align: center;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .receipt-title { 
+                border: 1.5px solid #0f172a; 
+                display: inline-block; 
+                padding: 1px 22px; 
+                font-size: 13.5px; 
+                font-weight: 800; 
+                background: #e2e8f0; 
+                color: #0f172a;
+                margin-bottom: 3px; 
+                border-radius: 4px;
+            }
+            .receipt-text { 
+                text-align: center; 
+                margin-bottom: 2px; 
+                color: #1e293b;
+                font-weight: 600;
+                font-size: 12.5px;
+            }
+            .receipt-footer-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 2px 10px 0 10px;
+                margin-top: 3px;
+                font-size: 12.5px;
+            }
+            .receipt-date-box, .receipt-sign-box {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                color: #1e293b;
+            }
+            .receipt-dots { 
+                letter-spacing: 1px; 
+                color: #475569;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page-container">
+            
+            <div class="decision-card">
+                <div>
+                    <div class="header-top">
+                        الجمهورية الجزائرية الديمقراطية الشعبية<br>
+                        وزارة التربية الوطنية
+                    </div>
+                    
+                    <div class="header-cols">
+                        <div class="header-right">
+                            مديرية التربية لولاية توقرت<br>
+                            مصلحة المستخدمين و التفتيش<br>
+                            مكتب التكوين و التفتيش<br>
+                            الرقم : &nbsp; <b>${decNum}</b> &nbsp; / &nbsp; ${currentYear}
+                        </div>
+                        
+                        <div class="header-left">
+                            توقرت في : <span dir="ltr"><b>${date}</b></span>
+                            <div class="copy-watermark">« نـسـخـــــة »</div>
+                        </div>
+                    </div>
+
+                    <div class="main-title-wrap">
+                        <div class="main-title">مـــقـــــــــــــرر</div>
+                    </div>
+
+                    <div class="legal-text">
+                        <div class="legal-item">- بمقتضى الأمر رقم 06-03 المؤرخ في جمادى الثانية عام 1427 الموافق 15 يوليو سنة 2006 ، و المتضمن القانون الأساسي العام للوظيفة العمومية.</div>
+                        <div class="legal-item">- بمقتضى المرسوم التنفيذي رقم : 90/174 المؤرخ في 09 جوان 1990 المحدد لإجراءات تنظيم و تسيير مصالح التربية على مستوى الولاية.</div>
+                        <div class="legal-item">- بمقتضى المرسوم رقم: 25-54 المؤرخ في 21 جانفي 2025 المتضمن القانون الأساسي الخاص بالموظفين المنتمين للأسلاك الخاصة بالتربية الوطنية .</div>
+                        <div class="legal-item">- و بمقتضى القرار الوزاري المؤرخ في 04 أكتوبر 2011 المتضمن تفويض سلطة التعيين و التسيير الإداري لمديري التربية بالولايات.</div>
+                        <div class="legal-item">- بناء على القرار الوزاري رقم : 15/250 المؤرخ في 2015/08/24 الذي يحدد كيفيات تنظيم التكوين البيداغوجي التحضيري أثناء التربص التجريبي لموظفي التعليم و مدته كذا محتوى برامجه.</div>
+                        <div class="legal-item">- بناء على القرار الوزاري المشترك المؤرخ في 17 نوفمبر 2013 المحدد لكيفية تنظيم التكوين المسبق للتعيين في رتبة أستاذ التعليم الثانوي ومحتواه وبرنامجه.</div>
+                        <div class="legal-item">- بناء على المنشور الوزاري رقم: <b>${circNum}</b> المتعلق بتنظيم ${type} والتكوين المسبق للأساتذة المدمجين بعنوان سنة <b>${circYear}</b>.</div>
+                        <div class="proposal">وبـاقـتــراح مـن الـسـيـد رئـيـس مـصـلـحـة المـسـتـخـدمـيـن و الـتـفـتـيـش</div>
+                    </div>
+
+                    <div class="decides-wrap">
+                        <div class="decides">يــقــــرر</div>
+                    </div>
+
+                    <div class="articles-container">
+                        <div class="article-row">
+                            <span class="art-title">المــادة 01:</span>
+                            <span class="art-label">يُعيّن السيد(ة) :</span>
+                            <span class="art-val">${name}</span>
+                        </div>
+                        <div class="article-row">
+                            <span class="art-title-spacer"></span>
+                            <span class="art-label">الإطــــــــــــــار :</span>
+                            <span class="art-val">${rank}</span>
+                        </div>
+                        <div class="article-row">
+                            <span class="art-title">المــادة 02:</span>
+                            <span class="art-label">يُعيّن المعني بـمـركـــز :</span>
+                            <span class="art-val art-center-val">${centerName}</span>
+                        </div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:30%;">نوع التكوين</th>
+                                <th style="width:25%;">المهمة</th>
+                                <th style="width:30%;">التاريخ</th>
+                                <th style="width:15%;">ملاحظة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>${type} لسنة <br><b dir="ltr">${year}</b></td>
+                                <td><b>${role}</b></td>
+                                <td>ابتداء من: <b dir="ltr">${startD}</b></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="signature-container">
+                        <div class="qr-box">
+                            <div class="qr-title">موقع مركز التكوين</div>
+                            <div class="qr-slot">
+                                <img src="${centerQrUrl}" class="qr-img" alt="QR موقع المركز" crossorigin="anonymous">
+                            </div>
+                            <div class="qr-desc">امسح لتحديد الموقع</div>
+                        </div>
+
+                        <div class="signature-box">
+                            <div class="signature-title">مدير التربية</div>
+                            <img src="${sealUrl}" class="seal-img" crossorigin="anonymous">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-bottom-bar">
+                    <span class="card-bottom-text">مستخرج من الأرضية الرقمية لمركز التكوين : <b>${centerName}</b></span>
+                </div>
+
+            </div>
+
+            <div class="cut-divider">
+                <div class="cut-divider-line"></div>
+                <span class="cut-badge">✂ قـطـع مـن هـنـا</span>
+            </div>
+
+            <div class="receipt-card">
+                <div><div class="receipt-title">قسيمة الإشعار بالاستلام</div></div>
+                <div class="receipt-text">
+                    أنا الممضي أسفله السيد(ة) : <span class="receipt-dots">...................................................</span> 
+                    المؤسسة : <span class="receipt-dots">...................................................</span>
+                </div>
+                <div class="receipt-text">
+                    أعلن بأنني قد استلمت مقرر متعلق بـ <b>${type}</b> لسنة <b dir="ltr">${year}</b>
+                </div>
+                
+                <div class="receipt-footer-row">
+                    <div class="receipt-date-box">
+                        <b>تاريخ الاستلام :</b> 
+                        <span dir="rtl" style="font-family: Arial, sans-serif; letter-spacing: 1px; font-weight: bold;">.... / .... / ${currentYear}</span>
+                    </div>
+                    <div class="receipt-sign-box">
+                        <b>الإمضـــــــــــاء :</b> 
+                        <span class="receipt-dots">...................................................</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </body>
+    <script>
+        window.onload = function() {
+            setTimeout(function() { window.print(); }, 600);
+        }
+    <\/script>
+    </html>
+    `;
 
     printWindow.document.write(html);
     printWindow.document.close();

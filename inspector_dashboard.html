@@ -25,38 +25,13 @@
   
   <style>
     * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
-    html, body {
-      max-width: 100%;
-      overflow-x: hidden; /* منع الاهتزاز أو التمرير العرضي غير المرغوب فيه على الهواتف */
-    }
-    body { 
-      margin: 0; 
-      background: linear-gradient(135deg, #f0f4f8, #d9e2ec); 
-      color: #333; 
-      min-height: 100vh; 
-      display: flex; 
-      flex-direction: column; 
-    }
+    body { margin: 0; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); color: #333; min-height: 100vh; display: flex; flex-direction: column; }
     .top-nav { background: #102a43; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
     .top-nav h2 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; color: #62b0e8; }
     .top-nav h2 span { color: #fff; font-size: 16px; background: #243b53; padding: 4px 12px; border-radius: 20px; margin-right: 10px; border: 1px solid #334e68;}
     .logout-btn { background: #d90429; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
     .logout-btn:hover { background: #ef233c; }
-    
-    .dashboard-container { 
-      padding: 20px; 
-      flex: 1; 
-      max-width: 100%; 
-      margin: 0 auto; 
-      width: 100%; 
-      overflow-x: hidden; /* عزل العناصر الداخلية لتفادي خروجها عن حدود الشاشة */
-    }
-
-    @media (max-width: 768px) {
-      .dashboard-container {
-        padding: 10px 8px;
-      }
-    }
+    .dashboard-container { padding: 20px; flex: 1; max-width: 100%; margin: 0 auto; width: 100%; }
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px; }
     .stat-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; border-right: 5px solid #102a43; }
     .stat-card.blue { border-right-color: #1E68E8; }
@@ -74,62 +49,6 @@
     .btn-detailed-stats:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(255, 87, 34, 0.4); }
     @keyframes pulse { 0% {box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4);} 70% {box-shadow: 0 0 0 10px rgba(255, 152, 0, 0);} 100% {box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);} }
     .filter-group { flex: 1; min-width: 180px; display: flex; flex-direction: column; position: relative; }
-
-    /* تجاوب البطاقات الإحصائية وأزرار الفلاتر على شاشات الهاتف */
-    @media (max-width: 768px) {
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-      }
-      .stat-card {
-        padding: 12px 15px;
-      }
-      .stat-info p {
-        font-size: 22px;
-      }
-      .stat-icon {
-        font-size: 30px;
-      }
-
-      /* ترويسة أزرار الفلاتر (إحصائيات، إكسل، طباعة 1، 2، 3، البطاقات، الأفواج، الحضور، التراخيص) */
-      .filters-header > div {
-        width: 100% !important;
-        display: grid !important;
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 8px !important;
-      }
-      .filters-header .btn-print, 
-      .filters-header .btn-detailed-stats {
-        width: 100%;
-        justify-content: center;
-        padding: 8px 10px;
-        font-size: 12px;
-      }
-      /* جعل مربع نتيجة الفلترة يأخذ عرض السطر بالكامل في الأسفل */
-      .filters-header span[style*="margin-right: auto"] {
-        grid-column: span 2;
-        margin: 4px 0 0 0 !important;
-        text-align: center;
-        width: 100%;
-        box-sizing: border-box;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .stats-grid {
-        grid-template-columns: 1fr; /* جعل البطاقات الثلاث عمودية للشاشات الصغيرة جداً */
-      }
-    }
-
-    @media (max-width: 380px) {
-      .filters-header > div {
-        grid-template-columns: 1fr !important; /* عمود واحد للأزرار في الشاشات الضيقة */
-      }
-      .filters-header span[style*="margin-right: auto"] {
-        grid-column: span 1;
-      }
-    }
-	
     .filter-group label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px; }
     .filter-group select, .filter-group input { padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Cairo'; outline: none; transition: 0.3s; }
     .filter-group select:focus, .filter-group input:focus { border-color: #102a43; box-shadow: 0 0 5px rgba(16, 42, 67, 0.2); }
@@ -168,37 +87,15 @@
         accent-color: #102a43; 
     }    
 
-   .table-responsive { 
-      width: 100%; 
-      overflow-x: auto; 
-      background: white; 
-      border-radius: 15px; 
-      box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-      -webkit-overflow-scrolling: touch; /* تمرير لمسي انسيابي على الهواتف الذكية */
-    }
+    .table-responsive { width: 100%; overflow-x: auto; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
     table { width: 100%; border-collapse: collapse; min-width: 1000px; }
     thead { background: #102a43; color: white; }
     th, td { padding: 12px 15px; text-align: right; border-bottom: 1px solid #eee; font-size: 14px; }
     tbody tr:hover { background: #f8fbff; }
-    
-    .action-btns { display: flex; gap: 5px; justify-content: center; }
-    .btn-icon { 
-      width: 35px; 
-      height: 35px; 
-      border-radius: 8px; 
-      border: none; 
-      color: white; 
-      cursor: pointer; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      transition: 0.2s; 
-      font-size: 16px;
-      flex-shrink: 0; /* منع انضغاط أزرار الإجراءات داخل الصف */
-    }
+    .action-btns { display: flex; gap: 5px; }
+    .btn-icon { width: 35px; height: 35px; border-radius: 8px; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-size: 16px;}
     .btn-info { background: #17a2b8; } .btn-info:hover { background: #138496; }
     .btn-edit { background: #ffc107; color: #000; } .btn-edit:hover { background: #e0a800; }
-    
     .pagination-container { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-top: 15px; flex-wrap: wrap; gap: 10px; }
     .pagination-info { font-weight: 600; color: #555; font-size: 14px; }
     .pagination-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -206,37 +103,6 @@
     .page-btn:hover:not(:disabled) { background: #102a43; color: white; }
     .page-btn.active { background: #102a43; color: white; }
     .page-btn:disabled { background: #eee; color: #aaa; border-color: #ddd; cursor: not-allowed; }
-
-    /* تجاوب الجدول الرئيسي ونظام الصفحات على الهواتف */
-    @media (max-width: 768px) {
-      .table-responsive {
-        border-radius: 10px;
-        margin-bottom: 10px;
-      }
-      th, td {
-        padding: 8px 10px;
-        font-size: 13px;
-      }
-      .pagination-container {
-        padding: 12px 10px;
-        flex-direction: column;
-        gap: 12px;
-        align-items: center;
-      }
-      .pagination-info {
-        font-size: 13px;
-        text-align: center;
-      }
-      .pagination-buttons {
-        justify-content: center;
-        width: 100%;
-      }
-      .page-btn {
-        padding: 5px 10px;
-        font-size: 12px;
-      }
-    }
-	
     #loader { display: flex; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.9); z-index:9999; justify-content:center; align-items:center; flex-direction:column; }
     .spinner { border: 5px solid #f3f3f3; border-top: 5px solid #102a43; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -251,371 +117,38 @@
     .s-card-data.total { font-size: 15px; color: #102a43; font-weight: 800; border-top: 1px solid #eee; padding-top: 5px; margin-top: 5px; }
     .c-male { color: #1E68E8; }
     .c-female { color: #e91e63; }
-
-
-@media (max-width: 900px) { 
-      .top-nav { 
-        flex-direction: column; 
-        gap: 12px; 
-        padding: 12px 10px;
-        text-align: center; 
-      } 
-      .top-nav h2 {
-        font-size: 18px;
-        justify-content: center;
-      }
-      .top-nav h2 span {
-        font-size: 13px;
-        padding: 2px 10px;
-      }
-      #welcomeName {
-        width: 100% !important;
-        min-width: unset !important;
-        justify-content: center;
-      }
-      #welcomeName > div {
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 8px 12px !important;
-        box-sizing: border-box;
-      }
-      /* تحويل أزرار الشريط العلوي إلى شبكة من عمودين متوازيين */
-      .top-nav > div:last-child {
-        width: 100% !important;
-        display: grid !important;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px !important;
-        justify-content: center;
-      }
-      .logout-btn {
-        width: 100%;
-        padding: 8px 10px;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        box-sizing: border-box;
-      }
-      .filters-section { 
-        flex-direction: column; 
-        align-items: stretch; 
-      } 
-      .filters-header { 
-        flex-direction: column; 
-        gap: 15px; 
-      } 
-    }
-
-    /* تحسين إضافي للشاشات الصغيرة جداً (320px إلى 414px) */
-    @media (max-width: 420px) {
-      .top-nav > div:last-child {
-        grid-template-columns: 1fr; /* جعل الأزرار بعمود واحد على الهواتف الضيقة */
-      }
-    }
-
-	
+    @media (max-width: 900px) { .top-nav { flex-direction: column; gap: 15px; text-align: center; } .filters-section { flex-direction: column; align-items: stretch; } .filters-header { flex-direction: column; gap: 15px; } }
+ 
 /* ================= تنسيقات نظام الحضور ================= */
-.modal-overlay { 
-  display: none; 
-  position: fixed; 
-  top: 0; 
-  left: 0; 
-  width: 100%; 
-  height: 100%; 
-  background: rgba(16, 42, 67, 0.8); 
-  z-index: 1000; 
-  justify-content: center; 
-  align-items: center; 
-  backdrop-filter: blur(5px); 
-}
-.modal-content { 
-  background: #f0f4f8; 
-  width: 95%; 
-  max-width: 1400px;
-  height: 95%; 
-  max-height: 98vh;
-  border-radius: 15px; 
-  display: flex; 
-  flex-direction: column; 
-  overflow: hidden; 
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
-}
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(16, 42, 67, 0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+.modal-content { background: #f0f4f8; width: 95%; height: 95%; border-radius: 15px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-header { background: #102a43; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.close-modal { background: #d90429; color: white; border: none; width: 35px; height: 35px; border-radius: 8px; cursor: pointer; font-size: 18px; transition: 0.3s; }
+.close-modal:hover { background: #ef233c; transform: scale(1.05); }
 
-/* ضبط وتجاوب المودال على شاشات الهاتف */
-@media (max-width: 768px) {
-  .modal-overlay {
-    padding: 6px;
-    align-items: flex-end;
-  }
-  .modal-content {
-    width: 100% !important;
-    height: 96vh !important;
-    max-height: 96vh !important;
-    border-radius: 16px 16px 0 0 !important;
-  }
-}
-
-.modal-header { 
-  background: #102a43; 
-  color: white; 
-  padding: 15px 20px; 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  flex-shrink: 0;
-}
-.modal-header h2 { 
-  margin: 0; 
-  font-size: 20px; 
-  display: flex; 
-  align-items: center; 
-  gap: 10px; 
-}
-.close-modal { 
-  background: #d90429; 
-  color: white; 
-  border: none; 
-  width: 35px; 
-  height: 35px; 
-  border-radius: 8px; 
-  cursor: pointer; 
-  font-size: 18px; 
-  transition: 0.3s; 
-  flex-shrink: 0;
-}
-.close-modal:hover { 
-  background: #ef233c; 
-  transform: scale(1.05); 
-}
-
-.att-controls { 
-  background: white; 
-  padding: 15px; 
-  display: flex; 
-  gap: 15px; 
-  flex-wrap: wrap; 
-  align-items: center; 
-  justify-content: space-between; 
-  border-bottom: 2px solid #d9e2ec; 
-  flex-shrink: 0;
-}
-.att-date-picker { 
-  display: flex; 
-  align-items: center; 
-  gap: 10px; 
-  font-weight: bold; 
-  color: #102a43; 
-}
-.att-date-picker input { 
-  padding: 8px; 
-  border: 1px solid #ccc; 
-  border-radius: 6px; 
-  font-family: 'Cairo'; 
-  outline: none; 
-}
+.att-controls { background: white; padding: 15px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-bottom: 2px solid #d9e2ec; }
+.att-date-picker { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #102a43; }
+.att-date-picker input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Cairo'; outline: none; }
 
 /* زر نظام الحضور (مفتوح / متأخر) */
-.system-toggle { 
-  display: flex; 
-  align-items: center; 
-  gap: 10px; 
-  background: #e8fbf0; 
-  padding: 8px 15px; 
-  border-radius: 30px; 
-  border: 2px solid #0FBA50; 
-  transition: 0.3s; 
-  cursor: pointer; 
-  user-select: none;
-}
-.system-toggle.is-late { 
-  background: #fff4e5; 
-  border-color: #ff9800; 
-}
-.system-toggle .toggle-text { 
-  font-weight: bold; 
-  color: #102a43; 
-}
+.system-toggle { display: flex; align-items: center; gap: 10px; background: #e8fbf0; padding: 8px 15px; border-radius: 30px; border: 2px solid #0FBA50; transition: 0.3s; cursor: pointer; user-select: none;}
+.system-toggle.is-late { background: #fff4e5; border-color: #ff9800; }
+.system-toggle .toggle-text { font-weight: bold; color: #102a43; }
 
-.att-stats { 
-  display: flex; 
-  gap: 10px; 
-  flex: 1; 
-  justify-content: flex-end; 
-}
-.att-stat-box { 
-  padding: 8px 15px; 
-  border-radius: 8px; 
-  font-weight: bold; 
-  font-size: 14px; 
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  min-width: 100px; 
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-
-/* تحسين تجاوب الترويسة وعناصر التحكم وإحصائيات الحضور على الهاتف */
-@media (max-width: 768px) {
-  .modal-header {
-    padding: 10px 14px;
-  }
-  .modal-header h2 {
-    font-size: 15px;
-    line-height: 1.3;
-  }
-  .close-modal {
-    width: 32px;
-    height: 32px;
-    font-size: 16px;
-  }
-  .att-controls {
-    padding: 10px;
-    gap: 10px;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .att-date-picker {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .att-date-picker input {
-    flex: 1;
-  }
-  .system-toggle {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-    padding: 8px;
-    border-radius: 12px;
-  }
-  .system-toggle > div {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  .att-stats {
-    width: 100%;
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-  .att-stat-box {
-    min-width: unset;
-    padding: 6px 8px;
-    font-size: 12px;
-  }
-  .att-stat-box span {
-    font-size: 13px;
-  }
-}
-
+.att-stats { display: flex; gap: 10px; flex: 1; justify-content: flex-end; }
+.att-stat-box { padding: 8px 15px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; flex-direction: column; align-items: center; min-width: 100px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
 .box-total { background: #102a43; color: white; }
 .box-present { background: #0FBA50; color: white; }
 .box-absent { background: #d90429; color: white; }
 .box-late { background: #ff9800; color: white; }
 
-.att-filters { 
-  padding: 15px; 
-  display: flex; 
-  gap: 15px; 
-  background: #fff; 
-  flex-shrink: 0;
-}
-.att-filters input, .att-filters select { 
-  padding: 8px 12px; 
-  border: 1px solid #ccc; 
-  border-radius: 6px; 
-  font-family: 'Cairo'; 
-  outline: none; 
-  flex: 1; 
-}
+.att-filters { padding: 15px; display: flex; gap: 15px; background: #fff; }
+.att-filters input, .att-filters select { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Cairo'; outline: none; flex: 1; }
 
-.att-table-container { 
-  flex: 1; 
-  overflow-y: auto; 
-  overflow-x: auto; 
-  background: white; 
-  padding: 0 15px 15px 15px; 
-  -webkit-overflow-scrolling: touch;
-}
-.att-table { 
-  width: 100%; 
-  border-collapse: collapse; 
-  min-width: 680px; /* يحمي محاذاة الأعمدة والبيانات من الانضغاط المشوه */
-}
-.att-table th { 
-  background: #334e68; 
-  position: sticky; 
-  top: 0; 
-  z-index: 10; 
-}
-.att-select { 
-  padding: 6px; 
-  border-radius: 6px; 
-  font-family: 'Cairo'; 
-  font-weight: bold; 
-  outline: none; 
-  border: 1px solid #ccc; 
-  cursor: pointer; 
-}
-
-/* تحسين تجاوب الفلاتر وجداول النوافذ المنبثقة على الهاتف */
-@media (max-width: 768px) {
-  /* شريط أزرار نافذة الحضور السريعة */
-  #attendanceModal .modal-content > div[style*="display: flex; gap: 10px"] {
-    padding: 10px !important;
-    gap: 6px !important;
-  }
-  #attendanceModal .modal-content > div[style*="display: flex; gap: 10px"] button {
-    flex: 1 1 calc(50% - 6px);
-    padding: 8px 10px !important;
-    font-size: 12px !important;
-    justify-content: center;
-  }
-
-  /* فلاتر النوافذ المنبثقة */
-  .att-filters {
-    padding: 10px;
-    gap: 8px;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .att-filters > div,
-  .att-filters input, 
-  .att-filters select {
-    width: 100% !important;
-    min-width: 100% !important;
-    flex: none;
-    font-size: 13px;
-  }
-
-  /* شريط الإدراج الجماعي للأفواج داخل المودال */
-  .bulk-action-bar {
-    flex-direction: column;
-    align-items: stretch !important;
-    gap: 8px !important;
-    margin: 0 10px 10px 10px !important;
-    padding: 10px !important;
-  }
-  .bulk-action-bar select,
-  .bulk-action-bar button,
-  .bulk-action-bar span {
-    width: 100% !important;
-    text-align: center;
-    justify-content: center;
-  }
-
-  .att-table-container {
-    padding: 0 8px 8px 8px;
-  }
-  .att-table th, 
-  .att-table td {
-    padding: 8px 6px;
-    font-size: 12.5px;
-  }
-}
-
+.att-table-container { flex: 1; overflow-y: auto; background: white; padding: 0 15px 15px 15px; }
+.att-table th { background: #334e68; position: sticky; top: 0; z-index: 10; }
+.att-select { padding: 6px; border-radius: 6px; font-family: 'Cairo'; font-weight: bold; outline: none; border: 1px solid #ccc; cursor: pointer; }
 .att-time { font-size: 12px; font-weight: bold; color: #555; direction: ltr; display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; margin-right: 5px;}
 
 /* ألوان السطور حسب الوضعية */
@@ -681,51 +214,6 @@
         padding: 0 !important; 
         overflow: hidden; 
         background: #f8fafc !important; 
-    }
-
-    /* تحسين توافق نوافذ SweetAlert2 على شاشات الهاتف */
-    @media (max-width: 768px) {
-      .swal2-popup {
-        width: 95% !important;
-        max-width: 95% !important;
-        padding: 15px 10px !important;
-        border-radius: 16px !important;
-      }
-      .swal2-html-container {
-        padding: 0 !important;
-        margin: 10px 0 !important;
-        max-height: 75vh !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
-      }
-      .swal2-title {
-        font-size: 16px !important;
-        padding: 0 5px !important;
-      }
-      .swal2-actions {
-        width: 100% !important;
-        gap: 8px !important;
-        margin: 10px 0 0 0 !important;
-        flex-wrap: wrap !important;
-      }
-      .swal2-actions button {
-        flex: 1 1 auto !important;
-        margin: 0 !important;
-        font-size: 13px !important;
-        padding: 10px 14px !important;
-      }
-      .swal2-input, .swal2-select, .swal2-textarea {
-        width: 100% !important;
-        box-sizing: border-box !important;
-        font-size: 13px !important;
-        margin: 8px 0 !important;
-      }
-      
-      /* تصغير حجم الصورة الدائرية في بطاقة الموظف لتناسب الشاشات الصغيرة */
-      .swal-modal-custom .profile-pic-container {
-        width: 120px !important;
-        height: 120px !important;
-      }
     }
 
 
@@ -4565,227 +4053,35 @@ async function exportToExcel() {
 }
 
 
-// ================= نظام الرابط السري الموحد وإدارة أجهزة الماسح (المحدث أمنياً) =================
-
+// ================= نظام الرابط السري الموحد للماسح =================
 window.generateScannerLink = async function() {
     Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     
     try {
+        // البحث عن رابط (Token) فعال لهذا المركز
         const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
         let currentToken = '';
         let oldDocId = null;
-        let maxDevices = 1;
-        let registeredDevicesList = [];
 
         if (!snapshot.empty) {
-            const data = snapshot.docs[0].data();
-            currentToken = snapshot.docs[0].id;
+            currentToken = snapshot.docs[0].id; // الرمز هو نفسه اسم الوثيقة
             oldDocId = currentToken;
-            maxDevices = data.maxDevices || 1;
-            registeredDevicesList = data.registeredDevices || [];
         } else {
+            // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
             currentToken = generateRandomToken(15);
             await db.collection('scanner_tokens').doc(currentToken).set({
                 center: INSPECTOR_CENTER,
-                maxDevices: 1, 
-                registeredDevices: [], 
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             oldDocId = currentToken;
         }
 
-        // 🌟 جلب الإحداثيات والنطاق المحفوظ مسبقاً 🌟
-        let savedLat = "", savedLng = "", savedRadius = 100;
-        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
-        
-        try {
-            const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
-            if (centerDoc.exists) {
-                if (centerDoc.data().latitude) {
-                    savedLat = centerDoc.data().latitude;
-                    savedLng = centerDoc.data().longitude;
-                }
-                if (centerDoc.data().radiusMeters) {
-                    savedRadius = centerDoc.data().radiusMeters; // جلب النطاق المخصص
-                }
-            }
-        } catch (gpsError) {
-            console.warn("تعذر جلب إعدادات الموقع.", gpsError);
-        }
-
-        window.showLinkModal(currentToken, oldDocId, maxDevices, registeredDevicesList, savedLat, savedLng, savedRadius);
+        window.showLinkModal(currentToken, oldDocId);
 
     } catch (e) {
-        console.error("خطأ عام في توليد الرابط:", e);
-        Swal.fire({ icon: 'error', title: 'خطأ', text: 'حدث مشكلة في جلب الرابط: ' + e.message });
+        console.error(e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
     }
-};
-
-window.showLinkModal = function(token, oldDocId, maxDevices = 1, registeredDevicesList = [], savedLat = "", savedLng = "", savedRadius = 100) {
-    let currentPath = window.location.href;
-    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
-
-    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
-
-    window.enlargeQR = function() {
-        let overlay = document.createElement('div');
-        overlay.id = 'qr-fullscreen-overlay';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0'; overlay.style.left = '0';
-        overlay.style.width = '100vw'; overlay.style.height = '100vh';
-        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)';
-        overlay.style.backdropFilter = 'blur(5px)'; overlay.style.zIndex = '999999';
-        overlay.style.display = 'flex'; overlay.style.flexDirection = 'column';
-        overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
-        overlay.style.cursor = 'zoom-out';
-        overlay.onclick = function() { document.body.removeChild(overlay); };
-        
-        let img = document.createElement('img');
-        img.src = qrCodeUrl;
-        img.style.width = '400px'; img.style.height = '400px';
-        img.style.maxWidth = '90vw'; img.style.maxHeight = '90vw';
-        img.style.backgroundColor = 'white'; img.style.padding = '20px';
-        img.style.borderRadius = '20px'; img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
-        
-        let text = document.createElement('div');
-        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
-        text.style.color = 'white'; text.style.marginTop = '25px';
-        text.style.fontFamily = 'Cairo'; text.style.fontSize = '18px'; text.style.fontWeight = 'bold';
-        
-        overlay.appendChild(img); overlay.appendChild(text);
-        document.body.appendChild(overlay);
-    };
-
-    let tokenListener = null;
-
-    Swal.fire({
-        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور وإدارة الماسح',
-        html: `
-            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
-                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;">
-                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 130px; height: 130px; display: block; border-radius: 8px;">
-                </div>
-            </div>
-
-            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 15px; text-align: right;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label style="font-weight: bold; color: #102a43; font-size: 13px;">
-                        <i class="fa-solid fa-mobile-screen-button" style="color: #1E68E8;"></i> الأجهزة المسموحة لفتح الرابط:
-                    </label>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span id="maxDevMsg" style="font-size: 12px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
-                        <input type="number" min="1" max="10" value="${maxDevices}" style="width: 60px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #0FBA50; outline: none;" onchange="updateTokenMaxDevices('${token}', this.value)">
-                    </div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;">
-                    <span style="font-size: 12px; color: #102a43; font-weight: bold;"><i class="fa-solid fa-chart-simple"></i> إجمالي البطاقات الممسوحة بالمركز:</span>
-                    <span id="totalScansUI" style="background: #1E68E8; color: white; padding: 2px 10px; border-radius: 12px; font-size: 14px; font-weight: 900;">0</span>
-                </div>
-
-                <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">الهواتف المقترنة وعدد عمليات المسح لكل جهاز:</div>
-                <div id="devicesListUI" style="font-size:12px; max-height:110px; overflow-y:auto; background:#fff; border:1px solid #ccc; padding:5px; border-radius:5px;">
-                    <div style="text-align:center; color:#777;">جاري التحميل...</div>
-                </div>
-            </div>
-            
-            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:12px; background:#f1f5f9; color:#102a43; outline:none;">
-            
-            <div style="display:flex; gap:10px; justify-content:center; margin-bottom:15px;">
-                <button onclick="copyScannerLink()" style="background:#102a43; color:white; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                    <i class="fa-solid fa-copy"></i> نسخ الرابط
-                </button>
-                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                    <i class="fa-solid fa-arrows-rotate"></i> إبطال وتوليد
-                </button>
-            </div>
-
-            <!-- أزرار الحماية الجغرافية والكاميرا المباشرة -->
-            <div style="border-top:1px dashed #cbd5e1; padding-top:15px; display:flex; flex-direction:column; gap:8px;">
-                
-                <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 12px; text-align: right;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <label style="font-weight: bold; color: #d35400; font-size: 13px;">
-                            <i class="fa-solid fa-location-dot"></i> إحداثيات المركز والنطاق (GPS):
-                        </label>
-                        <span id="gpsMsg" style="font-size: 11px; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
-                    </div>
-
-                    <!-- 🌟 الحقل الجديد للتحكم في الحيز / النطاق بالمتر 🌟 -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #fff; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <span style="font-size: 12px; font-weight: bold; color: #102a43;">
-                            <i class="fa-solid fa-ruler-horizontal" style="color: #1E68E8;"></i> النطاق المسموح (بالمتر):
-                        </span>
-                        <input type="number" id="centerRadius" min="1" max="500" value="${savedRadius}" style="width: 70px; padding: 5px; text-align: center; font-weight: bold; border-radius: 6px; border: 1px solid #17a2b8; outline: none;">
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <input type="text" id="manualLat" value="${savedLat}" placeholder="خط العرض (Latitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
-                        <input type="text" id="manualLng" value="${savedLng}" placeholder="خط الطول (Longitude)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: monospace; font-size: 12px; text-align: left; direction: ltr;">
-                    </div>
-                    
-                    <div style="display: flex; gap: 8px;">
-                        <button onclick="autoCaptureLocation()" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-crosshairs"></i> تحديد آلي (هاتف / حاسوب)
-                        </button>
-                        <button onclick="saveManualLocation()" style="background:#0FBA50; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex: 1; font-size: 12px;">
-                            <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
-                        </button>
-                    </div>
-                </div>
-
-                <div style="display:flex; gap:8px;">
-                    <button onclick="viewScannerFirstScanPhoto('${token}')" style="background:#17a2b8; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                        <i class="fa-solid fa-image-portrait"></i> صورة أول مستخدم
-                    </button>
-                    <button onclick="requestRemoteSnapshot('${token}')" style="background:#e67e22; color:white; border:none; padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; flex:1;">
-                        <i class="fa-solid fa-camera-rotate"></i> طلب صورة حية (مباشر)
-                    </button>
-                </div>
-            </div>
-        `,
-        showConfirmButton: true,
-        confirmButtonText: 'إغلاق النافذة',
-        confirmButtonColor: '#102a43',
-        didOpen: () => {
-            tokenListener = db.collection('scanner_tokens').doc(token).onSnapshot(doc => {
-                if (doc.exists) {
-                    let data = doc.data();
-                    let total = data.totalScans || 0;
-                    let counts = data.scanCounts || {};
-                    let devices = data.registeredDevices || [];
-                    
-                    let totalEl = document.getElementById('totalScansUI');
-                    if (totalEl) totalEl.innerText = total;
-
-                    let devicesListEl = document.getElementById('devicesListUI');
-                    if (devicesListEl) {
-                        if (devices.length > 0) {
-                            let dHtml = '';
-                            devices.forEach((dev, idx) => {
-                                let dName = (typeof dev === 'object') ? dev.deviceModel : 'جهاز غير معروف';
-                                let dTime = (typeof dev === 'object' && dev.registeredAt) ? new Date(dev.registeredAt).toLocaleTimeString('ar-DZ') : '';
-                                let devCount = counts[dev.deviceId] || 0; 
-                                
-                                dHtml += `
-                                <div style="border-bottom:1px dashed #eee; padding:6px 0; text-align:right; display:flex; justify-content:space-between; align-items:center;">
-                                    <div>📱 ${idx+1}. <b style="color:#1E68E8;">${dName}</b> <span style="color:#777; font-size:10px;">(${dTime})</span></div>
-                                    <div style="background:#e8fbf0; color:#0FBA50; padding:2px 8px; border-radius:10px; font-weight:bold; font-size:12px; border:1px solid #0FBA50;">${devCount} مسح</div>
-                                </div>`;
-                            });
-                            devicesListEl.innerHTML = dHtml;
-                        } else {
-                            devicesListEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#777; text-align:center;">لا توجد هواتف مقترنة حالياً.</div>';
-                        }
-                    }
-                }
-            });
-        },
-        willClose: () => {
-            if (tokenListener) tokenListener();
-        }
-    });
 };
 
 function generateRandomToken(length) {
@@ -4795,288 +4091,97 @@ function generateRandomToken(length) {
     return t;
 }
 
+window.showLinkModal = function(token, oldDocId) {
+    let currentPath = window.location.href;
+    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
 
+    // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
+    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
 
-window.copyScannerLink = function() {
-    let copyText = document.getElementById("scannerLinkInput");
-    copyText.select();
-    copyText.setSelectionRange(0, 99999); 
-    navigator.clipboard.writeText(copyText.value).then(() => {
-        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم نسخ الرابط بنجاح!', showConfirmButton: false, timer: 2000});
-    });
-};
+    // === الجديد: دالة تكبير الـ QR Code (تعمل بملء الشاشة) ===
+    window.enlargeQR = function() {
+        let overlay = document.createElement('div');
+        overlay.id = 'qr-fullscreen-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)'; // لون داكن يطابق ألوان لوحة المفتش
+        overlay.style.backdropFilter = 'blur(5px)'; // تشويش الخلفية
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.cursor = 'zoom-out';
+        
+        // إغلاق التكبير عند الضغط
+        overlay.onclick = function() { document.body.removeChild(overlay); };
+        
+        // تصميم الصورة المكبرة
+        let img = document.createElement('img');
+        img.src = qrCodeUrl;
+        img.style.width = '400px';
+        img.style.height = '400px';
+        img.style.maxWidth = '90vw';
+        img.style.maxHeight = '90vw';
+        img.style.backgroundColor = 'white';
+        img.style.padding = '20px';
+        img.style.borderRadius = '20px';
+        img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+        
+        // نص توجيهي للإغلاق
+        let text = document.createElement('div');
+        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
+        text.style.color = 'white';
+        text.style.marginTop = '25px';
+        text.style.fontFamily = 'Cairo';
+        text.style.fontSize = '18px';
+        text.style.fontWeight = 'bold';
+        
+        overlay.appendChild(img);
+        overlay.appendChild(text);
+        document.body.appendChild(overlay);
+    };
 
-window.regenerateToken = function(oldDocId) {
     Swal.fire({
-        title: 'تأكيد التغيير والإبطال',
-        text: 'الرابط القديم وجميع الأجهزة المقترنة به ستتوقف عن العمل فوراً. هل أنت متأكد؟',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d90429', cancelButtonColor: '#102a43',
-        confirmButtonText: 'نعم، أبطِل الرابط', cancelButtonText: 'إلغاء'
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            try {
-                if (oldDocId) await db.collection('scanner_tokens').doc(oldDocId).delete();
-                let currentToken = generateRandomToken(15);
-                await db.collection('scanner_tokens').doc(currentToken).set({
-                    center: INSPECTOR_CENTER, maxDevices: 1, registeredDevices: [],
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                window.showLinkModal(currentToken, currentToken, 1, []);
-                Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
-            } catch (e) {
-                console.error(e);
-                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
-            }
-        } else {
-            window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة
-        }
+        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
+        html: `
+            <!-- === واجهة الـ QR المصغرة في النافذة === -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;" onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#0FBA50';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#e2e8f0';">
+                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; display: block; border-radius: 8px;">
+                </div>
+                <span style="font-size: 13px; color: #1E68E8; margin-top: 12px; font-weight: 800; background: #eff6ff; padding: 6px 15px; border-radius: 20px; cursor: pointer;" onclick="enlargeQR()">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i> اضغط لتكبير الباركود
+                </span>
+            </div>
+
+            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.6; text-align: right;">
+                هذا هو الرابط <b>الموحد</b> لمركزك.<br>
+                <div style="background:#e8fbf0; border:1px solid #0FBA50; padding:8px; border-radius:6px; margin: 8px 0;">
+                    <span style="color:#0FBA50; font-size:13px;"><i class="fa-solid fa-shield-halved"></i> <b>حماية قفل الجهاز:</b> هذا الرابط سيقفل تلقائياً على <b>أول هاتف</b> يفتحه.</span>
+                </div>
+            </div>
+            
+            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:15px; background:#f8fafc; color:#102a43; outline:none;">
+            
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="copyScannerLink()" style="background:#0FBA50; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-copy"></i> نسخ الرابط
+                </button>
+                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-arrows-rotate"></i> تغيير وإبطال
+                </button>
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
     });
 };
-
-// ============================================================================
-// دوال الحماية الجديدة (GPS، الأجهزة، الكاميرا الحية، وصورة الموثوقية)
-// ============================================================================
-
-// 2. دوال تحديد وتثبيت الموقع الجغرافي (GPS)
-window.getUserLocation = function() {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject("متصفحك لا يدعم تحديد الموقع الجغرافي."); return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (position) => { resolve({ lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy }); },
-            (error) => {
-                let msg = "تعذر الحصول على الموقع.";
-                if (error.code === error.PERMISSION_DENIED) msg = "لقد قمت برفض إذن الوصول للموقع الجغرافي. (تأكد من إعدادات المتصفح).";
-                reject(msg);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    });
-};
-
-
-window.updateTokenMaxDevices = async function(token, newMax) {
-    let val = parseInt(newMax) || 1;
-    let msgSpan = document.getElementById('maxDevMsg');
-    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
-
-    try {
-        await db.collection('scanner_tokens').doc(token).update({ maxDevices: val });
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
-    } catch (e) {
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> فشل الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-    }
-};
-
-window.autoCaptureLocation = async function() {
-    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
-    if(radiusVal < 1) radiusVal = 1;
-    if(radiusVal > 500) radiusVal = 500;
-    document.getElementById('centerRadius').value = radiusVal; // التحديث في الواجهة لتصحيح الخطأ إن وجد
-
-    let msgSpan = document.getElementById('gpsMsg');
-    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#17a2b8;"></i> جاري الجلب...'; msgSpan.style.opacity = '1'; }
-    
-    try {
-        const loc = await window.getUserLocation(); 
-        document.getElementById('manualLat').value = loc.lat;
-        document.getElementById('manualLng').value = loc.lng;
-        
-        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
-        await db.collection("center_settings").doc(safeCenterId).set({
-            latitude: loc.lat, longitude: loc.lng, radiusMeters: radiusVal 
-        }, { merge: true });
-        
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم جلب وتثبيت الإعدادات'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-    } catch (err) {
-        if (msgSpan) { msgSpan.innerHTML = `<span style="color:#d90429;">${err}</span>`; setTimeout(() => { msgSpan.style.opacity = '0'; }, 4000); }
-    }
-};
-
-window.saveManualLocation = async function() {
-    let lat = parseFloat(document.getElementById('manualLat').value);
-    let lng = parseFloat(document.getElementById('manualLng').value);
-    let radiusVal = parseInt(document.getElementById('centerRadius').value) || 100;
-    
-    // 🌟 حماية القيم المدخلة 🌟
-    if(radiusVal < 1) radiusVal = 1;
-    if(radiusVal > 500) radiusVal = 500;
-    document.getElementById('centerRadius').value = radiusVal;
-
-    let msgSpan = document.getElementById('gpsMsg');
-    
-    if(isNaN(lat) || isNaN(lng)) {
-        if (msgSpan) { msgSpan.innerHTML = '<span style="color:#d90429;">إحداثيات غير صالحة!</span>'; msgSpan.style.opacity = '1'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-        return;
-    }
-    
-    if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color:#e67e22;"></i> جاري الحفظ...'; msgSpan.style.opacity = '1'; }
-    
-    try {
-        let safeCenterId = INSPECTOR_CENTER.replace(/\//g, '-').trim();
-        await db.collection("center_settings").doc(safeCenterId).set({
-            latitude: lat, longitude: lng, radiusMeters: radiusVal 
-        }, { merge: true });
-        
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-check" style="color:#0FBA50;"></i> تم الحفظ يدوياً بنجاح'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 2000); }
-    } catch (err) {
-        if (msgSpan) { msgSpan.innerHTML = '<i class="fa-solid fa-xmark" style="color:#d90429;"></i> خطأ في الحفظ'; setTimeout(() => { msgSpan.style.opacity = '0'; }, 3000); }
-    }
-};
-
-// 3. عرض صورة أول مستخدم فتح الرابط
-window.viewScannerFirstScanPhoto = async function(token) {
-    Swal.fire({ title: 'جاري الجلب...', didOpen: () => Swal.showLoading() });
-    try {
-        const docSnap = await db.collection("scanner_tokens").doc(token).get();
-        if (docSnap.exists && docSnap.data().firstScanAudits) {
-            const audits = docSnap.data().firstScanAudits;
-            const deviceKeys = Object.keys(audits);
-            
-            if (deviceKeys.length === 0) {
-                Swal.fire('معلومة', 'لا توجد صور مسجلة بعد.', 'info');
-                return;
-            }
-
-            // بناء واجهة عرض الصور بجانب بعضها
-            let htmlContent = '<div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">';
-            
-            deviceKeys.forEach((key, index) => {
-                let audit = audits[key];
-                let capturedDate = new Date(audit.capturedAt).toLocaleTimeString('ar-DZ');
-                let devName = audit.deviceName || 'جهاز غير معروف';
-                
-                htmlContent += `
-                    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; text-align: center; width: 220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                        <div style="font-size: 13px; font-weight: bold; color: #1E68E8; border-bottom: 1px dashed #cbd5e1; padding-bottom: 5px; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${devName}">
-                            📱 ${devName}
-                        </div>
-                        <img src="${audit.photoData}" style="width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 3px solid #0FBA50; margin-bottom: 10px;">
-                        <div style="font-size: 12px; font-weight: bold; color: #102a43;">أول بطاقة: <span style="color:#d90429;">${audit.firstScannedEmpId}</span></div>
-                        <div style="font-size: 11px; color: #777; margin-top: 3px;"><i class="fa-solid fa-clock"></i> ${capturedDate}</div>
-                    </div>
-                `;
-            });
-            htmlContent += '</div>';
-
-            Swal.fire({
-                title: 'توثيق أول عملية مسح (صاحب الهاتف)',
-                html: htmlContent,
-                width: '800px', // تكبير النافذة لتسع الأجهزة
-                confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
-            });
-        } else {
-            Swal.fire('معلومة', 'لم يتم تسجيل أي عملية مسح أو صورة على هذا الرابط بعد.', 'info');
-        }
-    } catch(e) { Swal.fire('خطأ', 'فشل الاتصال', 'error'); }
-};
-
-// 4. إرسال أمر التقاط صورة فورية (عن بعد)
-// ============================================================================
-// النظام المطور لطلب صورة حية (بدون تعليق النافذة أو اهتزاز شريط التمرير)
-// ============================================================================
-window.requestRemoteSnapshot = async function(token) {
-    Swal.fire({title: 'جاري التحضير...', didOpen: () => Swal.showLoading()});
-    
-    try {
-        const docSnap = await db.collection("scanner_tokens").doc(token).get();
-        if (!docSnap.exists) return;
-        
-        let devices = docSnap.data().registeredDevices || [];
-        if (devices.length === 0) {
-            Swal.fire('تنبيه', 'لا توجد أجهزة ماسح مقترنة حالياً لطلب صورة منها.', 'info');
-            return;
-        }
-
-        let optionsHtml = '<option value="all">📸 التقاط لجميع الأجهزة معاً</option>';
-        devices.forEach((dev, idx) => {
-            optionsHtml += `<option value="${dev.deviceId}">📱 جهاز ${idx + 1}: ${dev.deviceModel}</option>`;
-        });
-
-        // 1. اختيار الجهاز
-        Swal.fire({
-            title: 'تحديد الجهاز المستهدف',
-            html: `
-                <p style="font-size:14px; text-align:right; color:#555; margin-bottom:10px;">الرجاء اختيار الجهاز الذي تريد التقاط صورة حية منه الآن:</p>
-                <select id="targetDeviceSelect" class="swal2-select" style="width:100%; font-family:'Cairo'; font-size:14px; margin:0; padding:10px;">
-                    ${optionsHtml}
-                </select>
-            `,
-            showCancelButton: true, confirmButtonText: 'إرسال أمر الالتقاط', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
-            heightAuto: false // 🌟 منع النافذة من العبث بشريط التمرير
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                const targetDevice = document.getElementById('targetDeviceSelect').value;
-                const reqId = Date.now().toString();
-
-                // 2. إرسال الأمر للجهاز/الأجهزة
-                await db.collection("scanner_tokens").doc(token).update({
-                    remotePhotoCommand: { requestId: reqId, targetDevice: targetDevice, requested: true }
-                });
-
-                // 3. فتح نافذة الاستماع وانتظار وصول الصور
-                let photoListener = null;
-                let currentlyRenderedHtml = ""; // 🌟 لتخزين ما تم رسمه ومنع التكرار المزعج
-
-                Swal.fire({
-                    title: 'جاري استلام الصور...',
-                    html: `
-                        <div id="livePhotosGrid" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:15px; min-height:220px; align-items:center;">
-                            <div style="color:#777; font-family:'Cairo'; font-weight:bold; padding: 20px;">
-                                <i class="fa-solid fa-spinner fa-spin fa-2x" style="color:#e67e22; margin-bottom:15px; display:block;"></i> 
-                                بانتظار استجابة الكاميرا (يجب أن يكون الهاتف مفتوحاً)...
-                            </div>
-                        </div>
-                    `,
-                    width: targetDevice === 'all' ? '800px' : '400px',
-                    allowOutsideClick: false, showConfirmButton: true, confirmButtonText: 'إغلاق النافذة', confirmButtonColor: '#102a43',
-                    heightAuto: false, // 🌟 منع اهتزاز النافذة
-                    scrollbarPadding: false, // 🌟 منع إضافة هوامش للتمرير
-                    didOpen: () => {
-                        photoListener = db.collection("scanner_tokens").doc(token).onSnapshot(doc => {
-                            if(doc.exists && doc.data().lastRemotePhotosMap) {
-                                const photosMap = doc.data().lastRemotePhotosMap;
-                                let gridHtml = '';
-                                let receivedCount = 0;
-
-                                // الفرز وعرض الصور التي تتطابق مع الطلب الحالي فقط
-                                for (const [devId, photoData] of Object.entries(photosMap)) {
-                                    if (photoData.requestId === reqId) {
-                                        if (targetDevice === 'all' || targetDevice === devId) {
-                                            receivedCount++;
-                                            let capTime = new Date(photoData.capturedAt).toLocaleTimeString('ar-DZ');
-                                            gridHtml += `
-                                                <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px; padding:10px; text-align:center; width:220px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                                                    <div style="font-size:12px; font-weight:bold; color:#1E68E8; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${photoData.deviceName}">📱 ${photoData.deviceName}</div>
-                                                    <img src="${photoData.photoUrl}" style="width:160px; height:160px; border-radius:10px; object-fit:cover; border:3px solid #0FBA50; margin-bottom:8px;">
-                                                    <div style="font-size:12px; font-weight:bold; color:#555;"><i class="fa-solid fa-clock"></i> ${capTime}</div>
-                                                </div>
-                                            `;
-                                        }
-                                    }
-                                }
-
-                                // 🌟 التحديث الذكي: لا نُحدث الواجهة إلا إذا وصلت صورة جديدة حقاً 🌟
-                                if (receivedCount > 0 && gridHtml !== currentlyRenderedHtml) {
-                                    document.getElementById('livePhotosGrid').innerHTML = gridHtml;
-                                    currentlyRenderedHtml = gridHtml; // حفظ الحالة لمنع إعادة الرسم العشوائي
-                                }
-                            }
-                        });
-                    },
-                    willClose: () => { if (photoListener) photoListener(); }
-                });
-            }
-        });
-    } catch (e) {
-        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال.', 'error');
-    }
-};
-
 
 window.copyScannerLink = function() {
     let copyText = document.getElementById("scannerLinkInput");
