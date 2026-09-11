@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة تحكم المفتش - فضاء التكوين</title>
 
@@ -651,12 +652,13 @@
               <th style="width: 180px; text-align: center;">إجراءات الوثائق</th>
             </tr>
           </thead>
-          <tbody id="permTableBody">
+                    <tbody id="permTableBody">
             <!-- سيتم توليد البيانات هنا -->
           </tbody>
         </table>
       </div>
-
+    </div>
+  </div>
 
 <script>
 // ================= إعدادات Firebase المحدثة =================
@@ -681,9 +683,19 @@ let selectedGroupsTrainees = new Set();
 
 
 
-// ================= إعدادات الصور والمطابقة =================
+// ================= إعدادات الصور والمطابقة مع التخزين المحلي =================
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
-let employeePhotosMap = {}; 
+
+// 🌟 1. استرجاع الصور فوراً من التخزين المحلي لتظهر في 0 ثانية عند أي تحديث F5 🌟
+let employeePhotosMap = {};
+try {
+    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    if (cachedPhotos) {
+        employeePhotosMap = JSON.parse(cachedPhotos);
+    }
+} catch (e) {
+    console.warn("فشل قراءة كاش الصور المحلي:", e);
+}
 
 function extractCoreId(val) {
     if (!val) return "";
@@ -697,7 +709,6 @@ function extractCoreId(val) {
 let INSPECTOR_CENTER = "";
 
 window.onload = function() {
-    // التحقق من وجود الجلسة والمركز المخزن
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
@@ -706,47 +717,184 @@ window.onload = function() {
         return;
     }
 
-    // التحقق الحقيقي من أن الحساب نشط ومصادق عليه عبر Firebase Auth
     firebase.auth().onAuthStateChanged((user) => {
         if (user) {
-            // المستخدم مسجل دخول، يتم جلب بيانات المركز وعرض لوحة التحكم بأمان
             document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
             loadCenterAdmins();
             fetchData();
         } else {
-            // إذا لم يكن مسجلاً دخوله في Auth، يتم طرده فوراً
             window.location.href = "admin095526.html";
         }
     });
 };
 
-
 // ================= دالة الإنقاذ الذكية للصور (Smart Image Fallback) =================
 window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
-    // إذا لم نقم بتجربة رابط درايف بعد، والرابط موجود فعلاً
-    if (imgElement.getAttribute('data-retried') !== 'true' && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null') {
-        imgElement.setAttribute('data-retried', 'true');
-        
-        // تكبير دقة الصورة حسب المكان الذي تُعرض فيه
-        if (fallbackType === 'card' && driveUrl.includes('sz=w200')) {
-            driveUrl = driveUrl.replace('sz=w200', 'sz=w800');
-        } else if (fallbackType === 'print' && driveUrl.includes('sz=w200')) {
-            driveUrl = driveUrl.replace('sz=w200', 'sz=w400');
+    let currentSrc = imgElement.src || '';
+    let retries = parseInt(imgElement.getAttribute('data-retries') || '0');
+
+    // 1. إذا كان الرابط الأساسي (مثل ImgBB) تالفاً ولديه رابط احتياطي في درايف
+    if (retries === 0 && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null' && currentSrc !== driveUrl) {
+        imgElement.setAttribute('data-retries', '1');
+        if (fallbackType === 'card' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s800');
+        else if (fallbackType === 'print' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s400');
+        imgElement.src = driveUrl;
+        return;
+    }
+
+    // 2. التبديل الذكي بين سيرفرات جوجل (إذا تعثر أحدهما نستخدم الآخر)
+    if (retries < 2 && currentSrc.includes('lh3.googleusercontent.com/d/')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 'w800' : ((fallbackType === 'print') ? 'w400' : 'w200');
+            imgElement.src = `https://drive.google.com/thumbnail?id=${match[1]}&sz=${sz}`;
+            return;
         }
-        
-        // المحاولة الثانية: تحميل الصورة من درايف
-        imgElement.src = driveUrl; 
-    } else {
-        // المحاولة الأخيرة: فشل درايف أيضاً، إظهار الأيقونة حسب نوع الواجهة
-        if (fallbackType === 'table') {
-            imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
-        } else if (fallbackType === 'card') {
-            imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
-        } else if (fallbackType === 'print') {
-            imgElement.outerHTML = 'صورة<br>الموظف';
+    } else if (retries < 2 && currentSrc.includes('drive.google.com/thumbnail')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/id=([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 's800' : ((fallbackType === 'print') ? 's400' : 's200');
+            imgElement.src = `https://lh3.googleusercontent.com/d/${match[1]}=${sz}`;
+            return;
         }
     }
+
+    // 3. إذا تعذر كل شيء: عرض الأيقونة البديلة
+    if (fallbackType === 'table') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
+    } else if (fallbackType === 'card') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
+    } else if (fallbackType === 'print') {
+        imgElement.outerHTML = 'صورة<br>الموظف';
+    }
 };
+
+let centerData = []; 
+let filteredData = [];
+let currentPage = 1;
+const rowsPerPage = 10;
+let selectedTrainees = new Set();
+let isFirstLoad = true; 
+
+// ================= جلب البيانات والصور (مع كاسر الكاش والتخزين المحلي) =================
+function fetchData() {
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "flex";
+
+    let safetyTimer = setTimeout(() => {
+        if (loader && loader.style.display !== "none") {
+            loader.style.display = "none";
+        }
+    }, 4000);
+
+    // 🌟 2. كاسر الكاش (_t) لمنع خطأ CORS على F5 + تحميل مباشر عبر سيرفر lh3 الفائق 🌟
+    const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
+
+    fetch(cacheBusterUrl, { cache: "no-store" })
+        .then(async (photoRes) => {
+            const responseText = await photoRes.text();
+            if (responseText && responseText.includes("[")) {
+                const photoData = JSON.parse(responseText);
+                const freshPhotosMap = {};
+
+                photoData.forEach(item => {
+                    if (item.jobId && item.photoUrl) {
+                        const coreJobId = extractCoreId(item.jobId);
+                        let directUrl = item.photoUrl;
+                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                        
+                        // استخدام سيرفر lh3 المستقر
+                        if (match) {
+                            directUrl = `https://lh3.googleusercontent.com/d/${match[1]}=s200`;
+                        }
+                        freshPhotosMap[coreJobId] = directUrl;
+                    }
+                });
+
+                // دمج الصور وتحديث الكاش المحلي
+                employeePhotosMap = { ...employeePhotosMap, ...freshPhotosMap };
+                try {
+                    localStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
+                } catch(err) {}
+
+                // إعادة رسم الجدول بالصور الجديدة
+                if (filteredData && filteredData.length > 0) renderTable();
+            }
+        })
+        .catch(e => console.warn("تعذر جلب الصور من السيرفر، تم الاعتماد على الكاش المحلي:", e));
+
+    // 3. الاتصال اللحظي المستمر بقاعدة المتكونين
+    db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).onSnapshot((snapshot) => {
+        clearTimeout(safetyTimer);
+        if (loader) loader.style.display = "none";
+
+        let ranks = new Set();
+        centerData = [];
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            let item = {
+                docId: doc.id, 
+                empId: data.id || doc.id, 
+                photoUrl_fb: data.photoUrl_fb || null, 
+                name: data.name || "", 
+                gender: data.gnr || "", 
+                dob: data.diz || "", 
+                rank: data.grade || "", 
+                specialty: data.maty || "", 
+                workplace: data.place || "",
+                address: data.adrs || "", 
+                daira: data.daira || "-", 
+                phone: data.phone || data.tel || "-", 
+                pob: data.pob || "-", 
+                center: data.center || "", 
+                group: data.group || data.fawj || "-",
+                permissions: data.permissions || []
+            };
+
+            if (item.dob && typeof item.dob.toDate === 'function') {
+                let d = item.dob.toDate();
+                let day = ("0" + d.getDate()).slice(-2);
+                let month = ("0" + (d.getMonth() + 1)).slice(-2);
+                let year = d.getFullYear();
+                item.dob = `${year}/${month}/${day}`; 
+            } else if (typeof item.dob === 'string') {
+                let parts = item.dob.split(/[-/]/);
+                if (parts.length === 3) {
+                    if (parts[2].length === 4) {
+                        item.dob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        item.dob = `${parts[0]}/${parts[1]}/${parts[2]}`;
+                    }
+                } else {
+                    item.dob = item.dob.replace(/-/g, '/');
+                }
+            }
+
+            centerData.push(item);
+            if (item.rank && item.rank !== "-") ranks.add(item.rank);
+        });
+
+        const rankOptionsDiv = document.getElementById("rankOptions");
+        if (rankOptionsDiv && isFirstLoad) {
+            rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
+            ranks.forEach(val => { 
+                rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); 
+            });
+        }
+
+        isFirstLoad = false;
+        updateDynamicSpecs();
+        
+    }, (error) => {
+        clearTimeout(safetyTimer);
+        if (loader) loader.style.display = "none";
+        console.error("خطأ في جلب البيانات:", error);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات.', 'error');
+    });
+}
 
 // ================= دالة جلب وعرض مسؤولي المركز (بالتحديث اللحظي المباشر والذكي) =================
 function loadCenterAdmins() {
@@ -873,11 +1021,7 @@ async function getFramerNameFromBase(empId) {
 }
 
 
-let centerData = []; 
-let filteredData = [];
-let currentPage = 1;
-const rowsPerPage = 10;
-let selectedTrainees = new Set();
+
 
 function logout() {
     firebase.auth().signOut().then(() => {
@@ -949,118 +1093,7 @@ function updateSpecText() {
     else { document.getElementById('spec-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`; }
 }
 
-// ================= جلب البيانات والصور (بسرعة عالية مع تحديث لحظي مستمر) =================
-// متغير للتحكم في شاشة التحميل (تأكد من تعريفه خارج الدالة إذا لم يكن موجوداً)
-let isFirstLoad = true; 
 
-// ================= جلب البيانات والصور (مع مؤقت أمان لمنع تعليق شاشة التحميل) =================
-function fetchData() {
-    const loader = document.getElementById("loader");
-    if (loader) loader.style.display = "flex";
-
-    // ⏱️ مؤقت أمان: إخفاء شاشة التحميل إجبارياً بعد 4 ثوانٍ لمنع التعليق الدائم
-    let safetyTimer = setTimeout(() => {
-        if (loader && loader.style.display !== "none") {
-            loader.style.display = "none";
-            console.warn("تم إخفاء شاشة التحميل بواسطة مؤقت الأمان نظراً لتأخر الاتصال.");
-        }
-    }, 4000);
-
-    // 1. جلب الصور من درايف في الخلفية
-    fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
-        const responseText = await photoRes.text();
-        if (responseText && responseText.includes("[")) {
-            const photoData = JSON.parse(responseText);
-            employeePhotosMap = {};
-            photoData.forEach(item => {
-                if(item.jobId && item.photoUrl) {
-                    const coreJobId = extractCoreId(item.jobId);
-                    let directUrl = item.photoUrl;
-                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                    if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
-                    employeePhotosMap[coreJobId] = directUrl;
-                }
-            });
-            if(filteredData && filteredData.length > 0) renderTable();
-        }
-    }).catch(e => console.warn("تعذر جلب الصور:", e));
-
-    // 2. الاتصال اللحظي المستمر بقاعدة المتكونين
-    db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).onSnapshot((snapshot) => {
-        // إلغاء مؤقت الأمان لأن البيانات وصلت بنجاح
-        clearTimeout(safetyTimer);
-        if (loader) loader.style.display = "none";
-
-        let ranks = new Set();
-        centerData = []; // إعادة تعبئة لتفادي التكرار
-
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            let item = {
-                docId: doc.id, 
-                empId: data.id || doc.id, 
-                photoUrl_fb: data.photoUrl_fb || null, 
-                name: data.name || "", 
-                gender: data.gnr || "", 
-                dob: data.diz || "", 
-                rank: data.grade || "", 
-                specialty: data.maty || "", 
-                workplace: data.place || "",
-                address: data.adrs || "", 
-                daira: data.daira || "-", 
-                phone: data.phone || data.tel || "-", 
-                pob: data.pob || "-", 
-                center: data.center || "", 
-                group: data.group || data.fawj || "-",
-                permissions: data.permissions || []
-            };
-
-            if (item.dob && typeof item.dob.toDate === 'function') {
-                let d = item.dob.toDate();
-                let day = ("0" + d.getDate()).slice(-2);
-                let month = ("0" + (d.getMonth() + 1)).slice(-2);
-                let year = d.getFullYear();
-                // تم عكس الترتيب ليصبح (سنة/شهر/يوم)
-                item.dob = `${year}/${month}/${day}`; 
-            } else if (typeof item.dob === 'string') {
-                // تقسيم التاريخ النصي بناءً على الفواصل (- أو /)
-                let parts = item.dob.split(/[-/]/);
-                if (parts.length === 3) {
-                    // إذا كان الجزء الأخير هو السنة (4 أرقام)، نقوم بقلب الترتيب
-                    if (parts[2].length === 4) {
-                        item.dob = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                    } else {
-                        // إذا كان الترتيب صحيحاً بالفعل، نوحد الفواصل فقط
-                        item.dob = `${parts[0]}/${parts[1]}/${parts[2]}`;
-                    }
-                } else {
-                    item.dob = item.dob.replace(/-/g, '/');
-                }
-            }
-
-            centerData.push(item);
-            if (item.rank && item.rank !== "-") ranks.add(item.rank);
-        });
-
-        // تعبئة الفلاتر أول مرة
-        const rankOptionsDiv = document.getElementById("rankOptions");
-        if (rankOptionsDiv && isFirstLoad) {
-            rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
-            ranks.forEach(val => { 
-                rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); 
-            });
-        }
-
-        isFirstLoad = false;
-        updateDynamicSpecs();
-        
-    }, (error) => {
-        clearTimeout(safetyTimer);
-        if (loader) loader.style.display = "none";
-        console.error("خطأ في جلب البيانات:", error);
-        Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات.', 'error');
-    });
-}
 
 // ================= الفلترة وعرض الجدول =================
 function applyFilters(isSilent = false) {
@@ -1197,17 +1230,17 @@ window.viewInfo = function(docId) {
     
     let initialUrl = fbUrl ? fbUrl : driveUrl;
     
-    // تحسين دقة الصورة قبل عرضها
-    if (initialUrl && initialUrl.includes('sz=w200')) {
-        initialUrl = initialUrl.replace('sz=w200', 'sz=w800');
-    }
+    // تكبير دقة الصورة قبل عرضها سواء كانت من سيرفر lh3 أو سيرفر thumbnail
+if (initialUrl) {
+    if (initialUrl.includes('=s200')) initialUrl = initialUrl.replace('=s200', '=s800');
+    if (initialUrl.includes('sz=w200')) initialUrl = initialUrl.replace('sz=w200', 'sz=w800');
+}
 
-    const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+const isImgBB = initialUrl && initialUrl.includes('ibb.co');
 
-    // كود الصورة (بدون الزر)
-    const imgTag = initialUrl
-        ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="window.handleImageFallback(this, '${driveUrl}', 'card')">`
-        : `<div style="display:flex; align-items:center; justify-content:center; height:100%;"><i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i></div>`;
+const imgTag = initialUrl
+    ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover;" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'card')">`
+    : `<div style="display:flex; align-items:center; justify-content:center; height:100%;"><i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i></div>`;
 // زر التحديث العائم (يظهر فقط لروابط ImgBB)
     const refreshBtn = isImgBB 
         ? `<button onclick="window.removeBrokenImage('${docId}', 'info')" style="position: absolute; bottom: 5px; right: 5px; z-index: 20; background: #d90429; color: white; border: 3px solid white; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; transition: 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="حذف الصورة التالفة واسترجاع صورة درايف"><i class="fa-solid fa-arrows-rotate" style="font-size:16px;"></i></button>`
@@ -1808,18 +1841,17 @@ window.printIDCards = function() {
             // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
             const coreEmpId = extractCoreId(empId);
             const fbUrl = item.photoUrl_fb;
-            let driveUrl = employeePhotosMap[coreEmpId];
-            
+            const driveUrl = employeePhotosMap[coreEmpId];
             let initialUrl = fbUrl ? fbUrl : driveUrl;
             
-            // تحسين جودة الصورة للطباعة (w400)
-            if (initialUrl && initialUrl.includes('sz=w200')) {
-                initialUrl = initialUrl.replace('sz=w200', 'sz=w400');
-            }
-
-            const photoContent = initialUrl 
-                ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="window.handleImageFallback(this, '${driveUrl}', 'print')"/>`
-                : `صورة<br>الموظف`;
+            // تحسين جودة الصورة للطباعة (w400 / s400)
+if (initialUrl) {
+    if (initialUrl.includes('sz=w200')) initialUrl = initialUrl.replace('sz=w200', 'sz=w400');
+    if (initialUrl.includes('=s200')) initialUrl = initialUrl.replace('=s200', '=s400');
+}
+const photoContent = initialUrl 
+    ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'print')"/>`
+    : `صورة<br>الموظف`;
 
             pagesHtml += `
                 <div class="card">
@@ -3795,9 +3827,15 @@ window.printSingleIDCard = function(docId) {
         photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
     }
 
-    const photoContent = photoUrl 
-        ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.outerHTML='صورة<br>الموظف'"/>`
-        : `صورة<br>الموظف`;
+    // تحسين جودة الصورة للطباعة (w400 / s400)
+if (initialUrl) {
+    if (initialUrl.includes('sz=w200')) initialUrl = initialUrl.replace('sz=w200', 'sz=w400');
+    if (initialUrl.includes('=s200')) initialUrl = initialUrl.replace('=s200', '=s400');
+}
+
+const photoContent = initialUrl 
+    ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'print')"/>`
+    : `صورة<br>الموظف`;
 
     let pageHtml = `
         <div class="page">

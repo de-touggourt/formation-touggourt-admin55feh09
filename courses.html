@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>المقاييس والدروس - فضاء التكوين</title>
 
@@ -443,13 +444,29 @@ window.onload = async function() {
         document.getElementById('userWorkplaceDisplay').innerText = loggedInUser.place || loggedInUser.workplace || 'مكان العمل غير محدد';
 
         // الصورة الشخصية
+                // 🌟 1. استرجاع وعرض الصورة فوراً من الكاش المحلي في 0 جزء من الثانية 🌟
         const avatarBox = document.getElementById('userAvatarContainer');
+        const coreId = extractCoreId(empId);
+        
+        const localCachedAvatar = localStorage.getItem("user_avatar_" + coreId);
+        if (localCachedAvatar) {
+            avatarBox.innerHTML = `<img src="${localCachedAvatar}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '')">`;
+        }
+
+        // 🌟 2. التحقق من وجود صورة فايربيز / ImgBB أو درايف وتحديث العرض 🌟
         if (loggedInUser.photoUrl_fb) {
             let imgUrl = loggedInUser.photoUrl_fb;
             if (imgUrl.includes('sz=w200')) imgUrl = imgUrl.replace('sz=w200', 'sz=w800');
-            avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية">`;
+            if (imgUrl.includes('=s200')) imgUrl = imgUrl.replace('=s200', '=s800');
+            
+            try {
+                localStorage.setItem("user_avatar_" + coreId, imgUrl);
+            } catch(e) {}
+
+            avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="fetchPhotosFromDrive('${coreId}', document.getElementById('userAvatarContainer'))">`;
         } else {
-            fetchPhotosFromDrive(extractCoreId(empId), avatarBox);
+            // جلب وتحديث صورة درايف في الخلفية دون تعطيل الواجهة
+            fetchPhotosFromDrive(coreId, avatarBox);
         }
 
         // 2. 🌟 جلب إعدادات الموقع والعناوين وروابط المقاييس من Firestore مباشرة 🌟
@@ -494,22 +511,52 @@ window.onload = async function() {
     }
 };
 
+// ================= دالة الإنقاذ الذكية لصورة المتكون =================
+window.handleAvatarFallback = function(imgElement, fallbackUrl) {
+    if (fallbackUrl && fallbackUrl !== 'undefined' && fallbackUrl !== 'null' && imgElement.src !== fallbackUrl && !imgElement.getAttribute('data-retried')) {
+        imgElement.setAttribute('data-retried', 'true');
+        imgElement.src = fallbackUrl;
+    } else {
+        imgElement.outerHTML = '<i class="fa-solid fa-user"></i>';
+    }
+};
+
+// ================= دالة جلب الصورة من درايف (فائقة السرعة ومحصنة ضد أخطاء الكاش) =================
 async function fetchPhotosFromDrive(coreId, avatarBox) {
     try {
-        let res = await fetch(`${PHOTO_SCRIPT_URL}?type=employees`);
+        // 🌟 1. كاسر الكاش (_t) لمنع خطأ CORS عند التحديث F5 🌟
+        const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
+        let res = await fetch(cacheBusterUrl, { cache: "no-store" });
         let text = await res.text();
+        
         if (text && text.includes("[")) {
             let photoData = JSON.parse(text);
             let userPhotoObj = photoData.find(item => extractCoreId(item.jobId) === coreId);
+            
             if (userPhotoObj && userPhotoObj.photoUrl) {
                 let directUrl = userPhotoObj.photoUrl;
                 const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-                avatarBox.innerHTML = `<img src="${directUrl}" alt="الصورة الشخصية" onerror="this.outerHTML='<i class=\\'fa-solid fa-user\\'></i>'">`;
+                
+                let lh3Url = directUrl;
+                let thumbUrl = directUrl;
+
+                // 🌟 2. استخدام سيرفر lh3 الفائق بدقة s800 مع توفير رابط بديل 🌟
+                if (match) {
+                    lh3Url = `https://lh3.googleusercontent.com/d/${match[1]}=s800`;
+                    thumbUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+                }
+
+                // 🌟 3. حفظ الصورة في كاش المتصفح المحلي لتظهر فوراً في المرات القادمة 🌟
+                try {
+                    localStorage.setItem("user_avatar_" + coreId, lh3Url);
+                } catch(e) {}
+
+                avatarBox.innerHTML = `<img src="${lh3Url}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '${thumbUrl}')">`;
             }
         }
-    } catch(e) { console.warn("لم نتمكن من جلب صورة درايف"); }
-    document.getElementById("loader").style.display = "none";
+    } catch(e) { 
+        console.warn("تعذر تحديث صورة درايف من السيرفر:", e); 
+    }
 }
 
 /* =======================================================

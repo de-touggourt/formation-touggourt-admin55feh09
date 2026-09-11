@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة تحكم المديرية - فضاء التكوين البيداغوجي</title>
 
@@ -2031,25 +2032,7 @@ function updateDashboardStatsDynamic() {
     if(typeof updateStats === 'function') updateStats();
 }
 
-// ================= إعدادات الصور والمطابقة =================
-// (الأكواد الخاصة بجلب الموظفين بقيت كما هي دون تغيير)
-const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
-let employeePhotosMap = {}; 
 
-function extractCoreId(val) {
-    if (!val) return "";
-    let str = String(val).trim().toUpperCase();
-    let digitsOnly = str.replace(/\D/g, "");
-    let core = digitsOnly.replace(/^0+/, ""); 
-    return core === "" ? digitsOnly : core;
-}
-
-let allData = [];
-let filteredData = [];
-let currentPage = 1;
-const rowsPerPage = 10;
-let selectedTrainees = new Set();       
-let selectedGroupsTrainees = new Set(); 
 
 window.onload = function() {
     // إظهار شاشة التحميل فوراً
@@ -2329,35 +2312,79 @@ function getCenterOptionsHtml(selectedCenter) {
     return html;
 }
 
-// متغير لمعرفة ما إذا كان هذا هو التحميل الأول أم مجرد تحديث صامت
+// ================= إعدادات الصور والمطابقة مع التخزين المحلي =================
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
+
+// 🌟 1. استرجاع الصور فوراً من التخزين المحلي للمتصفح لتظهر في 0 ثانية عند التحديث F5 🌟
+let employeePhotosMap = {};
+try {
+    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    if (cachedPhotos) {
+        employeePhotosMap = JSON.parse(cachedPhotos);
+    }
+} catch (e) {
+    console.warn("فشل قراءة كاش الصور المحلي:", e);
+}
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let str = String(val).trim().toUpperCase();
+    let digitsOnly = str.replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); 
+    return core === "" ? digitsOnly : core;
+}
+
+let allData = [];
+let filteredData = [];
+let currentPage = 1;
+const rowsPerPage = 10;
+let selectedTrainees = new Set();       
+let selectedGroupsTrainees = new Set(); 
 let isFirstLoad = true;
 
-// ================= جلب البيانات والصور (بنظام التحديث اللحظي الصامت) =================
-// ================= جلب البيانات والصور (بسرعة عالية) =================
+// ================= جلب البيانات والصور (فائق السرعة وبدون أخطاء كاش) =================
 function fetchData() {
-    // 1. جلب الصور في الخلفية (بدون إيقاف جلب البيانات الأساسية)
-    fetch(`${PHOTO_SCRIPT_URL}?type=employees`)
+    // 🌟 2. إضافة كاسر الكاش (_t) لمنع المتصفح من استخدام 302 القديم وحل مشكلة اختفاء الصور على F5 🌟
+    const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
+
+    fetch(cacheBusterUrl, { cache: "no-store" })
         .then(res => res.text())
         .then(responseText => {
             if (responseText && responseText.includes("[")) {
                 const photoData = JSON.parse(responseText);
-                employeePhotosMap = {};
+                const freshPhotosMap = {};
+
                 photoData.forEach(item => {
-                    if(item.jobId && item.photoUrl) {
+                    if (item.jobId && item.photoUrl) {
                         const coreJobId = extractCoreId(item.jobId);
                         let directUrl = item.photoUrl;
                         const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                        if (match) directUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200`;
-                        employeePhotosMap[coreJobId] = directUrl;
+                        
+                        // 🌟 3. استخدام سيرفر lh3 الفائق السرعة لصور درايف لأنه لا يحظر التحديث 🌟
+                        if (match) {
+                            directUrl = `https://lh3.googleusercontent.com/d/${match[1]}=s200`;
+                        }
+                        freshPhotosMap[coreJobId] = directUrl;
                     }
                 });
-                // إعادة رسم الجدول برفق بعد تحميل الصور إذا كنا في الصفحة الأولى
-                if(!isFirstLoad) applyFilters(true);
+
+                // دمج وتحديث الكاش
+                employeePhotosMap = { ...employeePhotosMap, ...freshPhotosMap };
+
+                // حفظ في localStorage حتى لا تختفي الصور أبداً
+                try {
+                    localStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
+                } catch(err) {}
+
+                // إعادة رسم الجدول فور وصول الصور الجديدة
+                applyFilters(true);
             }
         })
-        .catch(e => console.warn("تعذر جلب الصور:", e));
+        .catch(e => {
+            console.warn("تعذر تحديث الصور من السيرفر، يتم الاعتماد على الصور المحفوظة محلياً:", e);
+        });
 
-    // 2. الاتصال اللحظي بقاعدة البيانات (Real-time Listener) فوراً
+    // 4. الاتصال اللحظي بقاعدة البيانات (Real-time Listener)
     db.collection("employeescomnew").onSnapshot((snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const doc = change.doc;
@@ -2366,7 +2393,7 @@ function fetchData() {
             let item = {
                 docId: doc.id,
                 empId: data.id || doc.id,
-				photoUrl_fb: data.photoUrl_fb || null,
+                photoUrl_fb: data.photoUrl_fb || null,
                 name: data.name || "",
                 gender: data.gnr || "",
                 dob: data.diz || "",
@@ -2387,17 +2414,13 @@ function fetchData() {
                 let day = ("0" + d.getDate()).slice(-2);
                 let month = ("0" + (d.getMonth() + 1)).slice(-2);
                 let year = d.getFullYear();
-                // تم عكس الترتيب ليصبح (سنة/شهر/يوم)
                 item.dob = `${year}/${month}/${day}`; 
             } else if (typeof item.dob === 'string') {
-                // تقسيم التاريخ النصي بناءً على الفواصل (- أو /)
                 let parts = item.dob.split(/[-/]/);
                 if (parts.length === 3) {
-                    // إذا كان الجزء الأخير هو السنة (4 أرقام)، نقوم بقلب الترتيب
                     if (parts[2].length === 4) {
                         item.dob = `${parts[2]}/${parts[1]}/${parts[0]}`;
                     } else {
-                        // إذا كان الترتيب صحيحاً بالفعل، نوحد الفواصل فقط
                         item.dob = `${parts[0]}/${parts[1]}/${parts[2]}`;
                     }
                 } else {
@@ -2548,7 +2571,7 @@ function renderTable() {
           <div style="position: relative; display: inline-block; width: 45px; height: 45px; margin: 0 auto 5px auto;">
               <div class="profile-pic-container" style="margin: 0; width: 100%; height: 100%; cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
                   ${initialUrl 
-                      ? `<img src="${initialUrl}" class="profile-pic-img" alt="صورة الموظف" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` 
+                      ? `<img src="${initialUrl}" class="profile-pic-img" alt="صورة الموظف" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` 
                       : `<i class="fa-solid fa-user profile-pic-placeholder" title="الصورة غير متوفرة"></i>`}
               </div>
               ${refreshBtn}
@@ -5921,13 +5944,33 @@ window.printHourlyVolume = function(mode) {
 
 // ================= دالة الإنقاذ الذكية للصور (Smart Image Fallback) =================
 window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
-    if (imgElement.getAttribute('data-retried') !== 'true' && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null') {
-        imgElement.setAttribute('data-retried', 'true');
-        if (fallbackType === 'card' && driveUrl.includes('sz=w200')) driveUrl = driveUrl.replace('sz=w200', 'sz=w800');
-        imgElement.src = driveUrl; 
-    } else {
-        if (fallbackType === 'table') imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
-        else if (fallbackType === 'card') imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
+    let currentSrc = imgElement.src || '';
+    let retries = parseInt(imgElement.getAttribute('data-retries') || '0');
+
+    // 1. إذا كان الرابط الأساسي (مثل ImgBB) تالفاً ولديه رابط احتياطي في درايف
+    if (retries === 0 && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null' && currentSrc !== driveUrl) {
+        imgElement.setAttribute('data-retries', '1');
+        if (fallbackType === 'card' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s800');
+        imgElement.src = driveUrl;
+        return;
+    }
+
+    // 2. إذا فشل سيرفر lh3، نجرب سيرفر thumbnail الاحتياطي
+    if (retries < 2 && currentSrc.includes('lh3.googleusercontent.com/d/')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 'w800' : 'w200';
+            imgElement.src = `https://drive.google.com/thumbnail?id=${match[1]}&sz=${sz}`;
+            return;
+        }
+    }
+
+    // 3. إذا فشل كل شيء، إظهار الأيقونة الافتراضية
+    if (fallbackType === 'table') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
+    } else if (fallbackType === 'card') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
     }
 };
 
