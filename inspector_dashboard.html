@@ -713,7 +713,7 @@ window.onload = function() {
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
-        window.location.href = "admin095526.html";
+        window.location.href = "index.html";
         return;
     }
 
@@ -723,7 +723,7 @@ window.onload = function() {
             loadCenterAdmins();
             fetchData();
         } else {
-            window.location.href = "admin095526.html";
+            window.location.href = "index.html";
         }
     });
 };
@@ -1026,7 +1026,7 @@ async function getFramerNameFromBase(empId) {
 function logout() {
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "admin095526.html";
+        window.location.href = "index.html";
     }).catch((error) => {
         console.error("خطأ أثناء تسجيل الخروج:", error);
     });

@@ -2050,11 +2050,11 @@ window.onload = function() {
                 // طرد أي مستخدم آخر (مثل المفتشين)
                 firebase.auth().signOut();
                 Swal.fire({ icon: 'error', title: 'صلاحيات مقيدة', text: 'لا تملك صلاحية دخول لوحة المديرية.'})
-                .then(() => window.location.href = "admin095526.html");
+                .then(() => window.location.href = "index.html");
             }
         } else {
             // لا يوجد جلسة نشطة
-            window.location.href = "admin095526.html";
+            window.location.href = "index.html";
         }
     });
 };
@@ -2063,7 +2063,7 @@ function logout() {
     // تسجيل الخروج الفعلي من سيرفرات فايربيز
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "admin095526.html";
+        window.location.href = "index.html";
     }).catch((error) => {
         console.error("خطأ في تسجيل الخروج:", error);
     });
