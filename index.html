@@ -665,6 +665,11 @@ async function promptSecretAdminPassword() {
                 const correctPassword = data['admin panel'];
 
                 if (password === correctPassword) {
+                    // 🌟 إنشاء تصريح مرور مؤقت صالح لـ 30 ثانية فقط 🌟
+                    const entryToken = "GATE_" + Math.random().toString(36).substring(2) + "_" + Date.now();
+                    sessionStorage.setItem("admin_entry_token", entryToken);
+                    sessionStorage.setItem("admin_entry_time", Date.now().toString());
+
                     Swal.fire({
                         icon: 'success',
                         title: 'تم التحقق بنجاح',

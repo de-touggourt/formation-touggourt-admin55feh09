@@ -5,19 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>فضاء التكوين البيداغوجي توقرت</title>
 
+  <!-- 🛑 1. حماية فورية: تحويل فوري إذا تم تعطيل الجافاسكريبت -->
+  <noscript>
+    <meta http-equiv="refresh" content="0; url=index.html">
+    <style>body { display: none !important; }</style>
+  </noscript>
+
+  <!-- 🛑 2. إخفاء محتوى الصفحة كلياً أثناء الفحص الأمني لمنع أي وميض -->
+  <style id="pageGateStyle">
+    body { display: none !important; }
+  </style>
+
+  <!-- 🛑 3. سكربت التحقق الأمني: لا يسمح بالفتح إلا بالمرور من صفحة index.html -->
+  <script>
+    (function() {
+      const token = sessionStorage.getItem("admin_entry_token");
+      const time = parseInt(sessionStorage.getItem("admin_entry_time") || "0", 10);
+      const now = Date.now();
+
+      // التصريح صالح لمدة 30 ثانية فقط من لحظة النقر في index.html، أو إذا كانت جلسة نشطة
+      const isValidToken = token && (now - time < 30000);
+      const hasActiveSession = sessionStorage.getItem("admin_page_active") === "true";
+
+      // إذا لم يأتِ من index أو فتح الرابط مباشرة أو من المفضلة
+      if (!isValidToken && !hasActiveSession) {
+        sessionStorage.removeItem("admin_entry_token");
+        sessionStorage.removeItem("admin_entry_time");
+        sessionStorage.removeItem("admin_page_active");
+        // طرد فوري إلى الصفحة الرئيسية
+        window.location.replace("index.html");
+      } else {
+        // استهلاك توكن الانتقال وتفعيل الجلسة الحالية
+        sessionStorage.removeItem("admin_entry_token");
+        sessionStorage.removeItem("admin_entry_time");
+        sessionStorage.setItem("admin_page_active", "true");
+
+        // إظهار الصفحة بعد نجاح التحقق
+        document.addEventListener("DOMContentLoaded", function() {
+          const gateStyle = document.getElementById("pageGateStyle");
+          if (gateStyle) gateStyle.remove();
+        });
+      }
+    })();
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <!-- 🌟 التعديل 1: إضافة مكتبة Firebase Auth الضرورية للمصادقة 🌟 -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <style>
-    /* ===========================
-       1. إعدادات أساسية والتجاوب
-       =========================== */
     * { 
         box-sizing: border-box; 
         -webkit-tap-highlight-color: transparent; 
@@ -26,7 +66,6 @@
     body {
       font-family: 'Cairo', sans-serif;
       margin: 0;
-      /* صورة الخلفية المشتركة */
       background-image: url('https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?q=80&w=1920&auto=format&fit=crop');
       background-size: cover;
       background-position: center;
@@ -43,7 +82,6 @@
       padding: 15px; 
     }
 
-    /* طبقة شفافة زجاجية تدمج اللون الأزرق الهادئ مع التدرجات */
     body::before {
       content: "";
       position: absolute;
@@ -53,9 +91,6 @@
       z-index: -1;
     }
 
-    /* ===========================
-       2. الحاوية الرئيسية (تأثير الضوء الأزرق المتحرك)
-       =========================== */
     .container {
       padding: 35px 25px;
       border-radius: 28px;
@@ -71,7 +106,6 @@
       animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
-    /* الضوء الدوار خلف الحاوية (معدل للون الأزرق) */
     .container::before {
       content: '';
       position: absolute;
@@ -81,7 +115,6 @@
       z-index: -2;
     }
 
-    /* الخلفية البيضاء الزجاجية */
     .container::after {
       content: '';
       position: absolute;
@@ -103,9 +136,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ===========================
-       3. النصوص والعناوين
-       =========================== */
     .header-text {
         margin-bottom: 20px;
         border-bottom: 2px dashed #e2e8f0;
@@ -142,9 +172,6 @@
         background-color: rgba(211, 47, 47, 0.08); 
     }
 
-    /* ===========================
-       4. الشعار (حركة التحليق الزرقاء)
-       =========================== */
     .login-logo-wrapper {
         position: relative;
         width: 120px;
@@ -189,9 +216,6 @@
       to { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
-    /* ===========================
-       5. حقول الإدخال والأزرار العصرية
-       =========================== */
     .input-wrapper { 
         position: relative; 
         width: 100%; 
@@ -270,9 +294,6 @@
     .swal2-popup { border-radius: 24px !important; font-family: 'Cairo', sans-serif !important; padding: 20px !important;}
     .swal2-confirm { background: #1E68E8 !important; box-shadow: 0 6px 15px rgba(30, 104, 232, 0.3) !important; border-radius: 12px !important; font-weight: 700 !important;}
 
-    /* ===========================
-       6. استعلامات الوسائط (الشاشات الصغيرة)
-       =========================== */
     @media (max-width: 380px) { 
         .container { padding: 25px 18px; border-radius: 20px; } 
         .container::after { border-radius: 17px; }
@@ -314,7 +335,6 @@
   </div>
 
 <script>
-// ================= إعدادات Firebase =================
 const firebaseConfig = {
   apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
   authDomain: "voyage-touggourt-48755.firebaseapp.com",
@@ -353,7 +373,6 @@ async function checkAccessCode() {
   Swal.fire({ title: 'جاري التحقق والمصادقة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
   try {
-      // 1. التحقق من كود الإدارة (المديرية)
       const configRef = db.collection("config").doc("pass");
       const configSnap = await configRef.get();
       
@@ -365,18 +384,18 @@ async function checkAccessCode() {
               const adminEmail = "admin_directorate@system.local";
               
               try {
-                  // محاولة تسجيل الدخول
                   await firebase.auth().signInWithEmailAndPassword(adminEmail, inputVal);
               } catch(e) {
-                  // 🌟 دعم التحديثات الأمنية الجديدة لفايربيز 🌟
                   if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
                       await firebase.auth().createUserWithEmailAndPassword(adminEmail, inputVal);
                   } else {
-                      throw e; // رمي الخطأ إذا كان من نوع آخر
+                      throw e;
                   }
               }
 
-              // الإبقاء على الجلسة القديمة للتوافقية
+              // إزالة تصريح الدخول المؤقت عند الانتقال للوحة التحكم
+              sessionStorage.removeItem("admin_page_active");
+
               sessionStorage.setItem("userEmpId", "ADMIN_ACCESS"); 
               sessionStorage.setItem("userName", "مدير النظام"); 
               sessionStorage.setItem("isLoggedIn", "true");
@@ -388,7 +407,6 @@ async function checkAccessCode() {
           }
       }
 
-      // 2. التحقق من قاعدة بيانات المفتشين (رؤساء المراكز)
       const querySnapshot = await db.collection("center_admins").where("password", "==", inputVal).get();
       
       if (!querySnapshot.empty) {
@@ -404,13 +422,15 @@ async function checkAccessCode() {
           try {
               await firebase.auth().signInWithEmailAndPassword(inspectorEmail, inputVal);
           } catch(e) {
-               // 🌟 دعم التحديثات الأمنية الجديدة لفايربيز للمفتشين 🌟
                if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
                   await firebase.auth().createUserWithEmailAndPassword(inspectorEmail, inputVal);
               } else {
                   throw e;
               }
           }
+
+          // إزالة تصريح الدخول المؤقت عند الانتقال للوحة التحكم
+          sessionStorage.removeItem("admin_page_active");
 
           sessionStorage.setItem("userEmpId", adminData.id); 
           sessionStorage.setItem("userName", adminData.name); 
@@ -436,7 +456,6 @@ async function checkAccessCode() {
   }
 }
 
-// 🔒 تحكم في فتح وغلق الموقع
 const registrationOpen = true; 
 window.onload = function() {
     if (!registrationOpen) {
@@ -448,7 +467,6 @@ window.onload = function() {
         document.querySelector(".header-text").appendChild(msg);
     }
 };
-
 </script>
 </body>
 </html>
