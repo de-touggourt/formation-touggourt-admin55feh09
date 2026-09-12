@@ -1,141 +1,28 @@
 {
-  "version": 2,
-  "cleanUrls": true,
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://lh3.googleusercontent.com https://drive.google.com https://*.googleusercontent.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://firestore.googleapis.com https://script.google.com https://script.googleusercontent.com; frame-src 'self' https://drive.google.com https://docs.google.com; object-src 'none'; base-uri 'self';"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-XSS-Protection",
-          "value": "1; mode=block"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(self), microphone=(), geolocation=()"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=63072000; includeSubDomains; preload"
-        }
-      ]
-    },
-    {
-      "source": "/(.*)\\.(html|htm)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/js/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=604800"
-        }
-      ]
-    }
-  ],
-  "redirects": [
-    {
-      "source": "/dashboard_finale_upload.html",
-      "destination": "/files-upload",
-      "permanent": true
-    },
-    {
-      "source": "/admin_dashboard.html",
-      "destination": "/admin-panel",
-      "permanent": true
-    },
-    {
-      "source": "/inspector_dashboard.html",
-      "destination": "/inspector",
-      "permanent": true
-    },
-    {
-      "source": "/framers_management.html",
-      "destination": "/framers",
-      "permanent": true
-    },
-    {
-      "source": "/grades_management.html",
-      "destination": "/grades",
-      "permanent": true
-    },
-    {
-      "source": "/manage_courses.html",
-      "destination": "/courses-manage",
-      "permanent": true
-    },
-    {
-      "source": "/scanner.html",
-      "destination": "/scanner-tool",
-      "permanent": true
-    },
-    {
-      "source": "/tracking.html",
-      "destination": "/statistics",
-      "permanent": true
-    },
-    {
-      "source": "/admin095526.html",
-      "destination": "/secure-login",
-      "permanent": true
-    },
-    {
-      "source": "/dashboard.html",
-      "destination": "/portal",
-      "permanent": true
-    },
-    {
-      "source": "/courses.html",
-      "destination": "/courses",
-      "permanent": true
-    },
-    {
-      "source": "/index.html",
-      "destination": "/login",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
-      "source": "/js/(.*)",
-      "destination": "/js/$1"
-    },
-    {
-      "source": "/",
+      "source": "/login",
       "destination": "/index.html"
     },
     {
-      "source": "/files-upload",
-      "destination": "/dashboard_finale_upload.html"
+      "source": "/portal",
+      "destination": "/dashboard.html"
+    },
+    {
+      "source": "/courses",
+      "destination": "/courses.html"
+    },
+    {
+      "source": "/inspector",
+      "destination": "/inspector_dashboard.html"
     },
     {
       "source": "/admin-panel",
       "destination": "/admin_dashboard.html"
     },
     {
-      "source": "/inspector",
-      "destination": "/inspector_dashboard.html"
+      "source": "/secure-login",
+      "destination": "/admin095526.html"
     },
     {
       "source": "/framers",
@@ -158,20 +45,31 @@
       "destination": "/tracking.html"
     },
     {
-      "source": "/secure-login",
-      "destination": "/admin095526.html"
-    },
+      "source": "/files-upload",
+      "destination": "/dashboard_finale_upload.html"
+    }
+  ],
+  "headers": [
     {
-      "source": "/portal",
-      "destination": "/dashboard.html"
-    },
-    {
-      "source": "/courses",
-      "destination": "/courses.html"
-    },
-    {
-      "source": "/login",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=()"
+        }
+      ]
     }
   ]
 }
