@@ -1,0 +1,3916 @@
+// التحقق الأمني من صلاحيات المفتش
+if (typeof SecurityGuard !== 'undefined') {
+    SecurityGuard.verifySession("INSPECTOR");
+}
+// ================= إعدادات Firebase المحدثة =================
+const firebaseConfig = {
+  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+  authDomain: "voyage-touggourt-48755.firebaseapp.com",
+  projectId: "voyage-touggourt-48755",
+  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+  messagingSenderId: "712694455348",
+  appId: "1:712694455348:web:5b4e8df57347edf944fe61",
+  measurementId: "G-TTJT4LQ65L"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let currentUserRole = "";
+let currentGroupPage = 1;         
+const groupsPerPage = 10;         
+let currentFilteredGroupData = []; 
+let selectedGroupsTrainees = new Set();
+
+
+
+// ================= إعدادات الصور والمطابقة مع التخزين المحلي =================
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
+
+// 🌟 1. استرجاع الصور فوراً من التخزين المحلي لتظهر في 0 ثانية عند أي تحديث F5 🌟
+let employeePhotosMap = {};
+try {
+    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    if (cachedPhotos) {
+        employeePhotosMap = JSON.parse(cachedPhotos);
+    }
+} catch (e) {
+    console.warn("فشل قراءة كاش الصور المحلي:", e);
+}
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let str = String(val).trim().toUpperCase();
+    let digitsOnly = str.replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); // إزالة الأصفار من اليسار للمطابقة
+    return core === "" ? digitsOnly : core;
+}
+
+// ================= استدعاء المركز بناءً على جلسة الدخول =================
+let INSPECTOR_CENTER = "";
+
+window.onload = function() {
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+
+    if (!isLoggedIn || !INSPECTOR_CENTER) {
+        window.location.href = "/login";
+        return;
+    }
+
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
+            loadCenterAdmins();
+            fetchData();
+        } else {
+            window.location.href = "/login";
+        }
+    });
+};
+
+// ================= دالة الإنقاذ الذكية للصور (Smart Image Fallback) =================
+window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
+    let currentSrc = imgElement.src || '';
+    let retries = parseInt(imgElement.getAttribute('data-retries') || '0');
+
+    // 1. إذا كان الرابط الأساسي (مثل ImgBB) تالفاً ولديه رابط احتياطي في درايف
+    if (retries === 0 && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null' && currentSrc !== driveUrl) {
+        imgElement.setAttribute('data-retries', '1');
+        if (fallbackType === 'card' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s800');
+        else if (fallbackType === 'print' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s400');
+        imgElement.src = driveUrl;
+        return;
+    }
+
+    // 2. التبديل الذكي بين سيرفرات جوجل (إذا تعثر أحدهما نستخدم الآخر)
+    if (retries < 2 && currentSrc.includes('lh3.googleusercontent.com/d/')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 'w800' : ((fallbackType === 'print') ? 'w400' : 'w200');
+            imgElement.src = `https://drive.google.com/thumbnail?id=${match[1]}&sz=${sz}`;
+            return;
+        }
+    } else if (retries < 2 && currentSrc.includes('drive.google.com/thumbnail')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/id=([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 's800' : ((fallbackType === 'print') ? 's400' : 's200');
+            imgElement.src = `https://lh3.googleusercontent.com/d/${match[1]}=${sz}`;
+            return;
+        }
+    }
+
+    // 3. إذا تعذر كل شيء: عرض الأيقونة البديلة
+    if (fallbackType === 'table') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
+    } else if (fallbackType === 'card') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
+    } else if (fallbackType === 'print') {
+        imgElement.outerHTML = 'صورة<br>الموظف';
+    }
+};
+
+let centerData = []; 
+let filteredData = [];
+let currentPage = 1;
+const rowsPerPage = 10;
+let selectedTrainees = new Set();
+let isFirstLoad = true; 
+
+// ================= جلب البيانات والصور (مع كاسر الكاش والتخزين المحلي) =================
+function fetchData() {
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "flex";
+
+    let safetyTimer = setTimeout(() => {
+        if (loader && loader.style.display !== "none") {
+            loader.style.display = "none";
+        }
+    }, 4000);
+
+    // 🌟 2. كاسر الكاش (_t) لمنع خطأ CORS على F5 + تحميل مباشر عبر سيرفر lh3 الفائق 🌟
+    const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
+
+    fetch(cacheBusterUrl, { cache: "no-store" })
+        .then(async (photoRes) => {
+            const responseText = await photoRes.text();
+            if (responseText && responseText.includes("[")) {
+                const photoData = JSON.parse(responseText);
+                const freshPhotosMap = {};
+
+                photoData.forEach(item => {
+                    if (item.jobId && item.photoUrl) {
+                        const coreJobId = extractCoreId(item.jobId);
+                        let directUrl = item.photoUrl;
+                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                        
+                        // استخدام سيرفر lh3 المستقر
+                        if (match) {
+                            directUrl = `https://lh3.googleusercontent.com/d/${match[1]}=s200`;
+                        }
+                        freshPhotosMap[coreJobId] = directUrl;
+                    }
+                });
+
+                // دمج الصور وتحديث الكاش المحلي
+                employeePhotosMap = { ...employeePhotosMap, ...freshPhotosMap };
+                try {
+                    localStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
+                } catch(err) {}
+
+                // إعادة رسم الجدول بالصور الجديدة
+                if (filteredData && filteredData.length > 0) renderTable();
+            }
+        })
+        .catch(e => console.warn("تعذر جلب الصور من السيرفر، تم الاعتماد على الكاش المحلي:", e));
+
+    // 3. الاتصال اللحظي المستمر بقاعدة المتكونين
+    db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).onSnapshot((snapshot) => {
+        clearTimeout(safetyTimer);
+        if (loader) loader.style.display = "none";
+
+        let ranks = new Set();
+        centerData = [];
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            let item = {
+                docId: doc.id, 
+                empId: data.id || doc.id, 
+                photoUrl_fb: data.photoUrl_fb || null, 
+                name: data.name || "", 
+                gender: data.gnr || "", 
+                dob: data.diz || "", 
+                rank: data.grade || "", 
+                specialty: data.maty || "", 
+                workplace: data.place || "",
+                address: data.adrs || "", 
+                daira: data.daira || "-", 
+                phone: data.phone || data.tel || "-", 
+                pob: data.pob || "-", 
+                center: data.center || "", 
+                group: data.group || data.fawj || "-",
+                permissions: data.permissions || []
+            };
+
+            if (item.dob && typeof item.dob.toDate === 'function') {
+                let d = item.dob.toDate();
+                let day = ("0" + d.getDate()).slice(-2);
+                let month = ("0" + (d.getMonth() + 1)).slice(-2);
+                let year = d.getFullYear();
+                item.dob = `${year}/${month}/${day}`; 
+            } else if (typeof item.dob === 'string') {
+                let parts = item.dob.split(/[-/]/);
+                if (parts.length === 3) {
+                    if (parts[2].length === 4) {
+                        item.dob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        item.dob = `${parts[0]}/${parts[1]}/${parts[2]}`;
+                    }
+                } else {
+                    item.dob = item.dob.replace(/-/g, '/');
+                }
+            }
+
+            centerData.push(item);
+            if (item.rank && item.rank !== "-") ranks.add(item.rank);
+        });
+
+        const rankOptionsDiv = document.getElementById("rankOptions");
+        if (rankOptionsDiv && isFirstLoad) {
+            rankOptionsDiv.innerHTML = `<label><input type="checkbox" id="rank-all" value="الكل" checked onchange="handleRankAll()"> الكل</label>`;
+            ranks.forEach(val => { 
+                rankOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="rank-checkbox" value="${val}" onchange="handleRankChange()"> ${val}</label>`); 
+            });
+        }
+
+        isFirstLoad = false;
+        updateDynamicSpecs();
+        
+    }, (error) => {
+        clearTimeout(safetyTimer);
+        if (loader) loader.style.display = "none";
+        console.error("خطأ في جلب البيانات:", error);
+        Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات.', 'error');
+    });
+}
+
+// ================= دالة جلب وعرض مسؤولي المركز (بالتحديث اللحظي المباشر والذكي) =================
+function loadCenterAdmins() {
+    const userEmpId = sessionStorage.getItem("userEmpId") ? String(sessionStorage.getItem("userEmpId")).trim() : "";
+    
+    // مصفوفات لتخزين البيانات اللحظية
+    let officialAdmins = [];
+    let centerFramers = [];
+
+    // دالة مساعدة لتحديث الشريط العلوي بناءً على البيانات المتوفرة
+    const renderTopBar = async () => {
+        let pedName = "غير معين";
+        let admName = "غير معين";
+        let loggedInRole = ""; 
+
+        // 1. فحص تعيينات المديرية (القاعدة الرسمية للحسابات)
+        officialAdmins.forEach(data => {
+            let safeDocId = extractCoreId(data.id);
+            let safeUserId = extractCoreId(userEmpId);
+            let isCurrentUser = (safeDocId === safeUserId);
+            let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
+
+            // استخدام includes لتفادي أخطاء الهمزات والمسافات
+            let r = data.jobTitle || data.role || "";
+            if (r.includes("البيداغوجي")) { pedName = (data.name || "بدون اسم") + " " + youTag; }
+            if (r.includes("الإداري") || r.includes("الاداري")) { admName = (data.name || "بدون اسم") + " " + youTag; }
+
+            if (isCurrentUser) { currentUserRole = r; loggedInRole = r; }
+        });
+
+        // 2. الميزة الاحتياطية: البحث في جدول المؤطرين الداخلي إذا لم تعينهم المديرية بحسابات
+        for (let fData of centerFramers) {
+            let safeDocId = extractCoreId(fData.empId);
+            let safeUserId = extractCoreId(userEmpId);
+            let isCurrentUser = (safeDocId === safeUserId);
+            let youTag = isCurrentUser ? `<span style="display: inline-block; background:#d90429; color:white; padding:2px 8px; border-radius:4px; font-size:10px; margin-right:15px; font-weight:bold; vertical-align: middle;">أنت</span>` : "";
+
+            let r = fData.role || "";
+
+            // التحقق من المسؤول الإداري (حتى لو كُتبت بدون همزة)
+            if ((admName === "غير معين" || admName === "غير معروف") && (r.includes("الإداري") || r.includes("الاداري"))) {
+                let name = await getFramerNameFromBase(fData.empId);
+                admName = name + " " + youTag;
+                if (isCurrentUser) { currentUserRole = r; loggedInRole = r; }
+            }
+            
+            // التحقق من المسؤول البيداغوجي
+            if ((pedName === "غير معين" || pedName === "غير معروف") && r.includes("البيداغوجي")) {
+                let name = await getFramerNameFromBase(fData.empId);
+                pedName = name + " " + youTag;
+                if (isCurrentUser) { currentUserRole = r; loggedInRole = r; }
+            }
+        }
+
+        // إعداد التصميم البصري للأسماء
+        let pedStyle = loggedInRole.includes("البيداغوجي") ? "color:#fff;" : "color:#cbd5e1;";
+        let admStyle = loggedInRole.includes("الإداري") ? "color:#fff;" : "color:#cbd5e1;";
+
+        let pedRowHtml = `
+            <div style="font-size:13px; font-family:'Cairo'; ${pedStyle} white-space: nowrap;">
+                <i class="fa-solid fa-chalkboard-user" style="color:#0FBA50; width:20px;"></i> المسؤول البيداغوجي: <b style="${loggedInRole.includes('البيداغوجي') ? 'font-size:15px;' : 'font-size:14px;'}">${pedName}</b>
+            </div>
+        `;
+        
+        let admRowHtml = `
+            <div style="font-size:13px; font-family:'Cairo'; ${admStyle} white-space: nowrap;">
+                <i class="fa-solid fa-user-tie" style="color:#ff9800; width:20px;"></i> المسؤول الإداري: <b style="${loggedInRole.includes('الإداري') ? 'font-size:15px;' : 'font-size:14px;'}">${admName}</b>
+            </div>
+        `;
+
+        // ترتيب الأسطر: صاحب الحساب يظهر في الأعلى دائماً
+        let finalRows = loggedInRole.includes("الإداري") ? (admRowHtml + pedRowHtml) : (pedRowHtml + admRowHtml);
+
+        const welcomeDiv = document.getElementById("welcomeName");
+        if(welcomeDiv) {
+            welcomeDiv.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:6px; background: rgba(0,0,0,0.25); padding: 8px 25px; border-radius: 12px; border: 1px dashed #62b0e8; text-align: right; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); width: max-content;">
+                    ${finalRows}
+                </div>
+            `;
+        }
+    };
+
+    // 🌟 السر هنا: استخدام onSnapshot ليتحدث الشريط العلوي فوراً عند أي إضافة أو تعديل 🌟
+    db.collection("center_admins").where("center", "==", INSPECTOR_CENTER).onSnapshot(snap => {
+        officialAdmins = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderTopBar();
+    }, e => console.error("Error fetching official admins:", e));
+
+    db.collection("center_framers").where("center", "==", INSPECTOR_CENTER).onSnapshot(snap => {
+        centerFramers = snap.docs.map(doc => doc.data());
+        renderTopBar();
+    }, e => console.error("Error fetching center framers:", e));
+}
+
+// ================= دالة مساعدة لجلب اسم المؤطر من قاعدة البيانات الرئيسية (محصنة) =================
+async function getFramerNameFromBase(empId) {
+    if (!empId) return "غير معروف";
+    
+    // 🌟 استخراج الرقم الصافي (بدون أصفار) لتفادي أخطاء التطابق 🌟
+    let safeId = extractCoreId(empId); 
+    
+    try {
+        // المحاولة 1: البحث بالرقم الصافي في قاعدة المتكونين
+        let snap = await db.collection("employeescomnew").doc(safeId).get();
+        if (!snap.exists) {
+            // المحاولة 2: البحث بالرقم الصافي في القاعدة الكلية
+            snap = await db.collection("employeescomplus").doc(safeId).get();
+        }
+        if (snap.exists && snap.data().name) return snap.data().name;
+
+        // المحاولة 3 (احتياطية): البحث بالرقم الخام كما أُدخل
+        let snapFallback = await db.collection("employeescomnew").doc(String(empId).trim()).get();
+        if (snapFallback.exists && snapFallback.data().name) return snapFallback.data().name;
+
+        let snapFallback2 = await db.collection("employeescomplus").doc(String(empId).trim()).get();
+        if (snapFallback2.exists && snapFallback2.data().name) return snapFallback2.data().name;
+
+    } catch (e) { 
+        console.error("خطأ في جلب اسم المسؤول:", e);
+    }
+    
+    return "غير معروف";
+}
+
+
+
+
+function logout() {
+    firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "/login";
+    }).catch((error) => {
+        console.error("خطأ أثناء تسجيل الخروج:", error);
+    });
+}
+
+// ================= دوال التحقق من الصلاحيات والمنع =================
+function checkAndOpenFileManager() {
+    if (currentUserRole === "المسؤول الإداري") {
+        Swal.fire({
+            icon: 'error',
+            title: 'صلاحيات مقيدة',
+            text: 'عذراً، إدارة ملفات المقاييس من الصلاحيات الحصرية للمسؤول البيداغوجي.',
+            confirmButtonColor: '#102a43'
+        });
+        return;
+    }
+    window.location.href = "/files-upload";
+}
+
+function checkAndOpenFramers() {
+    
+    window.location.href = "/framers";
+}
+
+// ================= دوال الفلاتر المتعددة =================
+function toggleRankMenu() { const menu = document.getElementById("rankOptions"); menu.style.display = menu.style.display === "block" ? "none" : "block"; }
+function toggleSpecMenu() { const menu = document.getElementById("specOptions"); menu.style.display = menu.style.display === "block" ? "none" : "block"; }
+document.addEventListener('click', function(e) {
+    if(!e.target.closest('#multiSelectRankContainer')) document.getElementById("rankOptions").style.display = "none";
+    if(!e.target.closest('#multiSelectContainer')) document.getElementById("specOptions").style.display = "none";
+});
+
+function handleRankAll() { document.querySelectorAll('.rank-checkbox').forEach(cb => cb.checked = false); updateRankText(); updateDynamicSpecs(); }
+function handleRankChange() { const anyChecked = Array.from(document.querySelectorAll('.rank-checkbox')).some(cb => cb.checked); document.getElementById('rank-all').checked = !anyChecked; updateRankText(); updateDynamicSpecs(); }
+function updateRankText() {
+    if(document.getElementById('rank-all').checked) { document.getElementById('rank-selected-text').innerText = "الكل"; return; }
+    const checkedBoxes = document.querySelectorAll('.rank-checkbox:checked');
+    if(checkedBoxes.length === 1) { document.getElementById('rank-selected-text').innerText = checkedBoxes[0].value; } 
+    else { document.getElementById('rank-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`; }
+}
+
+function updateDynamicSpecs() {
+    let selectedRanks = [];
+    if(!document.getElementById('rank-all').checked) { selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value); }
+    let validSpecs = new Set();
+    centerData.forEach(item => {
+        if (selectedRanks.length === 0 || selectedRanks.includes(item.rank)) {
+            if (item.specialty && item.specialty.trim() !== "") validSpecs.add(item.specialty);
+        }
+    });
+    const specOptionsDiv = document.getElementById("specOptions");
+    specOptionsDiv.innerHTML = `<label><input type="checkbox" id="spec-all" value="الكل" checked onchange="handleSpecAll()"> الكل</label>`;
+    validSpecs.forEach(val => { specOptionsDiv.insertAdjacentHTML('beforeend', `<label><input type="checkbox" class="spec-checkbox" value="${val}" onchange="handleSpecChange()"> ${val}</label>`); });
+    document.getElementById('spec-selected-text').innerText = "الكل";
+    applyFilters();
+}
+
+function handleSpecAll() { document.querySelectorAll('.spec-checkbox').forEach(cb => cb.checked = false); updateSpecText(); applyFilters(); }
+function handleSpecChange() { const anyChecked = Array.from(document.querySelectorAll('.spec-checkbox')).some(cb => cb.checked); document.getElementById('spec-all').checked = !anyChecked; updateSpecText(); applyFilters(); }
+function updateSpecText() {
+    if(document.getElementById('spec-all').checked) { document.getElementById('spec-selected-text').innerText = "الكل"; return; }
+    const checkedBoxes = document.querySelectorAll('.spec-checkbox:checked');
+    if(checkedBoxes.length === 1) { document.getElementById('spec-selected-text').innerText = checkedBoxes[0].value; } 
+    else { document.getElementById('spec-selected-text').innerText = `تم تحديد (${checkedBoxes.length})`; }
+}
+
+
+
+// ================= الفلترة وعرض الجدول =================
+function applyFilters(isSilent = false) {
+    const search = document.getElementById("searchInput").value.toLowerCase();
+    const filterDaira = document.getElementById("filterDaira").value;
+
+    let selectedRanks = []; if(!document.getElementById('rank-all').checked) { selectedRanks = Array.from(document.querySelectorAll('.rank-checkbox:checked')).map(cb => cb.value); }
+    let selectedSpecs = []; if(!document.getElementById('spec-all').checked) { selectedSpecs = Array.from(document.querySelectorAll('.spec-checkbox:checked')).map(cb => cb.value); }
+
+    filteredData = centerData.filter(item => {
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchDaira = (filterDaira === "الكل") || (item.daira === filterDaira);
+        const matchRank = selectedRanks.length === 0 || selectedRanks.includes(item.rank);
+        const matchSpec = selectedSpecs.length === 0 || selectedSpecs.includes(item.specialty);
+        return matchSearch && matchDaira && matchRank && matchSpec;
+    });
+
+    if (!isSilent) {
+        currentPage = 1; 
+        selectedTrainees.clear(); // مسح التحديدات القديمة عند تفعيل فلتر جديد
+        if(document.getElementById("selectAll")) document.getElementById("selectAll").checked = false;
+    }
+    
+    updateStats();
+    renderTable();
+}
+
+function updateStats() {
+    document.getElementById("stat-total").innerText = centerData.length;
+    const males = centerData.filter(i => (i.gender || '').includes('ذكر') || (i.gender || '').toUpperCase() === 'M').length;
+    const females = centerData.filter(i => (i.gender || '').includes('نث') || (i.gender || '').toUpperCase() === 'F').length;
+    
+    document.getElementById("stat-male").innerText = males;
+    document.getElementById("stat-female").innerText = females;
+    document.getElementById("stat-filtered").innerText = filteredData.length;
+}
+
+function renderTable() {
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+
+    if(filteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px;">لا توجد بيانات مطابقة</td></tr>`;
+        renderPagination(0);
+        return;
+    }
+
+    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    const paginatedData = filteredData.slice(start, end);
+
+    paginatedData.forEach((item, index) => {
+        const tr = document.createElement("tr");
+        
+       // 🌟 تجهيز الصورة بنظام الإنقاذ الذكي 🌟
+        const coreEmpId = extractCoreId(item.empId);
+        const fbUrl = item.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        
+        // تحديد الرابط الأولي (الأولوية لفايربيز/ImgBB إذا توفر)
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+        const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+        const refreshBtn = isImgBB 
+            ? `<button onclick="window.removeBrokenImage('${item.docId}', 'info')" style="position: absolute; bottom: -5px; right: -5px; z-index: 10; background: #dc3545; color: white; border: 2px solid white; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; font-size: 10px;" title="استعادة الصورة الأصلية"><i class="fa-solid fa-arrows-rotate"></i></button>`
+            : '';
+
+        const photoHtml = `
+          <div style="position: relative; display: inline-block; width: 45px; height: 45px; margin: 0 auto 5px auto;">
+              <div class="profile-pic-container" style="margin: 0; width: 100%; height: 100%; cursor: pointer;" onclick="viewInfo('${item.docId}')" title="اضغط لعرض البطاقة المهنية">
+                  ${initialUrl 
+                      ? `<img src="${initialUrl}" class="profile-pic-img" alt="صورة الموظف" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` 
+                      : `<i class="fa-solid fa-user profile-pic-placeholder" title="الصورة غير متوفرة"></i>`}
+              </div>
+              ${refreshBtn}
+          </div>
+        `;
+
+        const rankPlaceHtml = `
+            <div style="line-height: 1.4;">
+                <strong>${item.rank || '-'}</strong><br>
+                <span style="font-size: 12px; color: #555;">${item.workplace || '-'}</span>
+            </div>
+        `;
+        
+        // 🌟 التحقق هل هذا المتكون محدد مسبقاً أم لا 🌟
+        const isChecked = selectedTrainees.has(item.docId) ? 'checked' : '';
+
+        tr.innerHTML = `
+            <td style="text-align:center; vertical-align: middle;">
+                <input type="checkbox" class="row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleSelect(this, '${item.docId}')" style="width:18px; height:18px; accent-color:#102a43; cursor:pointer;">
+            </td>
+            <td style="text-align:center; vertical-align: middle;">${start + index + 1}</td>
+            <td style="text-align:center; vertical-align: middle;">
+                ${photoHtml}
+                <strong style="display:block;">${item.empId || '-'}</strong>
+            </td>
+            <td style="vertical-align: middle;">${item.name || '-'}</td>
+            <td style="text-align:center; white-space:nowrap; vertical-align: middle;"><span dir="ltr" style="display:inline-block; font-weight:600; letter-spacing:1px;">${item.dob || '-'}</span></td>
+            <td style="text-align:center; vertical-align: middle;">${item.pob || '-'}</td>
+            <td style="font-weight:600; color:#1E68E8; vertical-align: middle;">${item.daira || '-'}</td>
+            <td style="vertical-align: middle;">${item.address || '-'}</td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap; vertical-align: middle;">${item.phone || '-'}</td>
+            <td style="vertical-align: middle;">${rankPlaceHtml}</td>
+            <td style="font-weight:600; color:#555; vertical-align: middle;">${item.specialty || '-'}</td>
+            <td style="text-align:center; vertical-align: middle;">
+                <div class="action-btns" style="justify-content: center;">
+                    <button class="btn-icon" style="background: #0FBA50;" onclick="printSingleIDCard('${item.docId}')" title="طباعة البطاقة الفردية"><i class="fa-solid fa-print"></i></button>
+                    <button class="btn-icon btn-info" onclick="viewInfo('${item.docId}')" title="البطاقة المهنية"><i class="fa-solid fa-address-card"></i></button>
+                    <button class="btn-icon btn-edit" onclick="editRecord('${item.docId}')" title="تعديل"><i class="fa-solid fa-pen"></i></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // تحديث حالة مربع "تحديد الكل" إذا كانت الصفحة الحالية كلها محددة
+    document.getElementById("selectAll").checked = (filteredData.length > 0 && selectedTrainees.size === filteredData.length);
+    renderPagination(totalPages);
+}
+
+// ================= دالة عرض البطاقة المهنية للمتكون (تصميم عمودي موحد) =================
+window.viewInfo = function(docId) {
+    const data = centerData.find(d => d.docId === docId);
+    if (!data) return;
+
+    // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
+    const coreEmpId = extractCoreId(data.empId);
+    const fbUrl = data.photoUrl_fb;
+    let driveUrl = employeePhotosMap[coreEmpId];
+    
+    let initialUrl = fbUrl ? fbUrl : driveUrl;
+    
+    // تكبير دقة الصورة قبل عرضها سواء كانت من سيرفر lh3 أو سيرفر thumbnail
+if (initialUrl) {
+    if (initialUrl.includes('=s200')) initialUrl = initialUrl.replace('=s200', '=s800');
+    if (initialUrl.includes('sz=w200')) initialUrl = initialUrl.replace('sz=w200', 'sz=w800');
+}
+
+const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+const imgTag = initialUrl
+    ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover;" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'card')">`
+    : `<div style="display:flex; align-items:center; justify-content:center; height:100%;"><i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i></div>`;
+// زر التحديث العائم (يظهر فقط لروابط ImgBB)
+    const refreshBtn = isImgBB 
+        ? `<button onclick="window.removeBrokenImage('${docId}', 'info')" style="position: absolute; bottom: 5px; right: 5px; z-index: 20; background: #d90429; color: white; border: 3px solid white; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; transition: 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="حذف الصورة التالفة واسترجاع صورة درايف"><i class="fa-solid fa-arrows-rotate" style="font-size:16px;"></i></button>`
+        : '';
+
+    const html = `
+    <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Cairo', sans-serif; padding: 30px 20px 20px; background: #ffffff; border-radius: 20px;">
+        
+        <!-- حاوية الصورة مع الزر العائم -->
+        <div style="position: relative; width: 170px; height: 170px; margin-bottom: 20px;">
+            <!-- الإطار الملون والصورة -->
+            <div style="width: 100%; height: 100%; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #0ea5e9, #8b5cf6); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.25); box-sizing: border-box;">
+                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; overflow: hidden; border: 4px solid #fff; box-sizing: border-box;">
+                    ${imgTag}
+                </div>
+            </div>
+            <!-- الزر العائم تم وضعه هنا ليكون فوق الإطار ولا يتم قصه -->
+            ${refreshBtn}
+        </div>
+
+        <!-- الاسم والرتبة -->
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 900; color: #0f172a;">${data.name || '---'}</h2>
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: #0ea5e9;"><i class="fa-solid fa-briefcase" style="margin-left: 5px;"></i> ${data.rank || '---'}</h4>
+        </div>
+        
+        <!-- شبكة المعلومات (محاذاة لليمين) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; text-align: right;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.empId || '---'}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الفوج الحالي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${data.group || 'غير محدد'}</span>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مؤسسة العمل (المكان)</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${data.workplace || '---'}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${data.phone || '---'}</span>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مادة التخصص</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-book" style="color:#94a3b8; margin-left:5px;"></i> ${data.specialty || '---'}</span>
+            </div>
+        </div>
+    </div>
+    `;
+
+    Swal.fire({
+        html: html,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: '600px',
+        background: 'transparent',
+        customClass: { popup: 'swal-modal-custom' }
+    });
+}
+
+// ================= دالة الإحصائيات الدقيقة والهرمية (رتبة -> تخصص) =================
+window.showDetailedStats = function() {
+    if(filteredData.length === 0){ 
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لعرض إحصائياتها.', 'warning'); 
+        return; 
+    }
+
+    let nestedStats = {};
+    let totalMales = 0;
+    let totalFemales = 0;
+
+    // 1. تجميع البيانات هرمياً
+    filteredData.forEach(item => {
+        let isMale = (item.gender || '').includes('ذكر') || (item.gender || '').toUpperCase() === 'M';
+        let r = item.rank || 'رتبة غير محددة';
+        let s = item.specialty || 'تخصص غير محدد';
+
+        if(isMale) totalMales++; else totalFemales++;
+
+        // إنشاء الرتبة إذا لم تكن موجودة
+        if(!nestedStats[r]) {
+            nestedStats[r] = { t: 0, m: 0, f: 0, specs: {} };
+        }
+        nestedStats[r].t++;
+        if(isMale) nestedStats[r].m++; else nestedStats[r].f++;
+
+        // إضافة التخصص داخل الرتبة
+        if(!nestedStats[r].specs[s]) {
+            nestedStats[r].specs[s] = { t: 0, m: 0, f: 0 };
+        }
+        nestedStats[r].specs[s].t++;
+        if(isMale) nestedStats[r].specs[s].m++; else nestedStats[r].specs[s].f++;
+    });
+
+    // حفظ المتغيرات في نافذة عامة لاستخدامها في الطباعة
+    window.currentNestedStats = nestedStats;
+    window.currentTotalStats = { t: filteredData.length, m: totalMales, f: totalFemales };
+
+    // 2. بناء واجهة النافذة التفاعلية (HTML)
+    let htmlContent = `<div style="text-align: right; font-family: 'Cairo'; max-height: 60vh; overflow-y: auto; overflow-x: hidden; padding: 10px;">`;
+
+    // الشريط الإحصائي العام
+    htmlContent += `
+        <div style="background: linear-gradient(135deg, #102a43, #243b53); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+            <div><div style="font-size: 14px; color:#cbd5e1;">إجمالي المتكونين</div><div style="font-size: 30px; font-weight: 900;">${filteredData.length}</div></div>
+            <div><div style="font-size: 14px; color:#93c5fd;">الذكور</div><div style="font-size: 26px; font-weight: bold;">${totalMales}</div></div>
+            <div><div style="font-size: 14px; color:#f9a8d4;">الإناث</div><div style="font-size: 26px; font-weight: bold;">${totalFemales}</div></div>
+        </div>
+    `;
+
+    // بناء البطاقات حسب كل رتبة
+    for (const [rank, data] of Object.entries(nestedStats)) {
+        htmlContent += `
+            <div style="margin-bottom: 25px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                <div style="background: #e8fbf0; border-bottom: 2px solid #0FBA50; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <h4 style="margin: 0; color: #0FBA50; font-size: 17px;"><i class="fa-solid fa-layer-group"></i> ${rank}</h4>
+                    <div style="font-weight: bold; font-size: 14px; color: #102a43; background: #fff; padding: 5px 15px; border-radius: 20px; border: 1px solid #cbd5e1;">
+                        إجمالي: ${data.t} | ذكور: ${data.m} | إناث: ${data.f}
+                    </div>
+                </div>
+                <div style="padding: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; background: #f8fafc;">
+        `;
+
+        // إدراج التخصصات التابعة لهذه الرتبة فقط
+        for (const [spec, sData] of Object.entries(data.specs)) {
+            htmlContent += `
+                <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 15px; position: relative; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                    <h5 style="margin: 0 0 12px 0; color: #1E68E8; font-size: 15px; text-align: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px;">${spec}</h5>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+                        <span style="color: #1E68E8;"><i class="fa-solid fa-person"></i> ذكور: ${sData.m}</span>
+                        <span style="color: #e91e63;"><i class="fa-solid fa-person-dress"></i> إناث: ${sData.f}</span>
+                    </div>
+                    <div style="text-align: center; background: #f1f5f9; padding: 6px; border-radius: 6px; color: #102a43; font-weight: 900; font-size: 14px;">
+                        المجموع: ${sData.t}
+                    </div>
+                </div>
+            `;
+        }
+        htmlContent += `</div></div>`; // إغلاق الجريد والرتبة
+    }
+
+    htmlContent += `</div>`;
+    
+    // زر طباعة الملصق (Poster)
+    htmlContent += `
+        <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 2px dashed #eee;">
+            <button onclick="printDetailedStatsPoster()" style="background: #8e44ad; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; font-weight: bold; font-family: 'Cairo'; cursor: pointer; box-shadow: 0 4px 10px rgba(142, 68, 173, 0.3); transition: 0.3s; width: 100%;">
+                <i class="fa-solid fa-print"></i> طباعة البطاقة الإحصائية
+            </button>
+        </div>
+    `;
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-chart-pie" style="color: #ff9800;"></i> الإحصاء الشامل والمفصل للمركز',
+        width: '900px',
+        html: htmlContent,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق النافذة',
+        confirmButtonColor: '#102a43',
+        customClass: { popup: 'swal-modal-custom' }
+    });
+}
+
+// ================= دالة طباعة الملصق الإحصائي (Poster) =================
+window.printDetailedStatsPoster = function() {
+    if (!window.currentNestedStats) return;
+    
+    let stats = window.currentNestedStats;
+    let totals = window.currentTotalStats;
+    
+    let printWindow = window.open('', '', 'width=1000,height=800');
+    
+    // تصميم الملصق الإحصائي للطباعة
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>الملصق الإحصائي للمركز</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #111; background: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .main-title { text-align: center; font-size: 26px; font-weight: 900; margin: 20px 0; text-transform: uppercase; letter-spacing: 1px; color: #102a43; border: 2px dashed #102a43; display: inline-block; padding: 10px 30px; border-radius: 10px;}
+            
+            /* مربعات الإحصاء العام */
+            .summary-container { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 30px; }
+            .sum-box { flex: 1; border: 2px solid #102a43; border-radius: 12px; text-align: center; padding: 15px; background: #f8fafc; }
+            .sum-box.total { background: #102a43; color: white; }
+            .sum-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+            .sum-val { font-size: 32px; font-weight: 900; }
+            
+            /* جداول الرتب */
+            .rank-section { margin-bottom: 25px; page-break-inside: avoid; border: 2px solid #0FBA50; border-radius: 12px; overflow: hidden;}
+            .rank-header { background: #0FBA50; color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 17px; }
+            .rank-stats { background: #e8fbf0; color: #0FBA50; padding: 4px 10px; border-radius: 8px; font-size: 14px; }
+            
+            table { width: 100%; border-collapse: collapse; background: white; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: center; font-size: 15px; }
+            th { background: #f1f5f9; font-weight: 900; color: #334e68; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            td.spec-name { font-weight: bold; text-align: right; color: #1E68E8; width: 40%;}
+            td.total-col { font-weight: 900; background: #eff6ff; }
+        </style>
+    </head>
+    <body>
+        <div style="text-align: center; font-weight: 900; font-size: 14px; line-height: 1.5; margin-bottom: 10px;">
+            الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية
+        </div>
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align: left;">مركز التكوين البيداغوجي:<br><span style="font-size:16px;">${INSPECTOR_CENTER}</span></div>
+        </div>
+        
+        <div style="text-align: center;">
+            <div class="main-title">البطاقة الإحصائية المفصلة للمركز</div>
+        </div>
+        
+        <div class="summary-container">
+            <div class="sum-box">
+                <div class="sum-title">إجمالي الإناث</div>
+                <div class="sum-val" style="color: #e91e63;">${totals.f}</div>
+            </div>
+            <div class="sum-box">
+                <div class="sum-title">إجمالي الذكور</div>
+                <div class="sum-val" style="color: #1E68E8;">${totals.m}</div>
+            </div>
+            <div class="sum-box total">
+                <div class="sum-title">المجموع العام</div>
+                <div class="sum-val">${totals.t}</div>
+            </div>
+        </div>
+    `;
+
+    for (const [rank, data] of Object.entries(stats)) {
+        html += `
+        <div class="rank-section">
+            <div class="rank-header">
+                <span>${rank}</span>
+                <span class="rank-stats">( المجموع: ${data.t} | ذكور: ${data.m} | إناث: ${data.f} )</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>مادة التخصص</th>
+                        <th>الذكور</th>
+                        <th>الإناث</th>
+                        <th>المجموع</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        for (const [spec, sData] of Object.entries(data.specs)) {
+            html += `
+                    <tr>
+                        <td class="spec-name">${spec}</td>
+                        <td style="color: #1E68E8; font-weight: bold;">${sData.m}</td>
+                        <td style="color: #e91e63; font-weight: bold;">${sData.f}</td>
+                        <td class="total-col">${sData.t}</td>
+                    </tr>
+            `;
+        }
+        
+        html += `
+                </tbody>
+            </table>
+        </div>
+        `;
+    }
+
+    // إمضاءات أسفل الورقة
+    html += `
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; padding: 0 40px;">
+            <div>توقيع رئيس المركز</div>
+            <div>توقيع مدير التربية</div>
+        </div>
+    </body>
+    <script>
+        window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }
+    <\/script>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+// ================= دالة طباعة القوائم المحدثة (تعديل الترويسة ومنع التفاف النص) =================
+function printFilteredList() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning'); return; }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet); let phaseText = "الكل";
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`); 
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة قوائم المركز</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            
+            /* التنسيق الجديد لترويسة اليمين واليسار */
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .header-right { text-align: right; }
+            .header-left { text-align: left; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            
+            /* ==== التعديلات الجديدة لجدول الطباعة لمنع الالتفاف ==== */
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { 
+                border: 1px solid #000; 
+                padding: 6px 4px; /* تقليل الحشوة الداخلية لربح المساحة */
+                text-align: right; 
+                font-size: 12.5px; /* تصغير الخط ليتسع النص */
+            }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 13.5px; }
+            td.center-text { text-align: center; }
+            td.ltr-text { direction: ltr; text-align: right; }
+            td.nowrap { white-space: nowrap; } /* هذه الخاصية تمنع النص من النزول لسطر جديد نهائياً */
+            
+            @media print { body { padding: 0; } .sub-titles { background: transparent; border: none; padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        
+        <!-- الترويسة المقسمة -->
+        <div class="header-flex">
+            <div class="header-right">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div class="header-left">مركز التكوين البيداغوجي:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+
+        <div class="main-title">قوائم الأساتذة المتكونين</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 15%;">رقم الهاتف</th>
+                    <th style="width: 25%;">الرتبة</th>
+                    <th style="width: 30%;">مكان العمل</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    filteredData.forEach((item, index) => {
+        // تم إضافة كلاس 'nowrap' للأعمدة التي نريد إجبارها على سطر واحد
+        html += `<tr>
+            <td class="center-text">${index + 1}</td>
+            <td class="nowrap"><b>${item.name || '-'}</b></td>
+            <td class="ltr-text nowrap">${item.phone || '-'}</td>
+            <td class="nowrap">${item.rank || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+        </tr>`;
+    });
+    html += `</tbody></table><script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// ================= دالة طباعة القائمة 2 (الرقم - الاسم - الرتبة - التخصص - مكان العمل) =================
+function printFilteredList2() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning'); return; }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet); let phaseText = "الكل";
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`); 
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة القائمة 2</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .header-right { text-align: right; }
+            .header-left { text-align: left; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12.5px; }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 13.5px; }
+            td.center-text { text-align: center; }
+            td.nowrap { white-space: nowrap; } 
+            @media print { body { padding: 0; } .sub-titles { background: transparent; border: none; padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="header-flex">
+            <div class="header-right">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div class="header-left">مركز التكوين البيداغوجي:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+        <div class="main-title">قوائم الأساتذة المتكونين (القائمة 2)</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 20%;">التخصص</th>
+                    <th style="width: 30%;">مكان العمل</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    filteredData.forEach((item, index) => {
+        html += `<tr>
+            <td class="center-text">${index + 1}</td>
+            <td class="nowrap"><b>${item.name || '-'}</b></td>
+            <td class="nowrap">${item.rank || '-'}</td>
+            <td class="nowrap">${item.specialty || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+        </tr>`;
+    });
+    html += `</tbody></table><script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+
+// ================= دالة طباعة القائمة 3 (إضافة الملاحظة) =================
+function printFilteredList3() {
+    if (filteredData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعتها', 'warning'); return; }
+
+    let phasesSet = new Set();
+    filteredData.forEach(item => {
+        if (item.rank) {
+            if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+            else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+            else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+        }
+    });
+    
+    let phasesArr = Array.from(phasesSet); let phaseText = "الكل";
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "كل الأطوار (ابتدائي، متوسط، ثانوي)";
+
+    const dairaFilter = document.getElementById("filterDaira").value;
+    let subTitlesArr = [];
+    if (dairaFilter !== "الكل") subTitlesArr.push(`الدائرة: ${dairaFilter}`);
+    subTitlesArr.push(`الطور: ${phaseText}`); 
+    let subTitlesHtml = subTitlesArr.join(' &nbsp; | &nbsp; ');
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة القائمة 3</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .header-right { text-align: right; }
+            .header-left { text-align: left; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 15px; margin-bottom: 25px; font-weight: bold; color: #333; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; display: inline-block; margin-left: auto; margin-right: auto; display: table;}
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12.5px; }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 13.5px; }
+            td.center-text { text-align: center; }
+            td.nowrap { white-space: nowrap; } 
+            @media print { body { padding: 0; } .sub-titles { background: transparent; border: none; padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="header-flex">
+            <div class="header-right">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div class="header-left">مركز التكوين البيداغوجي:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+        <div class="main-title">قوائم الأساتذة المتكونين (القائمة 3)</div>
+        <div style="text-align: center;"><div class="sub-titles">${subTitlesHtml}</div></div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 22%;">الاسم واللقب</th>
+                    <th style="width: 18%;">الرتبة</th>
+                    <th style="width: 15%;">التخصص</th>
+                    <th style="width: 25%;">مكان العمل</th>
+                    <th style="width: 15%;">الملاحظة</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    filteredData.forEach((item, index) => {
+        html += `<tr>
+            <td class="center-text">${index + 1}</td>
+            <td class="nowrap"><b>${item.name || '-'}</b></td>
+            <td class="nowrap">${item.rank || '-'}</td>
+            <td class="nowrap">${item.specialty || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+            <td></td> <!-- خلية فارغة لكتابة الملاحظات -->
+        </tr>`;
+    });
+    html += `</tbody></table><script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+
+
+// ================= دالة طباعة البطاقات المحدثة (تدعم التحديد عبر مربعات Checkbox) =================
+window.printIDCards = function() {
+    // 🌟 1. تحديد من سيتم طباعة بطاقته 🌟
+    let dataToPrint = [];
+    
+    if (selectedTrainees.size > 0) {
+        // إذا قام المستخدم بتحديد مربعات، نطبع للمحددين فقط
+        dataToPrint = filteredData.filter(item => selectedTrainees.has(item.docId));
+    } else {
+        // إذا لم يحدد أحداً، نطبع كل القائمة المعروضة حالياً
+        dataToPrint = filteredData;
+    }
+
+    if (dataToPrint.length === 0) { 
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لطباعة بطاقاتها. تأكد من نتائج الفلترة أو التحديد.', 'warning'); 
+        return; 
+    }
+
+    // إشعار للمستخدم بالعدد
+    Swal.fire({
+        toast: true, position: 'top-end', icon: 'info',
+        title: `جاري تجهيز ${dataToPrint.length} بطاقة للطباعة...`,
+        showConfirmButton: false, timer: 2000
+    });
+
+    let printWindow = window.open('', '_blank');
+    let pagesHtml = '';
+    
+    // تقسيم البيانات إلى مجموعات من 8 بطاقات
+    for (let i = 0; i < dataToPrint.length; i += 8) {
+        let pageData = dataToPrint.slice(i, i + 8);
+        pagesHtml += '<div class="page">';
+        
+        pageData.forEach(item => {
+            let empId = (item.empId && item.empId.trim() !== '') ? item.empId : '000000';
+            
+            // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
+            const coreEmpId = extractCoreId(empId);
+            const fbUrl = item.photoUrl_fb;
+            const driveUrl = employeePhotosMap[coreEmpId];
+            let initialUrl = fbUrl ? fbUrl : driveUrl;
+            
+            // تحسين جودة الصورة للطباعة (w400 / s400)
+if (initialUrl) {
+    if (initialUrl.includes('sz=w200')) initialUrl = initialUrl.replace('sz=w200', 'sz=w400');
+    if (initialUrl.includes('=s200')) initialUrl = initialUrl.replace('=s200', '=s400');
+}
+const photoContent = initialUrl 
+    ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'print')"/>`
+    : `صورة<br>الموظف`;
+
+            pagesHtml += `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+                        <div class="side-headers">
+                            <div class="right-header">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                            <div class="left-header">مركز التكوين:<br><span class="center-name">${INSPECTOR_CENTER}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-title">بطاقة أستاذ متكون</div>
+                    
+                    <div class="card-body">
+                        <div class="info-section">
+                            <div class="info-row"><b>الاسم واللقب:</b> <span>${item.name || '-'}</span></div>
+                            <div class="info-row"><b>الرتبة:</b> <span>${item.rank || '-'}</span></div>
+                            <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b>مكان العمل:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${item.workplace || '-'}</span></div></div>
+                            <div class="info-row"><b>مادة التخصص:</b> <span>${item.specialty || '-'}</span></div>
+                            <div class="info-row"><b>الفوج:</b> <span>${item.group || '-'}</span></div>
+                            <div class="barcode-wrapper">
+                                <svg class="barcode" jsbarcode-value="${empId}" jsbarcode-displayvalue="false"></svg>
+                            </div>
+                        </div>
+                        
+                        <div class="photo-section">
+                            <div class="photo-box" style="overflow: hidden; padding: 0;">
+                                ${photoContent}
+                            </div>
+                            <div class="signature">رئيس المركز</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        pagesHtml += '</div>';
+    }
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة بطاقات المتكونين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <!-- استدعاء مكتبة الباركود -->
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { font-family: 'Cairo', sans-serif; background: #e0e6ed; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            
+            .page { 
+                width: 210mm; 
+                height: 297mm; 
+                background: white; 
+                margin: 0 auto; 
+                padding: 10mm; 
+                display: grid; 
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: repeat(4, 1fr);
+                gap: 6mm 5mm; 
+                box-sizing: border-box; 
+                page-break-after: always; 
+            }
+            
+            @media print { 
+                body { background: white; } 
+                .page { margin: 0; box-shadow: none; page-break-after: always; } 
+            }
+            
+            .card{
+                border:2px solid #102a43;
+                border-radius:10px;
+                padding:8px 10px 8px 10px; 
+                display:flex;
+                flex-direction:column;
+                background:#fff;
+                position:relative;
+                overflow:hidden; 
+                min-height:100%;
+                box-sizing:border-box;
+            }
+            .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: #1E68E8; }
+            
+            .card-header { margin-bottom: 3px; }
+            .rep-title { text-align: center; font-size: 10.5px; font-weight: 800; line-height: 1.3; margin-bottom: 4px; color: #102a43; }
+            .side-headers { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; color: #334e68; line-height: 1.3; }
+            .right-header { text-align: right; }
+            .left-header { text-align: left; }
+            .center-name { color: #d90429; font-weight: 900; }
+            
+            .card-title { 
+                text-align: center; font-size: 13.5px; font-weight: 900; 
+                background: #102a43; color: #fff; padding: 3px; 
+                border-radius: 5px; margin: 3px 0 5px 0; letter-spacing: 0.5px; 
+            }
+            
+            .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
+            
+            .info-section{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
+            .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
+            .info-row b { color: #1E68E8; display: inline-block; min-width: 60px; font-weight: 800;}
+            .info-row span { font-weight: 600; }
+
+            .barcode-wrapper{ margin-top: auto; margin-bottom: 4px; text-align:center; display:flex; justify-content:center; align-items:center; }
+            .barcode-wrapper svg { width: 100%; max-width: 115px; height: auto !important; display: block; margin: 0 auto; }
+
+            .photo-section{ width:25%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; }
+            .photo-box { width: 85%; aspect-ratio: 3/4; border: 2px dashed #9cb4d8; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9cb4d8; font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3; }
+            .signature{ font-size:8px; font-weight:800; text-align:center; color:#102a43; line-height:1.2; margin-top:0; padding-bottom:0; }
+        </style>
+    </head>
+    <body>
+        ${pagesHtml}
+        
+        <script>
+            function initBarcodes() {
+                if (typeof JsBarcode === 'undefined') {
+                    setTimeout(initBarcodes, 50);
+                    return;
+                }
+                
+                JsBarcode(".barcode").init({
+                    format: "CODE128",
+                    lineColor: "#000",
+                    width: 1.2,
+                    height: 25,          
+                    displayValue: true,  
+                    fontSize: 12,        
+                    fontOptions: "bold",
+                    textMargin: 2,
+                    margin: 0,           
+                    font: "Cairo"
+                });
+
+                document.querySelectorAll('.shrink-workplace').forEach(function(el) {
+                    var availableWidth = el.parentElement.clientWidth;
+                    var textWidth = el.scrollWidth;
+                    if (textWidth > availableWidth && availableWidth > 0) {
+                        var scale = availableWidth / textWidth;
+                        el.style.transform = 'translateY(-50%) scale(' + scale + ')';
+                    }
+                });
+                
+                setTimeout(function() {
+                    window.print();
+                }, 800);
+            }
+            window.onload = initBarcodes;
+        <\/script>
+    </body>
+    </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+function renderPagination(totalPages) {
+    const container = document.getElementById("pagination-controls");
+    if (totalPages <= 1) { container.innerHTML = ""; container.style.display = "none"; return; }
+    container.style.display = "flex";
+    let startItem = (currentPage - 1) * rowsPerPage + 1; let endItem = Math.min(currentPage * rowsPerPage, filteredData.length);
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${filteredData.length} مسجل</div><div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">السابق</button>`;
+    let startPage = Math.max(1, currentPage - 2); let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+    if (startPage > 1) { html += `<button class="page-btn" onclick="changePage(1)">1</button>`; if (startPage > 2) html += `<span style="align-self:center; color:#777;">...</span>`; }
+    for (let i = startPage; i <= endPage; i++) { html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`; }
+    if (endPage < totalPages) { if (endPage < totalPages - 1) html += `<span style="align-self:center; color:#777;">...</span>`; html += `<button class="page-btn" onclick="changePage(${totalPages})">${totalPages}</button>`; }
+    html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">التالي</button></div>`;
+    container.innerHTML = html;
+}
+
+function changePage(page) { currentPage = page; renderTable(); document.getElementById("table-section").scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+// ================= نظام متابعة الحضور والغياب المتقدم =================
+
+let currentAttDate = "";
+let attSystemMode = "open"; // open = حاضر, late = متأخر
+let attendanceRecords = {}; // تخزين الحالات والتوقيت
+
+// تعيين تاريخ اليوم كافتراضي
+function getTodayDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// فتح النافذة
+function openAttendanceModal() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات لأساتذة المركز.', 'warning'); return; }
+    
+    document.getElementById('attendanceModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // منع التمرير في الخلفية
+    
+    const dateInput = document.getElementById('attDate');
+    if (!dateInput.value) { dateInput.value = getTodayDate(); }
+    
+    loadAttendanceData();
+}
+
+// إغلاق النافذة
+function closeAttendanceModal() {
+    document.getElementById('attendanceModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// ================= تغيير حالة النظام (مفتوح / متأخر / مغلق) =================
+function changeSystemMode(mode) {
+    attSystemMode = mode;
+    const btnOpen = document.getElementById('btnSysOpen');
+    const btnLate = document.getElementById('btnSysLate');
+    const btnClosed = document.getElementById('btnSysClosed');
+
+    // إعادة ضبط الألوان
+    btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+    btnLate.style.background = "#f0f4f8"; btnLate.style.color = "#102a43";
+    btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+
+    if (mode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+    else if (mode === 'late') { btnLate.style.background = "#ff9800"; btnLate.style.color = "white"; }
+    else if (mode === 'closed') { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+
+    saveSystemState(mode);
+}
+
+let attendanceListener = null; // متغير لحفظ المستمع اللحظي
+
+// ================= جلب بيانات الحضور لحظياً (Real-Time) =================
+async function loadAttendanceData() {
+    currentAttDate = document.getElementById('attDate').value;
+    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    
+    document.getElementById('attTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السجل...</td></tr>';
+
+    // إيقاف أي استماع سابق إذا قمنا بتغيير التاريخ
+    if (attendanceListener) { attendanceListener(); }
+
+    // إنشاء اتصال لحظي (onSnapshot) بدلاً من (get)
+    attendanceListener = db.collection('attendance_daily').doc(docId).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            attendanceRecords = data.records || {};
+            
+            // تحديث أزرار حالة النظام في الواجهة إذا تغيرت من جهاز آخر
+            changeSystemModeLocal(data.systemMode || "closed");
+        } else {
+            attendanceRecords = {};
+            changeSystemModeLocal("closed"); // افتراضياً مغلق إذا لم يتم إنشاؤه
+        }
+        renderAttendanceTable(); // إعادة بناء الجدول فوراً عند أي مسح جديد
+    }, (error) => {
+        console.error("خطأ في المزامنة اللحظية:", error);
+    });
+}
+
+// دالة لتغيير ألوان الأزرار فقط (بدون إرسال طلب جديد للفايربيز)
+function changeSystemModeLocal(mode) {
+    attSystemMode = mode;
+    const btnOpen = document.getElementById('btnSysOpen');
+    const btnLate = document.getElementById('btnSysLate');
+    const btnClosed = document.getElementById('btnSysClosed');
+
+    btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+    btnLate.style.background = "#f0f4f8"; btnLate.style.color = "#102a43";
+    btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+
+    if (mode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+    else if (mode === 'late') { btnLate.style.background = "#ff9800"; btnLate.style.color = "white"; }
+    else if (mode === 'closed') { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+}
+
+// تغيير حالة النظام وحفظها
+function changeSystemMode(mode) {
+    changeSystemModeLocal(mode);
+    saveSystemState(mode);
+}
+
+
+
+
+
+// تعبئة البيانات في القوائم المتعددة
+function populateAttFilters() {
+    const groupOptions = document.getElementById('attGroupOptions');
+    const rankOptions = document.getElementById('attRankOptions');
+    const specOptions = document.getElementById('attSpecOptions');
+    
+    let groups = new Set(), ranks = new Set(), specs = new Set();
+    
+    centerData.forEach(item => { 
+        if (item.group && item.group !== '-') groups.add(item.group); 
+        if (item.rank && item.rank !== '-') ranks.add(item.rank);
+        if (item.specialty && item.specialty !== '-') specs.add(item.specialty);
+    });
+    
+    if(groupOptions) {
+        groupOptions.innerHTML = `<label><input type="checkbox" id="att-group-all" value="الكل" checked onchange="handleAttGroupAll()"> كل الأفواج</label>`;
+        Array.from(groups).sort().forEach(g => { groupOptions.innerHTML += `<label><input type="checkbox" class="att-group-checkbox" value="${g}" onchange="handleAttGroupChange()"> ${g}</label>`; });
+    }
+
+    if(rankOptions) {
+        rankOptions.innerHTML = `<label><input type="checkbox" id="att-rank-all" value="الكل" checked onchange="handleAttRankAll()"> كل الرتب</label>`;
+        Array.from(ranks).sort().forEach(r => { rankOptions.innerHTML += `<label><input type="checkbox" class="att-rank-checkbox" value="${r}" onchange="handleAttRankChange()"> ${r}</label>`; });
+    }
+
+    if(specOptions) {
+        specOptions.innerHTML = `<label><input type="checkbox" id="att-spec-all" value="الكل" checked onchange="handleAttSpecAll()"> كل التخصصات</label>`;
+        Array.from(specs).sort().forEach(s => { specOptions.innerHTML += `<label><input type="checkbox" class="att-spec-checkbox" value="${s}" onchange="handleAttSpecChange()"> ${s}</label>`; });
+    }
+    
+    const statusOptions = document.getElementById('attStatusOptions');
+    if(statusOptions && statusOptions.innerHTML.trim() === '') {
+         statusOptions.innerHTML = `
+            <label><input type="checkbox" id="att-status-all" value="الكل" checked onchange="handleAttStatusAll()"> كل الحالات</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="غير محدد" onchange="handleAttStatusChange()"> غير محدد</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="غائب" onchange="handleAttStatusChange()"> غائب</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="حاضر" onchange="handleAttStatusChange()"> حاضر</label>
+            <label><input type="checkbox" class="att-status-checkbox" value="متأخر" onchange="handleAttStatusChange()"> متأخر</label>
+         `;
+    }
+}
+
+// ================= بناء جدول الحضور (محدث ليشمل الفلترة المتعددة والترتيب التلقائي) =================
+function renderAttendanceTable() {
+    // ✅ 1. استدعاء دالة بناء الفلاتر أولاً (قبل محاولة قراءتها لتجنب خطأ البرمجة)
+    if (document.querySelectorAll('.att-group-checkbox').length === 0) {
+        populateAttFilters();
+    }
+
+    const search = document.getElementById('attSearch').value.toLowerCase();
+    
+    // ✅ 2. جلب قيم القوائم المتعددة مع شرط (if exists) لتفادي الأخطاء
+    let selRanks = []; if(document.getElementById('att-rank-all') && !document.getElementById('att-rank-all').checked) selRanks = Array.from(document.querySelectorAll('.att-rank-checkbox:checked')).map(cb => cb.value);
+    let selSpecs = []; if(document.getElementById('att-spec-all') && !document.getElementById('att-spec-all').checked) selSpecs = Array.from(document.querySelectorAll('.att-spec-checkbox:checked')).map(cb => cb.value);
+    let selGroups = []; if(document.getElementById('att-group-all') && !document.getElementById('att-group-all').checked) selGroups = Array.from(document.querySelectorAll('.att-group-checkbox:checked')).map(cb => cb.value);
+    let selStatuses = []; if(document.getElementById('att-status-all') && !document.getElementById('att-status-all').checked) selStatuses = Array.from(document.querySelectorAll('.att-status-checkbox:checked')).map(cb => cb.value);
+
+    const tbody = document.getElementById('attTableBody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+
+    let total = 0, present = 0, absent = 0, late = 0;
+    let itemsToRender = [];
+
+     centerData.forEach(item => {
+        let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
+        
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchStatus = selStatuses.length === 0 || selStatuses.includes(record.status);
+        const matchGroup = selGroups.length === 0 || selGroups.includes(item.group);
+        const matchRank = selRanks.length === 0 || selRanks.includes(item.rank);
+        const matchSpec = selSpecs.length === 0 || selSpecs.includes(item.specialty);
+
+        if (matchGroup && matchRank && matchSpec) {
+            total++;
+            if (record.status === 'حاضر') present++;
+            else if (record.status === 'متأخر') late++;
+            else if (record.status === 'غائب') absent++;
+        }
+
+        if (matchSearch && matchStatus && matchGroup && matchRank && matchSpec) {
+            itemsToRender.push({ item: item, record: record });
+        }
+    });
+
+    // ✅ الترتيب التلقائي (الأحدث وقتاً يرتفع للأعلى فوراً)
+    itemsToRender.sort((a, b) => {
+        let timeA = a.record.time || "";
+        let timeB = b.record.time || "";
+        
+        if (timeA === "" && timeB === "") return 0;
+        if (timeA === "") return 1; // "غير محدد" ينزل للأسفل
+        if (timeB === "") return -1; // "غير محدد" ينزل للأسفل
+        
+        return timeB.localeCompare(timeA); // ترتيب تنازلي بناءً على الوقت
+    });
+
+    itemsToRender.forEach((obj, index) => {
+        let item = obj.item;
+        let record = obj.record;
+
+        const tr = document.createElement('tr');
+        let rowClass = 'row-unspecified';
+        let selectClass = 'sel-unspecified';
+        
+        if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
+        else if (record.status === 'متأخر') { rowClass = 'row-late'; selectClass = 'sel-late'; }
+        else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
+
+        tr.className = rowClass;
+
+        tr.innerHTML = `
+            <td style="text-align:center;">${index + 1}</td>
+            <td><strong>${item.empId}</strong></td>
+            <td><b>${item.name}</b></td>
+            <td style="direction: ltr; text-align: right; white-space: nowrap;">${item.phone || '-'}</td>
+            <td>${item.rank || '-'}</td>
+            <td>${item.specialty || '-'}</td>
+            <td style="white-space: nowrap;"><span style="background:#eee; padding:2px 8px; border-radius:10px; font-size:12px;">${item.group || '-'}</span></td> <!-- منع التفاف الفوج -->
+            <td>${item.workplace || '-'}</td>
+            <td style="text-align: center; white-space: nowrap;">
+                <span class="att-time">${record.time || '--:--'}</span>
+                <select class="att-select ${selectClass}" onchange="changeRecordStatus('${item.empId}', this.value, this)">
+                    <option value="غير محدد" ${record.status === 'غير محدد' ? 'selected' : ''}>غير محدد</option>
+                    <option value="غائب" ${record.status === 'غائب' ? 'selected' : ''}>غائب</option>
+                    <option value="حاضر" ${record.status === 'حاضر' ? 'selected' : ''}>حاضر</option>
+                    <option value="متأخر" ${record.status === 'متأخر' ? 'selected' : ''}>متأخر</option>
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('st-total').innerText = total;
+    document.getElementById('st-present').innerText = `${present} (${((present/total)*100 || 0).toFixed(1)}%)`;
+    document.getElementById('st-late').innerText = `${late} (${((late/total)*100 || 0).toFixed(1)}%)`;
+    document.getElementById('st-absent').innerText = `${absent} (${((absent/total)*100 || 0).toFixed(1)}%)`;
+}
+
+// ================= دالة طباعة قائمة الحضور اليومية (محدثة للفلاتر المتعددة) =================
+function printAttendanceList() {
+    // ✅ إضافة حماية (if exists) لتفادي خطأ null في الطباعة أيضاً
+    let selRanks = []; if(document.getElementById('att-rank-all') && !document.getElementById('att-rank-all').checked) selRanks = Array.from(document.querySelectorAll('.att-rank-checkbox:checked')).map(cb => cb.value);
+    let selSpecs = []; if(document.getElementById('att-spec-all') && !document.getElementById('att-spec-all').checked) selSpecs = Array.from(document.querySelectorAll('.att-spec-checkbox:checked')).map(cb => cb.value);
+    let selGroups = []; if(document.getElementById('att-group-all') && !document.getElementById('att-group-all').checked) selGroups = Array.from(document.querySelectorAll('.att-group-checkbox:checked')).map(cb => cb.value);
+    let selStatuses = []; if(document.getElementById('att-status-all') && !document.getElementById('att-status-all').checked) selStatuses = Array.from(document.querySelectorAll('.att-status-checkbox:checked')).map(cb => cb.value);
+    
+    const search = document.getElementById('attSearch').value.toLowerCase();
+
+    let hasData = false;
+    let phasesSet = new Set();
+
+    centerData.forEach(item => {
+        let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
+        
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchStatus = selStatuses.length === 0 || selStatuses.includes(record.status);
+        const matchGroup = selGroups.length === 0 || selGroups.includes(item.group);
+        const matchRank = selRanks.length === 0 || selRanks.includes(item.rank);
+        const matchSpec = selSpecs.length === 0 || selSpecs.includes(item.specialty);
+
+        if (matchSearch && matchStatus && matchGroup && matchRank && matchSpec) {
+            hasData = true;
+            if (item.rank) {
+                if (item.rank.includes("ابتدائي")) phasesSet.add("الابتدائي");
+                else if (item.rank.includes("متوسط")) phasesSet.add("المتوسط");
+                else if (item.rank.includes("ثانوي")) phasesSet.add("الثانوي");
+            }
+        }
+    });
+
+    if (!hasData) { Swal.fire('تنبيه', 'لا توجد بيانات لطباعتها', 'warning'); return; }
+
+    let phasesArr = Array.from(phasesSet); 
+    let phaseText = "المجمع"; 
+    if (phasesArr.length === 1) phaseText = phasesArr[0]; 
+    else if (phasesArr.length === 2) phaseText = phasesArr.join(" و "); 
+    else if (phasesArr.length === 3) phaseText = "المجمع (ابتدائي، متوسط، ثانوي)";
+
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>سجل الحضور اليومي</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 5mm; } 
+            body { font-family: 'Cairo', sans-serif; padding: 5px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 15px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 15px; }
+            .main-title { text-align: center; font-size: 19px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 14px; margin-bottom: 20px; font-weight: bold; color: #333; background: #f9f9f9; padding: 8px 15px; border-radius: 5px; border: 1px dashed #ccc; display: table; margin: 0 auto 20px auto;}
+            table { width: 100%; border-collapse: collapse; table-layout: fixed; } 
+            th, td { border: 1px solid #000; padding: 4px 4px; text-align: right; font-size: 11px; word-wrap: break-word; } 
+            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 12px;}
+            .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            td.center-text { text-align: center; }
+            @media print { body { padding: 0; } } 
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="header-flex">
+            <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align:left;">مركز التكوين البيداغوجي<br><span style="color: #000; font-size: 14px; font-weight: bold;">${INSPECTOR_CENTER}</span></div>
+        </div>
+        <div class="main-title">
+            قائمة الحضور اليومي للمتكونين 
+            <span style="color: red; text-decoration: underline; direction: ltr; display: inline-block;">(${currentAttDate})</span>
+        </div>
+        <div class="sub-titles">الطور: ${phaseText}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:3%;">الرقم</th>
+                    <th style="width:25%;">الاسم واللقب</th>
+                    <th style="width:15%;">الرتبة</th>
+                    <th style="width:15%;">التخصص</th>
+                    <th style="width:8%;">الفوج</th>
+                    <th style="width:18%;">مكان العمل</th>
+                    <th style="width:8%;">الوضعية</th>
+                    <th style="width:8%;">الوقت</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    let counter = 1;
+    centerData.forEach(item => {
+        let record = attendanceRecords[item.empId] || { status: 'غير محدد', time: '' };
+        
+        const matchSearch = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        const matchStatus = selStatuses.length === 0 || selStatuses.includes(record.status);
+        const matchGroup = selGroups.length === 0 || selGroups.includes(item.group);
+        const matchRank = selRanks.length === 0 || selRanks.includes(item.rank);
+        const matchSpec = selSpecs.length === 0 || selSpecs.includes(item.specialty);
+
+        if (matchSearch && matchStatus && matchGroup && matchRank && matchSpec) {
+            let printStatus = record.status === 'غير محدد' ? '-' : record.status;
+            let printTime = record.time ? record.time : '-';
+
+            html += `<tr>
+                <td class="center-text">${counter++}</td>
+                <td class="nowrap"><b>${item.name || '-'}</b></td>
+                <td class="nowrap">${item.rank || '-'}</td>
+                <td class="nowrap">${item.specialty || '-'}</td>
+                <td class="center-text nowrap">${item.group || '-'}</td>
+                <td>${item.workplace || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${printStatus}</td>
+                <td class="center-text nowrap" style="direction:ltr;">${printTime}</td>
+            </tr>`;
+        }
+    });
+
+    html += `</tbody></table><script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); 
+    printWindow.document.close();
+}
+
+// فلترة الجدول من داخل النافذة
+function filterAttendanceTable() {
+    renderAttendanceTable();
+}
+
+
+
+// حفظ حالة النظام في الداتابيز مع اسم المركز والتاريخ
+async function saveSystemState(mode) {
+    const docId = `${INSPECTOR_CENTER.trim()}_${currentAttDate}`;
+    await db.collection('attendance_daily').doc(docId).set({ 
+        center: INSPECTOR_CENTER.trim(),
+        date: currentAttDate,
+        systemMode: mode 
+    }, { merge: true });
+}
+
+// تغيير حالة الحضور وحفظها يدوياً
+async function changeRecordStatus(empId, newStatus, selectElement) {
+    const docId = `${INSPECTOR_CENTER.trim()}_${currentAttDate}`;
+    
+    let timeString = '';
+    if (newStatus !== 'غير محدد') {
+        const d = new Date();
+        timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    }
+
+    try {
+        await db.collection('attendance_daily').doc(docId).set({
+            center: INSPECTOR_CENTER.trim(),
+            date: currentAttDate,
+            records: {
+                [String(empId).trim()]: { status: newStatus, time: timeString }
+            }
+        }, { merge: true });
+        
+    } catch (error) {
+        console.error("خطأ في الحفظ:", error);
+        Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: 'فشل حفظ التغيير', showConfirmButton: false, timer: 3000 });
+    }
+}
+
+// دالة إدراج الغياب الشامل
+function markAllAbsent() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+
+    Swal.fire({
+        title: 'تأكيد إدراج الغياب؟',
+        text: "سيتم تسجيل (غائب) مع الوقت الحالي لكل متكون لم تُحدد وضعيته (لم يمسح بطاقته).",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، إدراج الغياب',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const docId = `${INSPECTOR_CENTER.trim()}_${currentAttDate}`;
+            const d = new Date();
+            const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            
+            let newRecords = {};
+            let count = 0;
+
+            centerData.forEach(item => {
+                let record = attendanceRecords[item.empId];
+                if (!record || !record.time || record.time.trim() === '') {
+                    newRecords[item.empId] = { status: 'غائب', time: timeString };
+                    count++;
+                }
+            });
+
+            if (count > 0) {
+                try {
+                    await db.collection('attendance_daily').doc(docId).set({ 
+                        center: INSPECTOR_CENTER.trim(),
+                        date: currentAttDate,
+                        records: newRecords 
+                    }, { merge: true });
+                    Swal.fire('نجاح', `تم إدراج الغياب لـ ${count} متكون(ين) بنجاح.`, 'success');
+                } catch (error) {
+                    Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات', 'error');
+                }
+            } else {
+                Swal.fire('معلومة', 'جميع المتكونين تم تحديد وضعيتهم مسبقاً، لا يوجد من ندرجه كغائب!', 'info');
+            }
+        }
+    });
+}
+
+// دالة إدراج الحضور الشامل
+function markAllPresent() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+
+    Swal.fire({
+        title: 'تأكيد إدراج الحضور؟',
+        text: "سيتم تسجيل (حاضر) مع الوقت الحالي لكل متكون لم تُحدد وضعيته (لم يمسح بطاقته).",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#1E68E8',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، إدراج الحضور',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const docId = `${INSPECTOR_CENTER.trim()}_${currentAttDate}`;
+            const d = new Date();
+            const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            
+            let newRecords = {};
+            let count = 0;
+
+            centerData.forEach(item => {
+                let record = attendanceRecords[item.empId];
+                if (!record || !record.time || record.time.trim() === '') {
+                    newRecords[item.empId] = { status: 'حاضر', time: timeString };
+                    count++;
+                }
+            });
+
+            if (count > 0) {
+                try {
+                    await db.collection('attendance_daily').doc(docId).set({ 
+                        center: INSPECTOR_CENTER.trim(),
+                        date: currentAttDate,
+                        records: newRecords 
+                    }, { merge: true });
+                    Swal.fire('نجاح', `تم إدراج الحضور لـ ${count} متكون(ين) بنجاح.`, 'success');
+                } catch (error) {
+                    Swal.fire('خطأ', 'حدث مشكل في الاتصال بقاعدة البيانات', 'error');
+                }
+            } else {
+                Swal.fire('معلومة', 'جميع المتكونين تم تحديد وضعيتهم مسبقاً، لا يوجد من ندرجه كحاضر!', 'info');
+            }
+        }
+    });
+}
+
+// ================= نظام إدارة الأفواج (التفويج اللحظي) =================
+
+// القائمة الافتراضية لأسماء الأفواج
+let availableGroups = ["الفوج 1", "الفوج 2", "الفوج 3", "الفوج 4", "الفوج 5"];
+
+function openGroupingModal() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+    document.getElementById('groupingModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    centerData.forEach(item => {
+        if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+            availableGroups.push(item.group);
+        }
+    });
+
+    populateGroupingFilters();
+    updateBulkGroupSelect(); // تحديث شريط الإدراج الجماعي
+    resetGroupPageAndRender(); // بناء الجدول من الصفحة الأولى
+}
+
+function closeGroupingModal() {
+    document.getElementById('groupingModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    applyFilters(); 
+}
+
+// ================= نافذة إعداد أسماء الأفواج المدمجة =================
+function openGroupNamesManager() {
+    let listHtml = availableGroups.map((g, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f8fbff; margin-bottom:8px; border-radius:6px; border:1px solid #d9e2ec;">
+            <strong style="color:#102a43;">${g}</strong>
+            <button onclick="removeGroupFromList(${i})" style="background:#d90429; color:white; border:none; border-radius:6px; width:30px; height:30px; cursor:pointer; transition:0.3s;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-gears" style="color:#34495e;"></i> إعداد أسماء الأفواج',
+        html: `
+            <div style="text-align:right; margin-bottom:20px; display:flex; gap:10px;">
+                <input type="text" id="newSwalGroupName" placeholder="اكتب اسم فوج جديد..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:6px; font-family:'Cairo'; font-weight:bold; outline:none;">
+                <button onclick="addGroupToList()" style="padding:10px 20px; background:#1E68E8; color:white; border:none; border-radius:6px; cursor:pointer; font-family:'Cairo'; font-weight:bold;">إضافة</button>
+            </div>
+            <div id="swalGroupList" style="max-height:250px; overflow-y:auto; border:2px dashed #eee; padding:10px; border-radius:8px;">
+                ${listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>'}
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'تم وإغلاق',
+        confirmButtonColor: '#102a43'
+    });
+}
+
+// دوال التحكم بالنافذة (مربوطة بـ window لتعمل داخل SweetAlert)
+window.removeGroupFromList = function(index) {
+    availableGroups.splice(index, 1);
+    updateSwalGroupList();
+    renderGroupingTable(); 
+};
+
+window.addGroupToList = function() {
+    let val = document.getElementById('newSwalGroupName').value.trim();
+    if (val && !availableGroups.includes(val)) {
+        availableGroups.push(val);
+        document.getElementById('newSwalGroupName').value = '';
+        updateSwalGroupList();
+        renderGroupingTable();
+    } else if (availableGroups.includes(val)) {
+        Swal.showValidationMessage('هذا الفوج موجود مسبقاً!');
+    }
+};
+
+function updateSwalGroupList() {
+    let listHtml = availableGroups.map((g, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#f8fbff; margin-bottom:8px; border-radius:6px; border:1px solid #d9e2ec;">
+            <strong style="color:#102a43;">${g}</strong>
+            <button onclick="removeGroupFromList(${i})" style="background:#d90429; color:white; border:none; border-radius:6px; width:30px; height:30px; cursor:pointer; transition:0.3s;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+    `).join('');
+    const listDiv = document.getElementById('swalGroupList');
+    if(listDiv) listDiv.innerHTML = listHtml || '<div style="text-align:center; color:#777; padding:20px;">لا توجد أفواج مضافة</div>';
+    updateBulkGroupSelect(); // تحديث القائمة المنسدلة عند إضافة/حذف فوج
+}
+
+
+// دالة جديدة لتحديث قائمة الإدراج الجماعي للأفواج
+function updateBulkGroupSelect() {
+    const bulkGrpSel = document.getElementById('bulkGroupSelect');
+    if (bulkGrpSel) {
+        // إعادة تهيئة القائمة بالخيارات الأساسية
+        bulkGrpSel.innerHTML = '<option value="">-- اختر الفوج للإدراج --</option><option value="-">-- تفريغ الفوج (حذف) --</option>';
+        
+        // جلب الأفواج المتاحة وإضافتها كخيارات
+        availableGroups.forEach(v => {
+            bulkGrpSel.innerHTML += `<option value="${v}">${v}</option>`;
+        });
+    }
+}
+
+// ================= الفلاتر والجدول =================
+// === تجهيز الفلاتر المبدئية ===
+function populateGroupingFilters() {
+    let ranks = new Set(), specs = new Set();
+    centerData.forEach(i => {
+        if (i.rank) ranks.add(i.rank);
+        if (i.specialty && i.specialty !== '-') specs.add(i.specialty);
+    });
+
+    const rankSel = document.getElementById('grpRankFilter');
+    const specSel = document.getElementById('grpSpecFilter');
+
+    rankSel.innerHTML = '<option value="الكل">كل الرتب</option>';
+    specSel.innerHTML = '<option value="الكل">كل التخصصات</option>';
+
+    Array.from(ranks).sort().forEach(v => rankSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(specs).sort().forEach(v => specSel.innerHTML += `<option value="${v}">${v}</option>`);
+    
+    // استدعاء التحديث الديناميكي للأفواج بدلاً من الحشو الثابت
+    updateDynamicGroupsAndRender();
+}
+
+// === الدالة الجديدة: تحديث قائمة الأفواج ديناميكياً حسب التخصص/الرتبة ===
+function updateDynamicGroupsAndRender() {
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    
+    let validGroups = new Set();
+    
+    // حصر الأفواج الموجودة فقط في النتائج المطابقة للفلتر
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        
+        if (matchS && matchR && matchSp && item.group && item.group !== '-') {
+            validGroups.add(item.group);
+        }
+    });
+
+    const grpSel = document.getElementById('grpNameFilter');
+    const currentSelection = grpSel.value;
+
+    // إعادة بناء قائمة الأفواج بناءً على ما وجدناه فقط
+    grpSel.innerHTML = '<option value="الكل">كل الأفواج (المشكلة حالياً)</option>';
+    Array.from(validGroups).sort().forEach(v => {
+        let selected = (v === currentSelection) ? 'selected' : '';
+        grpSel.innerHTML += `<option value="${v}" ${selected}>${v}</option>`;
+    });
+
+    // إذا كان الفوج المحدد مسبقاً غير موجود في التخصص الجديد، أعده لـ "الكل"
+    if (currentSelection !== "الكل" && !validGroups.has(currentSelection)) {
+        grpSel.value = "الكل";
+    }
+
+resetGroupPageAndRender();}
+
+// === الدالة الجديدة: عرض البطاقة الإحصائية الشاملة للأفواج ===
+function showGroupStatistics() {
+    let stats = {};
+    
+    // تجميع الإحصائيات (تخصص -> فوج -> ذكور، إناث، المجموع)
+    centerData.forEach(item => {
+        if (item.group && item.group !== '-') {
+            let sp = item.specialty || 'بدون تخصص';
+            let grp = item.group;
+            let isMale = !((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F');
+            
+            if (!stats[sp]) stats[sp] = {};
+            if (!stats[sp][grp]) stats[sp][grp] = { m: 0, f: 0, t: 0 };
+            
+            stats[sp][grp].t++;
+            if (isMale) stats[sp][grp].m++;
+            else stats[sp][grp].f++;
+        }
+    });
+
+    if (Object.keys(stats).length === 0) {
+        Swal.fire('معلومة', 'لا توجد أفواج مشكلة حالياً لعرض إحصائياتها.', 'info');
+        return;
+    }
+
+    let htmlContent = '<div style="text-align: right; font-family: Cairo; max-height: 450px; overflow-y: auto; padding: 10px; overflow-x: hidden;">';
+    
+    let sortedSpecs = Object.keys(stats).sort();
+    
+    sortedSpecs.forEach(sp => {
+        htmlContent += `<div style="background: #102a43; color: white; padding: 10px 15px; border-radius: 8px; margin-top: 15px; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: -10px; z-index: 5;"><i class="fa-solid fa-book-open"></i> التخصص: ${sp}</div>`;
+        htmlContent += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px;">`;
+        
+        let sortedGroups = Object.keys(stats[sp]).sort();
+        sortedGroups.forEach(grp => {
+            let d = stats[sp][grp];
+            htmlContent += `
+                <div style="background: #f8fbff; border: 1px solid #cce5ff; border-radius: 8px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                    <h4 style="margin: 0 0 10px 0; color: #1E68E8; text-align: center; border-bottom: 1px dashed #ccc; padding-bottom: 8px; font-size: 15px;">${grp}</h4>
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+                        <span style="color: #1E68E8; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-person"></i> ذكور: ${d.m}</span>
+                        <span style="color: #e91e63; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-person-dress"></i> إناث: ${d.f}</span>
+                    </div>
+                    <div style="text-align: center; font-size: 14px; font-weight: 900; color: #102a43; background: #e2e8f0; padding: 6px; border-radius: 6px;">
+                        الإجمالي: ${d.t}
+                    </div>
+                </div>
+            `;
+        });
+        htmlContent += `</div>`;
+    });
+    htmlContent += '</div>';
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-chart-pie" style="color:#27ae60;"></i> البطاقة الإحصائية الشاملة للأفواج',
+        html: htmlContent,
+        width: '850px',
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
+    });
+}
+
+function resetGroupPageAndRender() {
+    currentGroupPage = 1; 
+    selectedGroupsTrainees.clear(); 
+    if(document.getElementById("selectAllGroups")) document.getElementById("selectAllGroups").checked = false;
+    renderGroupingTable();
+}
+
+function renderGroupingTable() {
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    const grpF = document.getElementById('grpNameFilter').value;
+    
+    // 1. فلترة البيانات
+    currentFilteredGroupData = centerData.filter(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        let matchG = grpF === "الكل" || item.group === grpF;
+        return matchS && matchR && matchSp && matchG;
+    });
+
+    const countDisplay = document.getElementById('grpFilterCount');
+    if (countDisplay) countDisplay.innerText = currentFilteredGroupData.length;
+
+    const tbody = document.getElementById('grpTableBody');
+    tbody.innerHTML = '';
+
+    if (currentFilteredGroupData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; font-weight:bold;">لا توجد بيانات مطابقة للفلتر</td></tr>`;
+        renderGroupPagination(0);
+        return;
+    }
+
+    // 2. حساب الصفحات
+    const totalPages = Math.ceil(currentFilteredGroupData.length / groupsPerPage);
+    if (currentGroupPage > totalPages) currentGroupPage = totalPages;
+
+    const start = (currentGroupPage - 1) * groupsPerPage;
+    const end = start + groupsPerPage;
+    const paginatedData = currentFilteredGroupData.slice(start, end);
+
+    // 3. بناء الأسطر
+    paginatedData.forEach(item => {
+        let genderIcon = ((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F') 
+                         ? '<i class="fa-solid fa-person-dress" style="color:#e91e63; font-size:18px;"></i>' 
+                         : '<i class="fa-solid fa-person" style="color:#1E68E8; font-size:18px;"></i>';
+
+        let optionsHtml = `<option value="-">-- بدون فوج --</option>`;
+        availableGroups.forEach(g => {
+            let selected = (item.group === g) ? 'selected' : '';
+            optionsHtml += `<option value="${g}" ${selected}>${g}</option>`;
+        });
+
+        if (item.group && item.group !== '-' && !availableGroups.includes(item.group)) {
+            optionsHtml += `<option value="${item.group}" selected>${item.group} (غير معتمد)</option>`;
+        }
+
+        const isChecked = selectedGroupsTrainees.has(item.docId) ? 'checked' : '';
+
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="text-align:center;"><input type="checkbox" class="grp-row-checkbox" value="${item.docId}" ${isChecked} onchange="toggleSingleGroupSelect(this, '${item.docId}')"></td>
+            <td><strong>${item.empId}</strong></td>
+            <td><b>${item.name}</b></td>
+            <td style="text-align:center;">${genderIcon}</td>
+            <td>${item.rank || '-'}</td>
+            <td>${item.specialty || '-'}</td>
+            <td>${item.workplace || '-'}</td>
+            <td>
+                <select onchange="updateGroupInstantly('${item.docId}', this.value)" 
+                        style="width:100%; padding:8px; border-radius:6px; border:1px solid #1E68E8; text-align:center; font-weight:bold; font-family:'Cairo'; outline:none; background:#f8fbff; cursor:pointer;">
+                    ${optionsHtml}
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    const selectAllChk = document.getElementById("selectAllGroups");
+    if (selectAllChk) selectAllChk.checked = (currentFilteredGroupData.length > 0 && selectedGroupsTrainees.size === currentFilteredGroupData.length);
+    
+    renderGroupPagination(totalPages);
+}
+
+// === نظام الصفحات (الترقيم) ===
+function renderGroupPagination(totalPages) {
+    const container = document.getElementById("group-pagination-controls");
+    if (totalPages <= 1) { container.innerHTML = ""; container.style.display = "none"; return; }
+    
+    container.style.display = "flex";
+    let startItem = (currentGroupPage - 1) * groupsPerPage + 1;
+    let endItem = Math.min(currentGroupPage * groupsPerPage, currentFilteredGroupData.length);
+    
+    let html = `<div class="pagination-info">عرض ${startItem} إلى ${endItem} من أصل ${currentFilteredGroupData.length} سجل</div>`;
+    html += `<div class="pagination-buttons">`;
+    html += `<button class="page-btn" ${currentGroupPage === 1 ? 'disabled' : ''} onclick="changeGroupPage(${currentGroupPage - 1})">السابق</button>`;
+
+    let startPage = Math.max(1, currentGroupPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+    if (startPage > 1) { html += `<button class="page-btn" onclick="changeGroupPage(1)">1</button><span style="align-self:center;">...</span>`; }
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="page-btn ${i === currentGroupPage ? 'active' : ''}" onclick="changeGroupPage(${i})">${i}</button>`;
+    }
+    if (endPage < totalPages) { html += `<span style="align-self:center;">...</span><button class="page-btn" onclick="changeGroupPage(${totalPages})">${totalPages}</button>`; }
+
+    html += `<button class="page-btn" ${currentGroupPage === totalPages ? 'disabled' : ''} onclick="changeGroupPage(${currentGroupPage + 1})">التالي</button></div>`;
+    container.innerHTML = html;
+}
+
+function changeGroupPage(page) {
+    currentGroupPage = page;
+    renderGroupingTable();
+}
+
+// === أزرار التحديد والإدراج الجماعي للأفواج ===
+function toggleSelectAllGroups() {
+    const isChecked = document.getElementById("selectAllGroups").checked;
+    if (isChecked) {
+        currentFilteredGroupData.forEach(item => selectedGroupsTrainees.add(item.docId));
+    } else {
+        selectedGroupsTrainees.clear();
+    }
+    document.querySelectorAll(".grp-row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleGroupSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedGroupsTrainees.add(docId);
+    } else {
+        selectedGroupsTrainees.delete(docId);
+        document.getElementById("selectAllGroups").checked = false;
+    }
+}
+
+async function bulkAssignGroups() {
+    const selectedGroup = document.getElementById("bulkGroupSelect").value;
+    if(!selectedGroup) { Swal.fire('تنبيه', 'الرجاء اختيار الفوج المراد إدراجه!', 'warning'); return; }
+
+    if(selectedGroupsTrainees.size === 0) { Swal.fire('تنبيه', 'الرجاء تحديد أستاذ واحد على الأقل', 'warning'); return; }
+
+    const docIds = Array.from(selectedGroupsTrainees);
+    let actionText = selectedGroup === '-' ? 'تفريغ الفوج (حذف)' : `الإدراج في: ${selectedGroup}`;
+
+    Swal.fire({
+        title: 'تأكيد الإجراء الجماعي', 
+        text: `سيتم تطبيق "${actionText}" على عدد (${docIds.length}) متكون/ة محدد.`,
+        icon: 'question', showCancelButton: true, confirmButtonColor: '#8e44ad', confirmButtonText: 'نعم، طبق الإجراء', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ في القاعدة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const batch = db.batch();
+                docIds.forEach(id => {
+                    const docRef = db.collection("employeescomnew").doc(id);
+                    batch.update(docRef, { group: selectedGroup, fawj: selectedGroup });
+                    
+                    // تحديث مصفوفة لوحة المفتش المحلية
+                    const localData = centerData.find(d => d.docId === id);
+                    if(localData) localData.group = selectedGroup;
+                });
+                
+                await batch.commit();
+                selectedGroupsTrainees.clear();
+                if(document.getElementById("selectAllGroups")) document.getElementById("selectAllGroups").checked = false;
+                
+                updateDynamicGroupsAndRender(); // تحديث الفلاتر وإعادة بناء الجدول
+                Swal.fire('تم بنجاح', 'تم تحديث الأفواج للأشخاص المحددين.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
+}
+
+// ================= الحفظ اللحظي (عند تغيير الفوج لأي أستاذ) =================
+async function updateGroupInstantly(docId, val) {
+    let item = centerData.find(d => d.docId === docId);
+    if (item) { 
+        item.group = val; // تحديث الواجهة محلياً
+        
+        try {
+            // حفظ التغيير مباشرة في قاعدة بيانات المتربص
+            await db.collection('employeescomnew').doc(docId).update({
+                group: val,
+                fawj: val
+            });
+
+            // إشعار صغير يظهر في الزاوية دون إزعاج
+            Swal.fire({
+                toast: true, position: 'bottom-start', icon: 'success', 
+                title: 'تم تحديث الفوج وحفظه', showConfirmButton: false, timer: 1500
+            });
+        } catch (error) {
+            console.error("خطأ في الحفظ:", error);
+            Swal.fire('خطأ', 'حدث مشكل في الاتصال، لم يتم الحفظ.', 'error');
+        }
+    }
+}
+
+// ================= التفويج الآلي (مع حفظ تلقائي لجميع التعديلات) =================
+// ================= التفويج الآلي (توزيع كل تخصص ابتداءً من الفوج الأول) =================
+function autoGroupTrainees() {
+    let maxSize = parseInt(document.getElementById('maxGroupSize').value);
+    if (isNaN(maxSize) || maxSize < 5) maxSize = 25;
+
+    Swal.fire({
+        title: 'تأكيد التفويج الآلي',
+        text: `سيتم التوزيع آلياً (كل تخصص يبدأ من الفوج 1) وحفظ النتائج في قاعدة البيانات فوراً.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، ابدأ التفويج والحفظ',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التفويج والحفظ...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            let categories = {};
+            
+            // تجميع الأساتذة حسب الرتبة والتخصص
+            centerData.forEach(item => {
+                let key = `${item.rank}_${item.specialty}`;
+                if (!categories[key]) categories[key] = { m: [], f: [] };
+                let isMale = !((item.gender||'').includes('نث') || (item.gender||'').toUpperCase() === 'F');
+                if (isMale) categories[key].m.push(item); else categories[key].f.push(item);
+            });
+
+            // التوزيع
+            for (let key in categories) {
+                // السر هنا: تصفير العداد مع كل تخصص جديد ليبدأ دائماً من الفوج 1
+                let groupCounter = 1; 
+
+                let males = categories[key].m; let females = categories[key].f;
+                let total = males.length + females.length;
+                if (total === 0) continue;
+
+                let numBuckets = Math.ceil(total / maxSize);
+                let buckets = Array.from({length: numBuckets}, () => []);
+
+                males.forEach((m, i) => buckets[i % numBuckets].push(m));
+                females.forEach((f, i) => buckets[i % numBuckets].push(f));
+
+                buckets.forEach(bucket => {
+                    if (bucket.length > 0) {
+                        let groupName = availableGroups[groupCounter - 1]; 
+                        if (!groupName) {
+                            groupName = `الفوج ${groupCounter}`; 
+                            availableGroups.push(groupName); 
+                        }
+                        bucket.forEach(trainee => { trainee.group = groupName; });
+                        groupCounter++;
+                    }
+                });
+            }
+
+            // إرسال التغييرات للقاعدة (Batch)
+            let batches = [];
+            let currentBatch = db.batch();
+            let opCount = 0;
+
+            centerData.forEach(item => {
+                if (item.group && item.group !== '-') {
+                    let ref = db.collection('employeescomnew').doc(item.docId);
+                    currentBatch.update(ref, { group: item.group, fawj: item.group });
+                    opCount++;
+                    if (opCount >= 400) { batches.push(currentBatch); currentBatch = db.batch(); opCount = 0; }
+                }
+            });
+            if (opCount > 0) batches.push(currentBatch);
+
+            try {
+                for (let b of batches) await b.commit();
+                populateGroupingFilters(); 
+                renderGroupingTable(); 
+                Swal.fire('نجاح', 'تم توزيع الأفواج (ابتداءً من الفوج 1 لكل تخصص) وحفظها بنجاح.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
+}
+
+// ================= طباعة قوائم الأفواج =================
+function printGroupsList() {
+    let grpsData = {}; let hasData = false;
+
+    centerData.forEach(item => {
+        if (item.group && item.group !== '-' && item.group.trim() !== '') {
+            if (!grpsData[item.group]) grpsData[item.group] = [];
+            grpsData[item.group].push(item);
+            hasData = true;
+        }
+    });
+
+    if (!hasData) { Swal.fire('تنبيه', 'لا توجد بيانات أفواج لطباعتها.', 'warning'); return; }
+
+    let sortedGroupNames = Object.keys(grpsData).sort();
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>قوائم الأفواج</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; padding: 0; color: #000; margin: 0; background: #fff;}
+            .group-page { page-break-after: always; padding: 20px; box-sizing: border-box; }
+            .group-page:last-child { page-break-after: auto; }
+            .print-header { text-align: center; font-weight: bold; font-size: 15px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
+            .main-title { text-align: center; font-size: 20px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            .sub-titles { text-align: center; font-size: 16px; margin-bottom: 25px; font-weight: bold; padding: 8px; border: 2px solid #000; display: inline-block; background: #f9f9f9;}
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #000; padding: 6px 4px; text-align: right; font-size: 12px; }
+            th { background-color: #eee; text-align: center; font-weight: bold; font-size: 13px; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+            .nowrap { white-space: nowrap; }
+            td.center-text { text-align: center; }
+        </style>
+    </head>
+    <body>
+    `;
+    
+    sortedGroupNames.forEach(grpName => {
+        let members = grpsData[grpName];
+        let ranksSet = new Set(); let specsSet = new Set();
+        members.forEach(m => { if(m.rank) ranksSet.add(m.rank); if(m.specialty) specsSet.add(m.specialty); });
+        let rText = Array.from(ranksSet).join(' / '); let sText = Array.from(specsSet).join(' / ');
+
+        html += `
+        <div class="group-page">
+            <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+            <div class="header-flex">
+                <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                <div style="text-align:left;">مركز التكوين البيداغوجي:<br><span style="font-size: 14px; font-weight: bold;">${INSPECTOR_CENTER}</span></div>
+            </div>
+            
+            <div class="main-title">القائمة الاسمية للمتكونين</div>
+            <div style="text-align: center;"><div class="sub-titles">${grpName} &nbsp; | &nbsp; العدد: ${members.length} متكون</div></div>
+            <div style="margin-bottom: 10px; font-weight: bold; font-size: 13px;">الرتبة: ${rText} &nbsp;&nbsp;|&nbsp;&nbsp; مادة التخصص: ${sText}</div>
+            
+            <table>
+                <thead>
+                    <tr><th style="width:5%;">الرقم</th><th style="width:25%;">الاسم واللقب</th><th style="width:10%;">الجنس</th><th style="width:20%;">الرتبة</th><th style="width:20%;">التخصص</th><th style="width:20%;">مكان العمل</th></tr>
+                </thead>
+                <tbody>
+        `;
+        
+        members.forEach((m, idx) => {
+            let genderText = ((m.gender||'').includes('نث') || (m.gender||'').toUpperCase() === 'F') ? 'أنثى' : 'ذكر';
+            html += `<tr><td class="center-text">${idx + 1}</td><td class="nowrap"><b>${m.name || '-'}</b></td><td class="center-text nowrap">${genderText}</td><td class="nowrap">${m.rank || '-'}</td><td class="nowrap">${m.specialty || '-'}</td><td>${m.workplace || '-'}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+    });
+
+    html += `<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// ================= تفريغ الأفواج (حسب الفلترة الحالية) =================
+function clearGroupings() {
+    // 1. قراءة الفلاتر الحالية لمعرفة من المعروض في الجدول
+    const search = document.getElementById('grpSearch').value.toLowerCase();
+    const rankF = document.getElementById('grpRankFilter').value;
+    const specF = document.getElementById('grpSpecFilter').value;
+    const grpF = document.getElementById('grpNameFilter').value;
+
+    let affectedItems = [];
+
+    // 2. حصر الأساتذة المطابقين للفلتر والذين لديهم فوج مسجل فعلاً
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+        let matchG = grpF === "الكل" || item.group === grpF;
+
+        // إذا طابق الفلتر وكان لديه فوج (ليس فارغاً)
+        if (matchS && matchR && matchSp && matchG && item.group && item.group !== '-') {
+            affectedItems.push(item);
+        }
+    });
+
+    if (affectedItems.length === 0) {
+        Swal.fire('معلومة', 'لا يوجد أساتذة في القائمة الحالية لديهم فوج ليتم حذفه.', 'info');
+        return;
+    }
+
+    // 3. رسالة تأكيد الحذف
+    Swal.fire({
+        title: 'تأكيد الحذف',
+        text: `هل أنت متأكد أنك تريد تفريغ الفوج لـ (${affectedItems.length}) أستاذ معروض في الجدول حالياً؟ (سيتم الحذف من قاعدة البيانات نهائياً)`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، احذف التفويج',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحذف...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            let batches = [];
+            let currentBatch = db.batch();
+            let opCount = 0;
+
+            // 4. تنفيذ التحديث (تفريغ الحقل)
+            affectedItems.forEach(item => {
+                item.group = '-'; // تحديث الواجهة محلياً
+                
+                let ref = db.collection('employeescomnew').doc(item.docId);
+                // تفريغ الحقلين لضمان التوافق
+                currentBatch.update(ref, { group: '-', fawj: '-' });
+                opCount++;
+
+                // تقسيم الدفعات لأن Firebase يقبل 500 عملية كحد أقصى في الدفعة
+                if (opCount >= 400) {
+                    batches.push(currentBatch);
+                    currentBatch = db.batch();
+                    opCount = 0;
+                }
+            });
+
+            if (opCount > 0) batches.push(currentBatch);
+
+            try {
+                // إرسال البيانات للقاعدة
+                for (let b of batches) await b.commit();
+                
+                // تحديث الواجهة والفلاتر
+                populateGroupingFilters();
+                renderGroupingTable();
+                
+                Swal.fire('نجاح', `تم تفريغ الأفواج لـ (${affectedItems.length}) أستاذ بنجاح.`, 'success');
+            } catch (error) {
+                console.error("خطأ في تفريغ الأفواج:", error);
+                Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+    });
+}
+
+function editRecord(docId) {
+    const item = centerData.find(d => d.docId === docId);
+    if(!item) return;
+
+    Swal.fire({
+        title: 'تعديل بيانات الأستاذ',
+        html: `
+            <div style="text-align:right; font-size:15px; padding: 5px;">
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 15px; font-size:14px; line-height:1.6;">
+                    <b>الاسم:</b> ${item.name || '-'} <br>
+                    <b>الرقم الوظيفي:</b> ${item.empId || '-'} <br>
+                    <b>الرتبة:</b> ${item.rank || '-'} <br>
+                    <b>مادة التخصص:</b> <span style="color:#1E68E8; font-weight:bold;">${item.specialty || '-'}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap: 10px;">
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">مكان الميلاد:</label>
+                        <input type="text" id="edit-pob" class="swal2-input" value="${item.pob !== '-' ? item.pob : ''}" style="margin: 0; width: 100%; height: 40px; font-size:14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">دائرة الإقامة:</label>
+                        <select id="edit-daira" class="swal2-select" style="margin: 0; width: 100%; height: 40px; font-size:14px; padding: 0 10px;">
+                            <option value="-" ${item.daira === '-' ? 'selected' : ''}>غير محدد</option>
+                            <option value="توقرت" ${item.daira === 'توقرت' ? 'selected' : ''}>توقرت</option>
+                            <option value="تماسين" ${item.daira === 'تماسين' ? 'selected' : ''}>تماسين</option>
+                            <option value="المقارين" ${item.daira === 'المقارين' ? 'selected' : ''}>المقارين</option>
+                            <option value="الطيبات" ${item.daira === 'الطيبات' ? 'selected' : ''}>الطيبات</option>
+                            <option value="الحجيرة" ${item.daira === 'الحجيرة' ? 'selected' : ''}>الحجيرة</option>
+                            <option value="البرمة" ${item.daira === 'البرمة' ? 'selected' : ''}>البرمة</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">العنوان:</label>
+                        <input type="text" id="edit-address" class="swal2-input" value="${item.address !== '-' ? item.address : ''}" style="margin: 0; width: 100%; height: 40px; font-size:14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#102a43; font-size:13px;">رقم الهاتف:</label>
+                        <input type="text" id="edit-phone" class="swal2-input" value="${item.phone !== '-' ? item.phone : ''}" dir="ltr" style="margin: 0; width: 100%; height: 40px; font-size:14px; text-align:right;">
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
+        preConfirm: () => {
+            // جلب رقم الهاتف وإزالة أي مسافات أو فراغات سابقة
+            let rawPhone = document.getElementById('edit-phone').value.trim().replace(/\s+/g, '');
+            // إعادة صياغة الرقم ليصبح بصيغة 00 00 00 00 00
+            let formattedPhone = rawPhone.replace(/(.{2})(?=.)/g, '$1 ');
+
+            return {
+                pob: document.getElementById('edit-pob').value.trim(), 
+                daira: document.getElementById('edit-daira').value,
+                address: document.getElementById('edit-address').value.trim(), 
+                phone: formattedPhone // حفظ الرقم المنسق
+            }
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const newValues = result.value;
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("employeescomnew").doc(docId).update({ pob: newValues.pob, daira: newValues.daira, adrs: newValues.address, phone: newValues.phone });
+                item.pob = newValues.pob || '-'; item.daira = newValues.daira; item.address = newValues.address || '-'; item.phone = newValues.phone || '-';
+                applyFilters(); 
+                Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث بيانات الأستاذ بنجاح!', confirmButtonColor: '#102a43' });
+            } catch (error) {
+                console.error("Update Error:", error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء حفظ التعديلات في قاعدة البيانات', 'error');
+            }
+        }
+    });
+}
+
+// ================= نظام الرخص والاستفسارات المتقدم =================
+
+// 1. تحديث دالة جلب البيانات لتشمل الرخص (ابحث عن fetchData في كودك وهذا الجزء يكملها برمجياً)
+// البيانات ستكون محفوظة في الحقل: permissions (مصفوفة) داخل employeescomnew
+
+// فتح النافذة وتعبئة الفلاتر الجديدة
+function openPermissionModal() {
+    if (centerData.length === 0) { Swal.fire('تنبيه', 'لا توجد بيانات.', 'warning'); return; }
+    document.getElementById('permissionModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    let groups = new Set(), ranks = new Set(), specs = new Set();
+    centerData.forEach(i => { 
+        if (i.group && i.group !== '-') groups.add(i.group); 
+        if (i.rank) ranks.add(i.rank);
+        if (i.specialty && i.specialty !== '-') specs.add(i.specialty);
+    });
+    
+    const grpSel = document.getElementById('permGroupFilter');
+    const rankSel = document.getElementById('permRankFilter');
+    const specSel = document.getElementById('permSpecFilter');
+    
+    grpSel.innerHTML = '<option value="الكل">كل الأفواج</option>';
+    rankSel.innerHTML = '<option value="الكل">كل الرتب</option>';
+    specSel.innerHTML = '<option value="الكل">كل التخصصات</option>';
+    
+    Array.from(groups).sort().forEach(v => grpSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(ranks).sort().forEach(v => rankSel.innerHTML += `<option value="${v}">${v}</option>`);
+    Array.from(specs).sort().forEach(v => specSel.innerHTML += `<option value="${v}">${v}</option>`);
+
+    renderPermissionTable();
+}
+
+function closePermissionModal() {
+    document.getElementById('permissionModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+// عرض الجدول وتلوينه وحساب الوثائق (لكل نوع على حدة)
+function renderPermissionTable() {
+    const search = document.getElementById('permSearch').value.toLowerCase();
+    const grpF = document.getElementById('permGroupFilter').value;
+    const rankF = document.getElementById('permRankFilter').value;
+    const specF = document.getElementById('permSpecFilter').value;
+    const permLimit = parseInt(document.getElementById('permLimitInput').value) || 3;
+    const tbody = document.getElementById('permTableBody');
+    tbody.innerHTML = '';
+
+    let counter = 1;
+    centerData.forEach(item => {
+        let matchS = (item.name || "").toLowerCase().includes(search) || (item.empId || "").toLowerCase().includes(search);
+        let matchG = grpF === "الكل" || item.group === grpF;
+        let matchR = rankF === "الكل" || item.rank === rankF;
+        let matchSp = specF === "الكل" || item.specialty === specF;
+
+        if (matchS && matchG && matchR && matchSp) {
+            let perms = item.permissions || [];
+            
+            // حساب كل نوع وثيقة بشكل مستقل
+            let counts = {
+                'رخصة خروج': 0, 'رخصة غياب': 0, 'استفسار عن تأخر': 0, 'استفسار عن غياب': 0, 'رخصة دخول': 0
+            };
+            
+            perms.forEach(p => {
+                if (counts[p.type] !== undefined) counts[p.type]++;
+            });
+            
+            // إذا وصل أي نوع من الوثائق للحد المسموح، يتم تلوين السطر بالكامل
+            let isLimitReached = Object.values(counts).some(c => c >= permLimit);
+            let rowClass = isLimitReached ? 'row-limit-reached' : '';
+
+            // دالة لتلوين وتنسيق الرقم داخل الخلية
+            const formatCount = (count) => {
+                if (count >= permLimit) return `<span class="perm-badge danger">${count}</span>`;
+                if (count > 0) return `<span class="perm-badge">${count}</span>`;
+                return `<span style="color:#bbb; font-size:12px;">0</span>`;
+            };
+
+            let tr = document.createElement('tr');
+            tr.className = rowClass;
+            tr.innerHTML = `
+                <td style="text-align:center;">${counter++}</td>
+                <td><strong>${item.empId}</strong><br><span style="font-size:13px;">${item.name}</span></td>
+                <td>${item.specialty || '-'}<br><span style="font-size:12px; color:#1E68E8; font-weight:bold;">${item.group || '-'}</span></td>
+                <td style="text-align:center;">${formatCount(counts['رخصة خروج'])}</td>
+                <td style="text-align:center;">${formatCount(counts['رخصة غياب'])}</td>
+                <td style="text-align:center;">${formatCount(counts['استفسار عن تأخر'])}</td>
+                <td style="text-align:center;">${formatCount(counts['استفسار عن غياب'])}</td>
+                <td style="text-align:center;">${formatCount(counts['رخصة دخول'])}</td>
+                <td style="text-align: center;">
+                    <div style="display: flex; gap: 5px; justify-content: center;">
+                        <button class="btn-print" style="background:#e67e22; padding: 6px 10px; font-size:11px;" onclick="addPermission('${item.docId}')">
+                            <i class="fa-solid fa-plus"></i> استخراج
+                        </button>
+                        <button class="btn-print" style="background:#34495e; padding: 6px 10px; font-size:11px;" onclick="viewPermissionHistory('${item.docId}')">
+                            <i class="fa-solid fa-clock-rotate-left"></i> السجل
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    });
+}
+
+// إضافة رخصة/وثيقة جديدة (السبب أصبح اختيارياً)
+function addPermission(docId) {
+    let item = centerData.find(d => d.docId === docId);
+    if(!item) return;
+
+    let today = new Date();
+    let currentDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    let currentTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
+
+    Swal.fire({
+        title: 'استخراج وثيقة إدارية',
+        html: `
+            <div style="text-align:right; font-size:14px;">
+                <label style="font-weight:bold; color:#102a43;">نوع الوثيقة:</label>
+                <select id="swalPermType" class="swal2-select" style="width:100%; margin: 5px 0 15px; font-family:'Cairo';">
+                    <option value="رخصة خروج">رخصة خروج</option>
+                    <option value="رخصة غياب">رخصة غياب</option>
+                    <option value="استفسار عن تأخر">استفسار عن تأخر</option>
+                    <option value="استفسار عن غياب">استفسار عن غياب بدون تبرير</option>
+                    <option value="رخصة دخول">رخصة دخول</option>
+                </select>
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">التاريخ:</label>
+                        <input type="date" id="swalPermDate" class="swal2-input" value="${currentDate}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">الوقت:</label>
+                        <input type="time" id="swalPermTime" class="swal2-input" value="${currentTime}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                </div>
+
+                <label style="font-weight:bold; color:#102a43;">السبب / المبرر (اختياري):</label>
+                <textarea id="swalPermReason" class="swal2-textarea" placeholder="اكتب السبب هنا (يمكنك تركه فارغاً)..." style="width:100%; margin: 5px 0 0; font-family:'Cairo';"></textarea>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ وطباعة الوثيقة', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+        preConfirm: () => {
+            let type = document.getElementById('swalPermType').value;
+            let date = document.getElementById('swalPermDate').value;
+            let time = document.getElementById('swalPermTime').value;
+            let reason = document.getElementById('swalPermReason').value.trim();
+            // تم إزالة شرط الإلزامية للسبب
+            if (!reason) reason = 'لا يوجد'; // وضع قيمة افتراضية إذا ترك فارغاً
+            return { id: Date.now().toString(), type, date, time, reason };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let newPerm = result.value;
+            
+            try {
+                await db.collection("employeescomnew").doc(docId).update({
+                    permissions: firebase.firestore.FieldValue.arrayUnion(newPerm)
+                });
+                
+                if(!item.permissions) item.permissions = [];
+                item.permissions.push(newPerm);
+                renderPermissionTable();
+
+                Swal.fire('تم بنجاح', 'تم تسجيل الوثيقة. سيتم فتح نافذة الطباعة.', 'success')
+                .then(() => printPermissionDocument(item, newPerm));
+            } catch (error) {
+                console.error(error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات', 'error');
+            }
+        }
+    });
+}
+
+// متغيرات عامة لنظام صفحات السجل (توضع في أعلى قسم الرخص أو داخل الدالة)
+let currentPermPage = 1;
+const permsPerPage = 5; // العرض بـ 5 أسطر فقط حسب طلبك
+
+// =======================================================
+// 1. دالة عرض السجل المحدثة بنظام 5 أسطر وصفحات داخلية
+// =======================================================
+function viewPermissionHistory(docId) {
+    let item = centerData.find(d => d.docId === docId);
+    let perms = item.permissions || [];
+
+    if (perms.length === 0) {
+        Swal.fire('معلومة', 'لا يوجد سجل وثائق لهذا المتكون.', 'info');
+        return;
+    }
+
+    // حساب إجمالي الصفحات
+    const totalPages = Math.ceil(perms.length / permsPerPage);
+    if (currentPermPage > totalPages) currentPermPage = totalPages;
+
+    // استقطاع الأسطر الخاصة بالصفحة الحالية فقط (5 أسطر)
+    const start = (currentPermPage - 1) * permsPerPage;
+    const end = start + permsPerPage;
+    const paginatedPerms = perms.slice(start, end);
+
+    // إنشاء أسطر الجدول للصفحة الحالية
+    let rowsHtml = paginatedPerms.map((p, index) => {
+        // حساب المؤشر الحقيقي للوثيقة داخل المصفوفة الأصلية لحفظ التعديل والحذف بشكل صحيح
+        let realIndex = start + index;
+        return `
+            <tr style="background:#f8fbff; border-bottom:1px solid #ddd;">
+                <td style="padding:12px; font-weight:bold; text-align:center;">${p.type}</td>
+                <td style="padding:12px; text-align:center;" dir="ltr">${p.date} <br> <span style="color:#777; font-size:12px;">${p.time}</span></td>
+                <td style="padding:12px; font-size:14px; color:#333; word-wrap: break-word;">${p.reason}</td>
+                <td style="padding:12px; text-align:center;">
+                    <div style="display: flex; gap: 5px; justify-content: center; min-width: 140px;">
+                        <button onclick="printSinglePermission('${docId}', '${p.id}')" class="page-btn" style="background:#17a2b8; color:white; border:none; padding:6px 10px;" title="طباعة الوثيقة">
+                            <i class="fa-solid fa-print"></i>
+                        </button>
+                        <button onclick="editPermission('${docId}', '${p.id}', ${realIndex})" class="page-btn" style="background:#ffc107; color:#000; border:none; padding:6px 10px;" title="تعديل الوثيقة">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button onclick="deletePermission('${docId}', '${p.id}', ${realIndex})" class="page-btn" style="background:#d90429; color:white; border:none; padding:6px 10px;" title="حذف الوثيقة">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // بناء أزرار نظام الصفحات الخاص بالسجل
+    let paginationHtml = '';
+    if (totalPages > 1) {
+        paginationHtml = `
+            <div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
+                <div class="pagination-info" style="font-size:13px; font-weight:600; color:#555;">عرض ${start + 1} إلى ${Math.min(end, perms.length)} من أصل ${perms.length} وثيقة</div>
+                <div class="pagination-buttons" style="display:flex; gap:5px;">
+                    <button class="page-btn" ${currentPermPage === 1 ? 'disabled' : ''} onclick="changePermPage('${docId}', ${currentPermPage - 1})" style="padding:4px 10px; font-size:12px;">السابق</button>
+        `;
+        for (let i = 1; i <= totalPages; i++) {
+            paginationHtml += `<button class="page-btn ${i === currentPermPage ? 'active' : ''}" onclick="changePermPage('${docId}', ${i})" style="padding:4px 10px; font-size:12px;">${i}</button>`;
+        }
+        paginationHtml += `
+                    <button class="page-btn" ${currentPermPage === totalPages ? 'disabled' : ''} onclick="changePermPage('${docId}', ${currentPermPage + 1})" style="padding:4px 10px; font-size:12px;">التالي</button>
+                </div>
+            </div>
+        `;
+    }
+
+    // عرض نافذة السجل محدثة بالجدول والصفحات
+    Swal.fire({
+        title: `سجل الوثائق: ${item.name}`,
+        width: '950px',
+        html: `
+            <div style="width: 100%; overflow-x: auto; border: 1px solid #eee; border-radius: 8px;"> 
+                <table style="width:100%; min-width: 850px; border-collapse:collapse; text-align:right; font-family:'Cairo';">
+                    <thead style="background:#102a43; color:white;">
+                        <tr>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:20%; text-align:center;">نوع الوثيقة</th>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:20%; text-align:center;">التاريخ والوقت</th>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:40%;">السبب</th>
+                            <th style="padding:12px; border-bottom:2px solid #ccc; width:20%; text-align:center;">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+            ${paginationHtml} <!-- إدراج أزرار التنقل أسفل الجدول مباشرة -->
+        `,
+        showConfirmButton: true, confirmButtonText: 'إغلاق', confirmButtonColor: '#102a43'
+    });
+}
+
+// =======================================================
+// 2. الدالة المساعدة للتنقل بين صفحات السجل دون إغلاق النافذة
+// =======================================================
+window.changePermPage = function(docId, page) {
+    currentPermPage = page;
+    viewPermissionHistory(docId); // إعادة بناء النافذة فوراً لعرض الصفحة المطلوبة
+};
+
+// =======================================================
+// 2. دالة الطباعة المفردة من السجل
+// =======================================================
+window.printSinglePermission = function(docId, permId) {
+    let item = centerData.find(d => d.docId === docId);
+    if (!item || !item.permissions) return;
+    
+    let perm = item.permissions.find(p => p.id === permId);
+    if (perm) {
+        printPermissionDocument(item, perm);
+    }
+};
+
+// =======================================================
+// 3. دالة تعديل الوثيقة من السجل
+// =======================================================
+window.editPermission = function(docId, permId, arrayIndex) {
+    let item = centerData.find(d => d.docId === docId);
+    if (!item || !item.permissions) return;
+    
+    let perm = item.permissions[arrayIndex];
+
+    Swal.fire({
+        title: 'تعديل الوثيقة الإدارية',
+        html: `
+            <div style="text-align:right; font-size:14px;">
+                <label style="font-weight:bold; color:#102a43;">نوع الوثيقة:</label>
+                <select id="editPermType" class="swal2-select" style="width:100%; margin: 5px 0 15px; font-family:'Cairo';">
+                    <option value="رخصة خروج" ${perm.type === 'رخصة خروج' ? 'selected' : ''}>رخصة خروج</option>
+                    <option value="رخصة غياب" ${perm.type === 'رخصة غياب' ? 'selected' : ''}>رخصة غياب</option>
+                    <option value="استفسار عن تأخر" ${perm.type === 'استفسار عن تأخر' ? 'selected' : ''}>استفسار عن تأخر</option>
+                    <option value="استفسار عن غياب" ${perm.type === 'استفسار عن غياب' ? 'selected' : ''}>استفسار عن غياب بدون تبرير</option>
+                    <option value="رخصة دخول" ${perm.type === 'رخصة دخول' ? 'selected' : ''}>رخصة دخول</option>
+                </select>
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">التاريخ:</label>
+                        <input type="date" id="editPermDate" class="swal2-input" value="${perm.date}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; color:#102a43;">الوقت:</label>
+                        <input type="time" id="editPermTime" class="swal2-input" value="${perm.time}" style="width:100%; margin:5px 0 0;">
+                    </div>
+                </div>
+
+                <label style="font-weight:bold; color:#102a43;">السبب / المبرر:</label>
+                <textarea id="editPermReason" class="swal2-textarea" style="width:100%; margin: 5px 0 0; font-family:'Cairo';">${perm.reason === 'لا يوجد' ? '' : perm.reason}</textarea>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#ffc107',
+        preConfirm: () => {
+            let type = document.getElementById('editPermType').value;
+            let date = document.getElementById('editPermDate').value;
+            let time = document.getElementById('editPermTime').value;
+            let reason = document.getElementById('editPermReason').value.trim();
+            if (!reason) reason = 'لا يوجد';
+            
+            return { id: perm.id, type, date, time, reason };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let updatedPerm = result.value;
+            
+            // تحديث المصفوفة محلياً
+            item.permissions[arrayIndex] = updatedPerm;
+
+            try {
+                // حفظ المصفوفة بأكملها في قاعدة البيانات بعد التعديل
+                await db.collection("employeescomnew").doc(docId).update({
+                    permissions: item.permissions
+                });
+                
+                renderPermissionTable(); // لتحديث الجدول الرئيسي في الخلفية إن لزم الأمر
+                
+                Swal.fire('تم بنجاح', 'تم تعديل الوثيقة بنجاح.', 'success')
+                .then(() => {
+                    // إعادة فتح نافذة السجل بعد التعديل ليرى التحديث
+                    viewPermissionHistory(docId);
+                });
+            } catch (error) {
+                console.error(error);
+                Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بقاعدة البيانات', 'error');
+            }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            // إعادة فتح السجل إذا تم الضغط على زر إلغاء لتجنب إغلاق كل النوافذ
+            viewPermissionHistory(docId);
+        }
+    });
+};
+
+// =======================================================
+// دالة الطباعة المحسنة (بدون الرقم الوظيفي وبدون سمك في الإمضاءات)
+// =======================================================
+function printPermissionDocument(item, perm) {
+    let printWindow = window.open('', '', 'width=1000,height=700');
+    
+    // تصميم الورقة الواحدة (نصف A4)
+    let docTemplate = `
+        <div class="doc-half">
+            <div class="doc-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+            <div class="doc-subheader">
+                <div style="text-align:right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                <div style="text-align:left;">مركز التكوين البيداغوجي:<br><strong>${INSPECTOR_CENTER}</strong></div>
+            </div>
+            
+            <div class="doc-title">${perm.type}</div>
+            
+            <div class="doc-body">
+                <table class="info-table">
+                    <tr><td width="30%"><strong>الاسم واللقب:</strong></td><td>${item.name}</td></tr>
+                    <tr><td><strong>الرتبة:</strong></td><td>${item.rank || '-'}</td></tr>
+                    <tr><td><strong>مادة التخصص:</strong></td><td>${item.specialty || '-'}</td></tr>
+                    <tr><td><strong>الفوج:</strong></td><td>${item.group || '-'}</td></tr>
+                    <tr><td><strong>مكان العمل:</strong></td><td>${item.workplace || '-'}</td></tr>
+                    <tr><td><strong>رقم الهاتف:</strong></td><td dir="ltr" style="text-align:right;">${item.phone || '-'}</td></tr>
+                </table>
+                
+                <div class="reason-box">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+                        <span><strong>التاريخ:</strong> <span dir="ltr">${perm.date}</span></span>
+                        <span><strong>الوقت:</strong> <span dir="ltr">${perm.time}</span></span>
+                    </div>
+                    <div><strong>السبب / المبرر:</strong> <br> ${perm.reason === 'لا يوجد' ? '....................................................................' : perm.reason}</div>
+                </div>
+                
+                <!-- الإمضاءات بدون سمك (تم إزالة وسوم strong) -->
+                <div class="doc-signatures">
+                    <div style="text-align:center; width:45%;">توقيع المعني بالأمر</div>
+                    <div style="text-align:center; width:45%;">ختم وتوقيع المفتش / رئيس المركز</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة الوثيقة - ${item.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 0; }
+            body { 
+                font-family: 'Cairo', sans-serif; margin: 0; padding: 0; 
+                display: flex; width: 100vw; height: 100vh; color: #000; box-sizing: border-box; 
+                overflow: hidden; 
+            }
+            
+            .doc-half { 
+                width: 50%; height: 100%; 
+                padding: 8mm 15mm 15mm 15mm; 
+                box-sizing: border-box; display: flex; flex-direction: column; 
+                border-left: 1px dashed #999; 
+            }
+            .doc-half:last-child { border-left: none; } 
+            
+            .doc-header { text-align: center; font-weight: 900; font-size: 13px; margin-bottom: 10px; line-height: 1.4; }
+            .doc-subheader { display: flex; justify-content: space-between; font-weight: bold; font-size: 12px; line-height: 1.4; margin-bottom: 10px; }
+            
+            .doc-title { 
+                text-align: center; font-size: 20px; font-weight: 900; margin-bottom: 10px; 
+                padding: 5px 15px; border: 3px double #000; display: table; margin-left: auto; margin-right: auto; 
+            }
+            
+            .doc-body { font-size: 13px; display: flex; flex-direction: column; }
+            
+            .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+            .info-table td { padding: 4px 5px; border-bottom: 1px solid #ddd; }
+            
+            .reason-box {
+                border: 1px solid #000; padding: 10px; border-radius: 5px;
+                background: #fafafa; margin-bottom: 5px; min-height: 70px;
+            }
+            
+            /* مساحة الإمضاء: تم تعديل الخط ليكون عادياً (normal) بدلاً من سميك (bold) */
+            .doc-signatures { 
+                display: flex; justify-content: space-between; 
+                font-weight: normal; /* هنا تم تغيير السمك إلى عادي */
+                font-size: 14px; 
+                margin-top: 20px; 
+                padding: 10px;
+            }
+            
+            @media print { 
+                body { padding: 0; width: 100%; height: 100%; } 
+                .doc-half { border-left: none; } 
+                .reason-box { background: transparent; }
+            }
+        </style>
+    </head>
+    <body>
+        ${docTemplate}
+        ${docTemplate}
+        <script>
+            window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }
+        <\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+}
+
+// حذف وثيقة من السجل
+window.deletePermission = function(docId, permId, arrayIndex) {
+    let item = centerData.find(d => d.docId === docId);
+    let permToRemove = item.permissions.find(p => p.id === permId);
+
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'هل أنت متأكد من حذف هذه الوثيقة من السجل؟', icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#d90429', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                await db.collection("employeescomnew").doc(docId).update({
+                    permissions: firebase.firestore.FieldValue.arrayRemove(permToRemove)
+                });
+                item.permissions.splice(arrayIndex, 1);
+                renderPermissionTable();
+                Swal.fire('تم الحذف', 'تم حذف الوثيقة بنجاح.', 'success');
+            } catch (error) {
+                Swal.fire('خطأ', 'فشل عملية الحذف.', 'error');
+            }
+        }
+    });
+};
+
+// ================= دوال التحكم في القوائم المتعددة لجدول الحضور =================
+function toggleAttRankMenu() { const m = document.getElementById("attRankOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+function toggleAttSpecMenu() { const m = document.getElementById("attSpecOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+function toggleAttGroupMenu() { const m = document.getElementById("attGroupOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+function toggleAttStatusMenu() { const m = document.getElementById("attStatusOptions"); m.style.display = m.style.display === "block" ? "none" : "block"; }
+
+// إغلاق القوائم عند النقر خارجها
+document.addEventListener('click', function(e) {
+    if(!e.target.closest('#multiAttRankContainer')) { let m = document.getElementById("attRankOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiAttSpecContainer')) { let m = document.getElementById("attSpecOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiAttGroupContainer')) { let m = document.getElementById("attGroupOptions"); if(m) m.style.display = "none"; }
+    if(!e.target.closest('#multiAttStatusContainer')) { let m = document.getElementById("attStatusOptions"); if(m) m.style.display = "none"; }
+});
+
+function handleAttRankAll() { document.querySelectorAll('.att-rank-checkbox').forEach(cb => cb.checked = false); updateAttRankText(); filterAttendanceTable(); }
+function handleAttRankChange() { const any = Array.from(document.querySelectorAll('.att-rank-checkbox')).some(cb => cb.checked); document.getElementById('att-rank-all').checked = !any; updateAttRankText(); filterAttendanceTable(); }
+function updateAttRankText() {
+    if(document.getElementById('att-rank-all').checked) { document.getElementById('att-rank-selected-text').innerText = "كل الرتب"; return; }
+    const checked = document.querySelectorAll('.att-rank-checkbox:checked');
+    document.getElementById('att-rank-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+function handleAttSpecAll() { document.querySelectorAll('.att-spec-checkbox').forEach(cb => cb.checked = false); updateAttSpecText(); filterAttendanceTable(); }
+function handleAttSpecChange() { const any = Array.from(document.querySelectorAll('.att-spec-checkbox')).some(cb => cb.checked); document.getElementById('att-spec-all').checked = !any; updateAttSpecText(); filterAttendanceTable(); }
+function updateAttSpecText() {
+    if(document.getElementById('att-spec-all').checked) { document.getElementById('att-spec-selected-text').innerText = "كل التخصصات"; return; }
+    const checked = document.querySelectorAll('.att-spec-checkbox:checked');
+    document.getElementById('att-spec-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+function handleAttGroupAll() { document.querySelectorAll('.att-group-checkbox').forEach(cb => cb.checked = false); updateAttGroupText(); filterAttendanceTable(); }
+function handleAttGroupChange() { const any = Array.from(document.querySelectorAll('.att-group-checkbox')).some(cb => cb.checked); document.getElementById('att-group-all').checked = !any; updateAttGroupText(); filterAttendanceTable(); }
+function updateAttGroupText() {
+    if(document.getElementById('att-group-all').checked) { document.getElementById('att-group-selected-text').innerText = "كل الأفواج"; return; }
+    const checked = document.querySelectorAll('.att-group-checkbox:checked');
+    document.getElementById('att-group-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+function handleAttStatusAll() { document.querySelectorAll('.att-status-checkbox').forEach(cb => cb.checked = false); updateAttStatusText(); filterAttendanceTable(); }
+function handleAttStatusChange() { const any = Array.from(document.querySelectorAll('.att-status-checkbox')).some(cb => cb.checked); document.getElementById('att-status-all').checked = !any; updateAttStatusText(); filterAttendanceTable(); }
+function updateAttStatusText() {
+    if(document.getElementById('att-status-all').checked) { document.getElementById('att-status-selected-text').innerText = "كل الحالات"; return; }
+    const checked = document.querySelectorAll('.att-status-checkbox:checked');
+    document.getElementById('att-status-selected-text').innerText = checked.length === 1 ? checked[0].value : `تحديد (${checked.length})`;
+}
+
+
+// ================= دالة طباعة البطاقة الفردية للمتكون =================
+window.printSingleIDCard = function(docId) {
+    const item = centerData.find(d => d.docId === docId);
+    if (!item) {
+        Swal.fire('خطأ', 'لم يتم العثور على بيانات المتكون.', 'error');
+        return;
+    }
+
+    let printWindow = window.open('', '_blank');
+    
+    let empId = (item.empId && item.empId.trim() !== '') ? item.empId : '000000';
+    const coreEmpId = extractCoreId(empId);
+    const fbUrl = item.photoUrl_fb;
+    const driveUrl = employeePhotosMap[coreEmpId];
+    let initialUrl = fbUrl ? fbUrl : driveUrl;
+    
+    if (initialUrl) {
+        if (initialUrl.includes('sz=w200')) initialUrl = initialUrl.replace('sz=w200', 'sz=w400');
+        if (initialUrl.includes('=s200')) initialUrl = initialUrl.replace('=s200', '=s400');
+    }
+
+    const photoContent = initialUrl 
+        ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" referrerpolicy="no-referrer" onerror="window.handleImageFallback(this, '${driveUrl}', 'print')"/>`
+        : `صورة<br>الموظف`;
+
+    let pageHtml = `
+        <div class="page">
+            <div class="card">
+                <div class="card-header">
+                    <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+                    <div class="side-headers">
+                        <div class="right-header">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                        <div class="left-header">مركز التكوين:<br><span class="center-name">${INSPECTOR_CENTER}</span></div>
+                    </div>
+                </div>
+                
+                <div class="card-title">بطاقة أستاذ متكون</div>
+                
+                <div class="card-body">
+                    <div class="info-section">
+                        <div class="info-row"><b>الاسم واللقب:</b> <span>${item.name || '-'}</span></div>
+                        <div class="info-row"><b>الرتبة:</b> <span>${item.rank || '-'}</span></div>
+                        <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b>مكان العمل:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${item.workplace || '-'}</span></div></div>
+                        <div class="info-row"><b>مادة التخصص:</b> <span>${item.specialty || '-'}</span></div>
+                        <div class="info-row"><b>الفوج:</b> <span>${item.group || '-'}</span></div>
+                        <div class="barcode-wrapper">
+                            <svg class="barcode" jsbarcode-value="${empId}" jsbarcode-displayvalue="false"></svg>
+                        </div>
+                    </div>
+                    
+                    <div class="photo-section">
+                        <div class="photo-box" style="overflow: hidden; padding: 0;">
+                            ${photoContent}
+                        </div>
+                        <div class="signature">رئيس المركز</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة بطاقة - ${item.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { font-family: 'Cairo', sans-serif; background: #e0e6ed; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page { width: 210mm; height: 297mm; background: white; margin: 0 auto; padding: 10mm; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 6mm 5mm; box-sizing: border-box; page-break-after: always; }
+            @media print { body { background: white; } .page { margin: 0; box-shadow: none; page-break-after: always; } }
+            .card{ border:2px solid #102a43; border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; background:#fff; position:relative; overflow:hidden; min-height:100%; box-sizing:border-box; }
+            .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: #1E68E8; }
+            .card-header { margin-bottom: 3px; }
+            .rep-title { text-align: center; font-size: 10.5px; font-weight: 800; line-height: 1.3; margin-bottom: 4px; color: #102a43; }
+            .side-headers { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; color: #334e68; line-height: 1.3; }
+            .right-header { text-align: right; }
+            .left-header { text-align: left; }
+            .center-name { color: #d90429; font-weight: 900; }
+            .card-title { text-align: center; font-size: 13.5px; font-weight: 900; background: #102a43; color: #fff; padding: 3px; border-radius: 5px; margin: 3px 0 5px 0; letter-spacing: 0.5px; }
+            .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
+            .info-section{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
+            .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
+            .info-row b { color: #1E68E8; display: inline-block; min-width: 60px; font-weight: 800;}
+            .info-row span { font-weight: 600; }
+            .barcode-wrapper{ margin-top: auto; margin-bottom: 4px; text-align:center; display:flex; justify-content:center; align-items:center; }
+            .barcode-wrapper svg { width: 100%; max-width: 115px; height: auto !important; display: block; margin: 0 auto; }
+            .photo-section{ width:25%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; }
+            .photo-box { width: 85%; aspect-ratio: 3/4; border: 2px dashed #9cb4d8; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #9cb4d8; font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3; }
+            .signature{ font-size:8px; font-weight:800; text-align:center; color:#102a43; line-height:1.2; margin-top:0; padding-bottom:0; }
+        </style>
+    </head>
+    <body>
+        ${pageHtml}
+        <script>
+            function initBarcodes() {
+                if (typeof JsBarcode === 'undefined') { setTimeout(initBarcodes, 50); return; }
+                JsBarcode(".barcode").init({ format: "CODE128", lineColor: "#000", width: 1.2, height: 25, displayValue: true, fontSize: 12, fontOptions: "bold", textMargin: 2, margin: 0, font: "Cairo" });
+                document.querySelectorAll('.shrink-workplace').forEach(function(el) {
+                    var availableWidth = el.parentElement.clientWidth;
+                    var textWidth = el.scrollWidth;
+                    if (textWidth > availableWidth && availableWidth > 0) {
+                        var scale = availableWidth / textWidth;
+                        el.style.transform = 'translateY(-50%) scale(' + scale + ')';
+                    }
+                });
+                setTimeout(function() { window.print(); }, 800);
+            }
+            window.onload = initBarcodes;
+        <\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ================= دالة تصدير البيانات إلى ملف Excel باحترافية =================
+async function exportToExcel() {
+    if (filteredData.length === 0) {
+        Swal.fire('تنبيه', 'لا توجد بيانات حالياً لتصديرها', 'warning');
+        return;
+    }
+
+    Swal.fire({ title: 'جاري تجهيز وتنسيق الملف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('قائمة المتكونين', {
+            views: [{ rightToLeft: true }]
+        });
+
+        // تعريف الأعمدة
+        worksheet.columns = [
+            { header: 'الرقم', key: 'index' },
+            { header: 'الرقم الوظيفي', key: 'empId' },
+            { header: 'الاسم واللقب', key: 'name' },
+            { header: 'الجنس', key: 'gender' },
+            { header: 'تاريخ الميلاد', key: 'dob' },
+            { header: 'مكان الميلاد', key: 'pob' },
+            { header: 'الدائرة', key: 'daira' },
+            { header: 'العنوان', key: 'address' },
+            { header: 'رقم الهاتف', key: 'phone' },
+            { header: 'الرتبة', key: 'rank' },
+            { header: 'التخصص', key: 'specialty' },
+            { header: 'الفوج', key: 'group' },
+            { header: 'مكان العمل', key: 'workplace' },
+            { header: 'المركز', key: 'center' }
+        ];
+
+        // تعبئة البيانات
+        filteredData.forEach((item, index) => {
+            worksheet.addRow({
+                index: index + 1,
+                empId: item.empId || '-',
+                name: item.name || '-',
+                gender: item.gender || '-',
+                dob: item.dob || '-',
+                pob: item.pob || '-',
+                daira: item.daira || '-',
+                address: item.address || '-',
+                phone: item.phone || '-',
+                rank: item.rank || '-',
+                specialty: item.specialty || '-',
+                group: item.group || '-',
+                workplace: item.workplace || '-',
+                center: INSPECTOR_CENTER || '-'
+            });
+        });
+
+        // تطبيق التنسيقات الاحترافية
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell, colNumber) => {
+                cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+                cell.border = {
+                    top: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    left: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    bottom: {style:'thin', color: {argb:'FFB0BEC5'}},
+                    right: {style:'thin', color: {argb:'FFB0BEC5'}}
+                };
+
+                if (rowNumber === 1) { // الصف الأول (العناوين)
+                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF102A43' } }; // لون لوحة المفتش
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                } else {
+                    cell.font = { size: 11 };
+                }
+            });
+        });
+
+        // الـ Auto-Fit (عرض الأعمدة التلقائي)
+        worksheet.columns.forEach(column => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, cell => {
+                let columnLength = cell.value ? cell.value.toString().length : 0;
+                if (columnLength > maxLength) maxLength = columnLength;
+            });
+            column.width = maxLength < 12 ? 12 : maxLength + 5;
+        });
+
+        // تجميع وتحميل الملف
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        const dateStr = new Date().toISOString().split('T')[0];
+        saveAs(blob, `متكوني_${INSPECTOR_CENTER.replace(/\s+/g, '_')}_${dateStr}.xlsx`);
+
+        Swal.close();
+        
+    } catch (error) {
+        console.error("Excel Export Error:", error);
+        Swal.fire('خطأ', 'حدث مشكل أثناء تصدير الملف.', 'error');
+    }
+}
+
+
+// ================= نظام الرابط السري الموحد للماسح =================
+window.generateScannerLink = async function() {
+    Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        // البحث عن رابط (Token) فعال لهذا المركز
+        const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
+        let currentToken = '';
+        let oldDocId = null;
+
+        if (!snapshot.empty) {
+            currentToken = snapshot.docs[0].id; // الرمز هو نفسه اسم الوثيقة
+            oldDocId = currentToken;
+        } else {
+            // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
+            currentToken = generateRandomToken(15);
+            await db.collection('scanner_tokens').doc(currentToken).set({
+                center: INSPECTOR_CENTER,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            oldDocId = currentToken;
+        }
+
+        window.showLinkModal(currentToken, oldDocId);
+
+    } catch (e) {
+        console.error(e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+    }
+};
+
+function generateRandomToken(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let t = '';
+    for (let i = 0; i < length; i++) t += chars.charAt(Math.floor(Math.random() * chars.length));
+    return t;
+}
+
+window.showLinkModal = function(token, oldDocId) {
+    let currentPath = window.location.href;
+    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+    let fullLink = `${baseUrl}/scanner-tool?token=${token}`; 
+
+    // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
+    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
+
+    // === الجديد: دالة تكبير الـ QR Code (تعمل بملء الشاشة) ===
+    window.enlargeQR = function() {
+        let overlay = document.createElement('div');
+        overlay.id = 'qr-fullscreen-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)'; // لون داكن يطابق ألوان لوحة المفتش
+        overlay.style.backdropFilter = 'blur(5px)'; // تشويش الخلفية
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.cursor = 'zoom-out';
+        
+        // إغلاق التكبير عند الضغط
+        overlay.onclick = function() { document.body.removeChild(overlay); };
+        
+        // تصميم الصورة المكبرة
+        let img = document.createElement('img');
+        img.src = qrCodeUrl;
+        img.style.width = '400px';
+        img.style.height = '400px';
+        img.style.maxWidth = '90vw';
+        img.style.maxHeight = '90vw';
+        img.style.backgroundColor = 'white';
+        img.style.padding = '20px';
+        img.style.borderRadius = '20px';
+        img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+        
+        // نص توجيهي للإغلاق
+        let text = document.createElement('div');
+        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
+        text.style.color = 'white';
+        text.style.marginTop = '25px';
+        text.style.fontFamily = 'Cairo';
+        text.style.fontSize = '18px';
+        text.style.fontWeight = 'bold';
+        
+        overlay.appendChild(img);
+        overlay.appendChild(text);
+        document.body.appendChild(overlay);
+    };
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
+        html: `
+            <!-- === واجهة الـ QR المصغرة في النافذة === -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;" onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#0FBA50';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#e2e8f0';">
+                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; display: block; border-radius: 8px;">
+                </div>
+                <span style="font-size: 13px; color: #1E68E8; margin-top: 12px; font-weight: 800; background: #eff6ff; padding: 6px 15px; border-radius: 20px; cursor: pointer;" onclick="enlargeQR()">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i> اضغط لتكبير الباركود
+                </span>
+            </div>
+
+            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.6; text-align: right;">
+                هذا هو الرابط <b>الموحد</b> لمركزك.<br>
+                <div style="background:#e8fbf0; border:1px solid #0FBA50; padding:8px; border-radius:6px; margin: 8px 0;">
+                    <span style="color:#0FBA50; font-size:13px;"><i class="fa-solid fa-shield-halved"></i> <b>حماية قفل الجهاز:</b> هذا الرابط سيقفل تلقائياً على <b>أول هاتف</b> يفتحه.</span>
+                </div>
+            </div>
+            
+            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:15px; background:#f8fafc; color:#102a43; outline:none;">
+            
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="copyScannerLink()" style="background:#0FBA50; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-copy"></i> نسخ الرابط
+                </button>
+                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-arrows-rotate"></i> تغيير وإبطال
+                </button>
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
+    });
+};
+
+window.copyScannerLink = function() {
+    let copyText = document.getElementById("scannerLinkInput");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); 
+    navigator.clipboard.writeText(copyText.value).then(() => {
+        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم نسخ الرابط بنجاح!', showConfirmButton: false, timer: 2000});
+    });
+};
+
+window.regenerateToken = function(oldDocId) {
+    Swal.fire({
+        title: 'تأكيد تغيير الرابط',
+        text: 'الرابط القديم سيتوقف عن العمل فوراً. هل أنت متأكد؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، غيّر الرابط',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // إبطال الرابط القديم بحذفه
+                if (oldDocId) {
+                    await db.collection('scanner_tokens').doc(oldDocId).delete();
+                }
+                
+                // إنشاء رابط جديد
+                let currentToken = generateRandomToken(15);
+                await db.collection('scanner_tokens').doc(currentToken).set({
+                    center: INSPECTOR_CENTER,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                window.showLinkModal(currentToken, currentToken);
+                Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
+
+            } catch (e) {
+                console.error(e);
+                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
+            }
+        } else {
+            window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة في حالة الإلغاء
+        }
+    });
+};
+
+// ================= دالة زر استعادة الصورة المكسورة من ImgBB =================
+window.removeBrokenImage = async function(docId, cardType = 'info') {
+    Swal.fire({
+        title: 'استعادة الصورة من درايف',
+        text: 'هل تود حذف هذا الرابط التالف والاعتماد على الصورة الاحتياطية في قوقل درايف؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0FBA50',
+        confirmButtonText: 'نعم، استعادة',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التحديث اللحظي...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // 1. تحديد رقم الموظف الصحيح
+                let item = centerData.find(d => d.docId === docId);
+                let actualEmpId = item ? item.empId : docId;
+
+                // 2. مسح الرابط التالف من فايربيز
+                await db.collection("employeescomnew").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                await db.collection("employeescomplus").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                
+                // 3. تحديث المصفوفة المحلية للمتكونين وتحديث الجدول فوراً في مكانه
+                if (item) item.photoUrl_fb = null;
+                
+                if (typeof allData !== 'undefined') {
+                    let allItem = allData.find(d => d.docId === docId);
+                    if (allItem) allItem.photoUrl_fb = null;
+                }
+
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
+                
+                // 4. إعادة رسم الجدول دون تغيير الصفحة الحالية
+                if (typeof applyFilters === 'function') applyFilters(true);
+                
+                // 5. إعادة فتح البطاقة وعرض صورة درايف مباشرة
+                setTimeout(() => {
+                    if (typeof viewInfo === 'function') viewInfo(docId);
+                }, 400);
+
+            } catch(e) {
+                Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error');
+            }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            if (typeof viewInfo === 'function') viewInfo(docId);
+        }
+    });
+};
+
+// ================= دوال التحديد المتعدد (Checkboxes) =================
+function toggleSelectAll() {
+    const isChecked = document.getElementById("selectAll").checked;
+    if (isChecked) {
+        filteredData.forEach(item => selectedTrainees.add(item.docId));
+    } else {
+        selectedTrainees.clear();
+    }
+    document.querySelectorAll(".row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedTrainees.add(docId);
+    } else {
+        selectedTrainees.delete(docId);
+        document.getElementById("selectAll").checked = false;
+    }
+}
+
+// ================= نظام تفريغ سجلات الحضور والغياب (المتقدم) =================
+async function openClearAttendanceModal() {
+    Swal.fire({
+        title: 'جاري جلب الأيام المسجلة...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    const centerClean = INSPECTOR_CENTER.trim();
+    let recordedDays = new Set();
+    if (currentAttDate) recordedDays.add(currentAttDate);
+
+    try {
+        // جلب الأيام بالمعرف
+        const startId = `${centerClean}_`;
+        const endId = `${centerClean}_\uf8ff`;
+        const snapById = await db.collection('attendance_daily')
+            .where(firebase.firestore.FieldPath.documentId(), '>=', startId)
+            .where(firebase.firestore.FieldPath.documentId(), '<=', endId)
+            .get();
+
+        snapById.forEach(doc => {
+            let parts = doc.id.split('_');
+            let dateStr = parts[parts.length - 1];
+            if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                recordedDays.add(dateStr);
+            } else if (doc.data().date) {
+                recordedDays.add(doc.data().date);
+            }
+        });
+
+        // جلب الأيام بحقل center
+        const snapByCenter = await db.collection('attendance_daily').where('center', '==', centerClean).get();
+        snapByCenter.forEach(doc => {
+            let parts = doc.id.split('_');
+            let dateStr = parts[parts.length - 1];
+            if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                recordedDays.add(dateStr);
+            } else if (doc.data().date) {
+                recordedDays.add(doc.data().date);
+            }
+        });
+    } catch(e) {
+        console.warn("Error fetching recorded days:", e);
+    }
+
+    const daysList = Array.from(recordedDays).sort().reverse();
+
+    let daysOptionsHtml = `<option value="current">اليوم المعروض حالياً (${currentAttDate})</option>`;
+    daysOptionsHtml += `<option value="all" style="font-weight:bold; color:#d90429;">⚠️ جميع الأيام المسجلة (تفريغ كلي وشامل)</option>`;
+    
+    if (daysList.length > 0) {
+        daysOptionsHtml += `<optgroup label="-- اختر يوماً محدداً من الأيام المسجلة --">`;
+        daysList.forEach(day => {
+            daysOptionsHtml += `<option value="${day}">يوم: ${day}</option>`;
+        });
+        daysOptionsHtml += `</optgroup>`;
+    }
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-trash-can" style="color:#d90429;"></i> تفريغ سجلات الحضور والغياب',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; font-size:14px; padding: 5px;">
+                <p style="color:#555; margin-bottom:15px; font-size:13px; line-height:1.6;">
+                    اختر اليوم المستهدف ثم حدد الحالة التي تريد تفريغها (إلغاء تسجيلها وإعادتها لوضعية "غير محدد").
+                </p>
+
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">
+                        <i class="fa-regular fa-calendar-days"></i> نطاق الأيام:
+                    </label>
+                    <select id="swalClearDay" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
+                        ${daysOptionsHtml}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">
+                        <i class="fa-solid fa-filter"></i> الحالة المراد تفريغها:
+                    </label>
+                    <select id="swalClearStatus" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
+                        <option value="all">الكل (تفريغ جميع الحالات: حضور + غياب + تأخر)</option>
+                        <option value="غائب">الغياب فقط (إعادة الغائبين إلى غير محدد)</option>
+                        <option value="حاضر">الحضور فقط (إعادة الحاضرين إلى غير محدد)</option>
+                        <option value="متأخر">التأخر فقط (إعادة المتأخرين إلى غير محدد)</option>
+                    </select>
+                </div>
+
+                <div style="background:#fff3cd; border:1px solid #ffeeba; color:#856404; padding:10px; border-radius:8px; font-size:12.5px; line-height:1.5;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <b>تنبيه:</b> الأشخاص الذين تنطبق عليهم الشروط سيتم إلغاء حالتهم وإعادتهم إلى <b>(غير محدد)</b> مع مسح توقيت المسح.
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> متابعة التفريغ',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#34495e',
+        focusConfirm: false,
+        preConfirm: () => {
+            return {
+                dayScope: document.getElementById('swalClearDay').value,
+                statusType: document.getElementById('swalClearStatus').value
+            };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const { dayScope, statusType } = result.value;
+            await executeAttendanceClear(dayScope, statusType);
+        }
+    });
+}
+
+async function executeAttendanceClear(dayScope, statusType) {
+    const centerClean = INSPECTOR_CENTER.trim();
+    
+    const isFullDelete = (statusType === "all"); // هل المطلوب حذف الأيام بالكامل
+
+    let dayText = "";
+    if (dayScope === "all") dayText = "كافة الأيام المسجلة بالمركز (حذف كلي وشامل للأيام وسجلاتها)";
+    else if (dayScope === "current") dayText = `اليوم المعروض حالياً (${typeof currentAttDate !== 'undefined' ? currentAttDate : ''})`;
+    else dayText = `يوم (${dayScope})`;
+
+    let statusText = "";
+    if (statusType === "all") statusText = "حذف شامل لكل الحالات وإزالة وثائق الأيام نهائياً من قاعدة البيانات";
+    else if (statusType === "غائب") statusText = "تفريغ حالات الغياب فقط";
+    else if (statusType === "حاضر") statusText = "تفريغ حالات الحضور فقط";
+    else if (statusType === "متأخر") statusText = "تفريغ حالات التأخر فقط";
+
+    const confirmRes = await Swal.fire({
+        title: 'تأكيد الحذف النهائي',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; font-size:14px; line-height:1.8;">
+                هل أنت متأكد من: <b style="color:#d90429;">${statusText}</b> ؟<br>
+                النطاق: <b style="color:#1E68E8;">${dayText}</b><br>
+                ${isFullDelete ? '<div style="margin-top:10px; padding:8px; background:#ffeaea; border:1px solid #ffc6c6; border-radius:6px; color:#d90429; font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> تنبيه: سيتم حذف الأيام بالكامل من قاعدة البيانات ولن تظهر في قائمة الأيام المسجلة نهائياً.</div>' : '<span style="color:#777;">سيتم تحديث قاعدة البيانات فوراً.</span>'}
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، احذف نهائياً',
+        cancelButtonText: 'تراجع'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري الحذف النهائي من قاعدة البيانات...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        let targetDocs = [];
+
+        // 1. جلب الوثائق المستهدفة بالحذف
+        if (dayScope === "all") {
+            const startId = `${centerClean}_`;
+            const endId = `${centerClean}_\uf8ff`;
+            const snapById = await db.collection('attendance_daily')
+                .where(firebase.firestore.FieldPath.documentId(), '>=', startId)
+                .where(firebase.firestore.FieldPath.documentId(), '<=', endId)
+                .get();
+            snapById.forEach(d => targetDocs.push(d));
+
+            const snapByCenter = await db.collection('attendance_daily').where('center', '==', centerClean).get();
+            snapByCenter.forEach(d => {
+                if (!targetDocs.some(x => x.id === d.id)) targetDocs.push(d);
+            });
+
+            // إجراء احتياطي إضافي لضمان الوصول لكافة وثائق المركز
+            if (targetDocs.length === 0) {
+                const allSnap = await db.collection('attendance_daily').get();
+                allSnap.forEach(d => {
+                    let dCenter = d.data().center ? String(d.data().center).trim() : "";
+                    if (d.id.startsWith(centerClean + "_") || dCenter === centerClean) {
+                        if (!targetDocs.some(x => x.id === d.id)) targetDocs.push(d);
+                    }
+                });
+            }
+        } else {
+            const targetDate = (dayScope === "current" && typeof currentAttDate !== 'undefined') ? currentAttDate : dayScope;
+            const docId = `${centerClean}_${targetDate}`;
+            const docSnap = await db.collection('attendance_daily').doc(docId).get();
+            if (docSnap.exists) {
+                targetDocs.push(docSnap);
+            }
+        }
+
+        if (targetDocs.length === 0) {
+            Swal.fire('تنبيه', 'لا توجد أيام مسجلة مطابقة للنطاق المحدد.', 'info');
+            return;
+        }
+
+        // 2. تنفيذ الحذف الفعلي من Firestore
+        let batches = [];
+        let batch = db.batch();
+        let opCount = 0;
+        let deletedDaysCount = 0;
+        let clearedRecordsCount = 0;
+
+        targetDocs.forEach(docSnap => {
+            if (statusType === "all") {
+                // 🔥 حذف وثيقة اليوم بأكملها نهائياً من قاعدة البيانات 🔥
+                batch.delete(docSnap.ref);
+                deletedDaysCount++;
+                opCount++;
+            } else {
+                // تفريغ حالة معينة فقط
+                let records = docSnap.data().records || {};
+                let modified = false;
+
+                for (let empKey in records) {
+                    if (records[empKey] && records[empKey].status === statusType) {
+                        delete records[empKey];
+                        clearedRecordsCount++;
+                        modified = true;
+                    }
+                }
+
+                if (modified) {
+                    // إذا أصبحت الوثيقة فارغة تماماً بعد التفريغ، نحذف اليوم كلياً أيضاً
+                    if (Object.keys(records).length === 0) {
+                        batch.delete(docSnap.ref);
+                        deletedDaysCount++;
+                    } else {
+                        batch.update(docSnap.ref, { records: records });
+                    }
+                    opCount++;
+                }
+            }
+
+            if (opCount >= 400) {
+                batches.push(batch);
+                batch = db.batch();
+                opCount = 0;
+            }
+        });
+
+        if (opCount > 0) batches.push(batch);
+        for (let b of batches) {
+            await b.commit();
+        }
+
+        // 3. تحديث واجهة لوحة المفتش اللحظية (إن وُجدت)
+        if (typeof attendanceRecords !== 'undefined') {
+            if (dayScope === "all" || (typeof currentAttDate !== 'undefined' && (dayScope === "current" || dayScope === currentAttDate))) {
+                if (statusType === "all") {
+                    attendanceRecords = {};
+                } else {
+                    for (let k in attendanceRecords) {
+                        if (attendanceRecords[k] && attendanceRecords[k].status === statusType) {
+                            delete attendanceRecords[k];
+                        }
+                    }
+                }
+                if (typeof renderAttendanceTable === 'function') renderAttendanceTable();
+            }
+        }
+
+        // 4. تحديث صفحة الإحصاء الشامل tracking.html فوراً (إن وُجدت)
+        if (typeof processTrackingData === 'function') {
+            await processTrackingData();
+        }
+
+        let successMsg = "";
+        if (statusType === "all") {
+            successMsg = `تم حذف ${deletedDaysCount} يوم/أيام بالكامل نهائياً من قاعدة البيانات.`;
+        } else {
+            successMsg = `تم تفريغ ${clearedRecordsCount} سجل بنجاح.`;
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: 'تم الحذف بنجاح',
+            text: successMsg,
+            confirmButtonColor: '#102a43'
+        });
+
+    } catch (error) {
+        console.error("Error deleting attendance days:", error);
+        Swal.fire('خطأ', 'حدث مشكل أثناء الحذف: ' + (error.message || ''), 'error');
+    }
+}

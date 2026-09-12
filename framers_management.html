@@ -149,7 +149,7 @@
   <div class="top-nav">
     <h2><i class="fa-solid fa-users-gear"></i> إدارة مؤطري المركز <span id="headerCenterName">...</span></h2>
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-      <button class="nav-btn btn-back" onclick="window.location.href='inspector_dashboard.html'">
+      <button class="nav-btn btn-back" onclick="window.location.href='/inspector'">
         <i class="fa-solid fa-arrow-right-to-bracket"></i> رجوع للوحة الرئيسية
       </button>
      
@@ -348,7 +348,7 @@
         <button class="btn-print" style="background: #1E68E8; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="markAllFramersPresent()">إدراج الحضور الشامل</button>
         <button class="btn-print" style="background: #d90429; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="markAllFramersAbsent()">إدراج الغياب الشامل</button>
         <button class="btn-print" style="background: #8e44ad; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="printPresentFramers()">طباعة قائمة الحاضرين</button>
-        <button class="btn-print" style="background: #34495e; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="window.open('scanner.html', '_blank')">فتح ماسح الباركود</button>
+        <button class="btn-print" style="background: #34495e; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="window.open('/scanner-tool', '_blank')">فتح ماسح الباركود</button>
         <button class="btn-print" style="background: #e67e22; color:white; border:none; padding:8px 15px; border-radius:8px; font-weight:bold; cursor:pointer;" onclick="generateScannerLink()">
         <i class="fa-solid fa-link"></i> إنشاء رابط الحضور
         </button>
@@ -375,8 +375,8 @@
   </div>
 
 
-  <script src="js/security.js" defer></script>
-  <script src="js/framers_management.js" defer></script>
+  <script src="js/sys-shield-v2.js" defer></script>
+  <script src="js/staff-sync-7d4e.js" defer></script>
 
 </body>
 </html>

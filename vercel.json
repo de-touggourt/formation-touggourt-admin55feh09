@@ -54,58 +54,124 @@
       ]
     }
   ],
-  "routes": [
+  "redirects": [
     {
-      "src": "/js/(.*)",
-      "dest": "/js/$1"
+      "source": "/dashboard_finale_upload.html",
+      "destination": "/files-upload",
+      "permanent": true
     },
     {
-      "src": "/login",
-      "dest": "/index.html"
+      "source": "/admin_dashboard.html",
+      "destination": "/admin-panel",
+      "permanent": true
     },
     {
-      "src": "/portal",
-      "dest": "/dashboard.html"
+      "source": "/inspector_dashboard.html",
+      "destination": "/inspector",
+      "permanent": true
     },
     {
-      "src": "/courses",
-      "dest": "/courses.html"
+      "source": "/framers_management.html",
+      "destination": "/framers",
+      "permanent": true
     },
     {
-      "src": "/inspector",
-      "dest": "/inspector_dashboard.html"
+      "source": "/grades_management.html",
+      "destination": "/grades",
+      "permanent": true
     },
     {
-      "src": "/admin-panel",
-      "dest": "/admin_dashboard.html"
+      "source": "/manage_courses.html",
+      "destination": "/courses-manage",
+      "permanent": true
     },
     {
-      "src": "/secure-login",
-      "dest": "/admin095526.html"
+      "source": "/scanner.html",
+      "destination": "/scanner-tool",
+      "permanent": true
     },
     {
-      "src": "/framers",
-      "dest": "/framers_management.html"
+      "source": "/tracking.html",
+      "destination": "/statistics",
+      "permanent": true
     },
     {
-      "src": "/grades",
-      "dest": "/grades_management.html"
+      "source": "/admin095526.html",
+      "destination": "/secure-login",
+      "permanent": true
     },
     {
-      "src": "/courses-manage",
-      "dest": "/manage_courses.html"
+      "source": "/dashboard.html",
+      "destination": "/portal",
+      "permanent": true
     },
     {
-      "src": "/scanner-tool",
-      "dest": "/scanner.html"
+      "source": "/courses.html",
+      "destination": "/courses",
+      "permanent": true
     },
     {
-      "src": "/statistics",
-      "dest": "/tracking.html"
+      "source": "/index.html",
+      "destination": "/login",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/js/(.*)",
+      "destination": "/js/$1"
     },
     {
-      "src": "/files-upload",
-      "dest": "/dashboard_finale_upload.html"
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/files-upload",
+      "destination": "/dashboard_finale_upload.html"
+    },
+    {
+      "source": "/admin-panel",
+      "destination": "/admin_dashboard.html"
+    },
+    {
+      "source": "/inspector",
+      "destination": "/inspector_dashboard.html"
+    },
+    {
+      "source": "/framers",
+      "destination": "/framers_management.html"
+    },
+    {
+      "source": "/grades",
+      "destination": "/grades_management.html"
+    },
+    {
+      "source": "/courses-manage",
+      "destination": "/manage_courses.html"
+    },
+    {
+      "source": "/scanner-tool",
+      "destination": "/scanner.html"
+    },
+    {
+      "source": "/statistics",
+      "destination": "/tracking.html"
+    },
+    {
+      "source": "/secure-login",
+      "destination": "/admin095526.html"
+    },
+    {
+      "source": "/portal",
+      "destination": "/dashboard.html"
+    },
+    {
+      "source": "/courses",
+      "destination": "/courses.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
     }
   ]
 }
