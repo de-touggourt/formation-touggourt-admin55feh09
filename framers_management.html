@@ -3968,13 +3968,16 @@ window.promptPrintParticipationCerts = async function() {
 };
 
 // ============================================================================
-// دالة استخراج وطباعة مقرر المؤطر الفردي (استدعاء ديناميكي حسب الدورة المختارة)
+// دالة استخراج وطباعة مقرر المؤطر الفردي (مع شرط منع الطباعة إذا لم يوجد رقم مقرر)
 // ============================================================================
 window.printSingleFramerDecision = async function(docId) {
     const f = framersData.find(x => x.docId === docId);
     if (!f) return Swal.fire('خطأ', 'لم يتم العثور على بيانات المؤطر.', 'error');
 
-    // 1. تحديد الدورة
+    let framerName = (f.baseInfo && f.baseInfo.name) ? f.baseInfo.name : 'المؤطر';
+    let framerRole = f.role || 'مؤطر بالمركز';
+
+    // 1. تحديد الدورة المراد طباعتها
     let session = currentTab;
     if (session === 'all') {
         let activeSessions = [];
@@ -3987,34 +3990,42 @@ window.printSingleFramerDecision = async function(docId) {
         } else if (activeSessions.length === 1) {
             session = activeSessions[0].id;
         } else {
-            let framerName = (f.baseInfo && f.baseInfo.name) ? f.baseInfo.name : 'المؤطر';
-            let framerRole = f.role || 'مؤطر بالمركز';
+            // عرض بطاقات الدورات مع بيان حالة توفر رقم المقرر لكل دورة
+            let cardsHtml = activeSessions.map((s, idx) => {
+                let sNum = f['decisionNumber_' + s.id];
+                if ((sNum === undefined || sNum === null || sNum === "") && s.id === 's1' && f.decisionNumber) {
+                    sNum = f.decisionNumber;
+                }
+                let hasNum = (sNum !== undefined && sNum !== null && String(sNum).trim() !== "" && String(sNum).trim() !== "..........");
+                let statusBadge = hasNum 
+                    ? `<div style="font-size: 11px; color: #0FBA50; font-weight: 800; margin-top: 4px;"><i class="fa-solid fa-hashtag"></i> رقم المقرر: ${sNum}</div>`
+                    : `<div style="font-size: 11px; color: #dc2626; font-weight: 800; margin-top: 4px;"><i class="fa-solid fa-circle-xmark"></i> بدون رقم مقرر</div>`;
 
-            // بطاقات اختيار الدورة التفاعلية (بدون شريط تمرير)
-            let cardsHtml = activeSessions.map((s, idx) => `
-                <label style="cursor: pointer; position: relative; margin: 0; display: block; flex: 1;">
-                    <input type="radio" name="swalSessionRadio" value="${s.id}" ${idx === 0 ? 'checked' : ''} style="position: absolute; opacity: 0;" onchange="
-                        document.querySelectorAll('.session-choice-box').forEach(el => {
-                            el.style.borderColor='#cbd5e1'; el.style.background='#fff'; el.style.boxShadow='none';
-                            el.querySelector('.choice-check').style.display='none';
-                        });
-                        this.closest('label').querySelector('.session-choice-box').style.borderColor='#e67e22';
-                        this.closest('label').querySelector('.session-choice-box').style.background='#fff8f3';
-                        this.closest('label').querySelector('.session-choice-box').style.boxShadow='0 4px 12px rgba(230,126,34,0.2)';
-                        this.closest('label').querySelector('.choice-check').style.display='block';
-                    ">
-                    <div class="session-choice-box" style="border: 2px solid ${idx === 0 ? '#e67e22' : '#cbd5e1'}; background: ${idx === 0 ? '#fff8f3' : '#fff'}; border-radius: 12px; padding: 14px 10px; text-align: center; transition: all 0.25s ease; position: relative; box-shadow: ${idx === 0 ? '0 4px 12px rgba(230,126,34,0.2)' : 'none'};">
-                        <div class="choice-check" style="display: ${idx === 0 ? 'block' : 'none'}; position: absolute; top: 8px; left: 8px; color: #e67e22; font-size: 14px;"><i class="fa-solid fa-circle-check"></i></div>
-                        <div style="font-size: 24px; color: #e67e22; margin-bottom: 6px;"><i class="fa-solid fa-calendar-check"></i></div>
-                        <div style="font-size: 15px; font-weight: 900; color: #102a43;">${s.name}</div>
-                        <div style="font-size: 11px; color: #64748b; font-weight: 700; margin-top: 3px;">طباعة المقرر</div>
-                    </div>
-                </label>
-            `).join('');
+                return `
+                    <label style="cursor: pointer; position: relative; margin: 0; display: block; flex: 1;">
+                        <input type="radio" name="swalSessionRadio" value="${s.id}" ${idx === 0 ? 'checked' : ''} style="position: absolute; opacity: 0;" onchange="
+                            document.querySelectorAll('.session-choice-box').forEach(el => {
+                                el.style.borderColor='#cbd5e1'; el.style.background='#fff'; el.style.boxShadow='none';
+                                el.querySelector('.choice-check').style.display='none';
+                            });
+                            this.closest('label').querySelector('.session-choice-box').style.borderColor='#e67e22';
+                            this.closest('label').querySelector('.session-choice-box').style.background='#fff8f3';
+                            this.closest('label').querySelector('.session-choice-box').style.boxShadow='0 4px 12px rgba(230,126,34,0.2)';
+                            this.closest('label').querySelector('.choice-check').style.display='block';
+                        ">
+                        <div class="session-choice-box" style="border: 2px solid ${idx === 0 ? '#e67e22' : '#cbd5e1'}; background: ${idx === 0 ? '#fff8f3' : '#fff'}; border-radius: 12px; padding: 14px 10px; text-align: center; transition: all 0.25s ease; position: relative; box-shadow: ${idx === 0 ? '0 4px 12px rgba(230,126,34,0.2)' : 'none'};">
+                            <div class="choice-check" style="display: ${idx === 0 ? 'block' : 'none'}; position: absolute; top: 8px; left: 8px; color: #e67e22; font-size: 14px;"><i class="fa-solid fa-circle-check"></i></div>
+                            <div style="font-size: 24px; color: #e67e22; margin-bottom: 6px;"><i class="fa-solid fa-calendar-check"></i></div>
+                            <div style="font-size: 15px; font-weight: 900; color: #102a43;">${s.name}</div>
+                            ${statusBadge}
+                        </div>
+                    </label>
+                `;
+            }).join('');
 
             const { value: selectedSess } = await Swal.fire({
                 title: '<i class="fa-solid fa-calendar-days" style="color:#e67e22; margin-left:8px;"></i> اختيار الدورة التكوينية',
-                width: '490px',
+                width: '500px',
                 padding: '20px',
                 customClass: { popup: 'swal-modal-custom' },
                 html: `
@@ -4048,7 +4059,36 @@ window.printSingleFramerDecision = async function(docId) {
         }
     }
 
-    // 🌟 2. جلب إعدادات المقرر الخاصة بهذه الدورة تحديداً من المديرية 🌟
+    // 🌟 2. التحقق الصارم من توفر رقم المقرر لهذه الدورة 🌟
+    let sessionName = session === 's1' ? 'الدورة الأولى' : (session === 's2' ? 'الدورة الثانية' : 'الدورة الثالثة');
+    let fieldName = 'decisionNumber_' + session;
+    let currentNum = f[fieldName];
+    if ((currentNum === undefined || currentNum === null || currentNum === "") && session === 's1' && f.decisionNumber) {
+        currentNum = f.decisionNumber;
+    }
+
+    let decNum = (currentNum !== undefined && currentNum !== null) ? String(currentNum).trim() : "";
+
+    // الشرط الأساسي: منع الطباعة إذا لم يوجد رقم مقرر
+    if (!decNum || decNum === "" || decNum === "..........") {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'تعذر طباعة المقرر',
+            html: `
+                <div style="font-family:'Cairo'; text-align:center; font-size:14px; line-height:1.6;">
+                    عذراً، لا يمكن طباعة مقرر <b>${sessionName}</b> للمؤطر:<br>
+                    <b style="color:#102a43; font-size:16px;">${framerName}</b><br><br>
+                    <div style="color:#dc2626; font-weight:bold; background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:8px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> لم يتم إدراج رقم المقرر الخاص بهذه الدورة من لوحة التحكم!
+                    </div>
+                </div>
+            `,
+            confirmButtonText: 'حسناً',
+            confirmButtonColor: '#102a43'
+        });
+    }
+
+    // 3. جلب إعدادات المقرر من المديرية للدورة المحددة
     let allConfigs = window.globalDecisionConfig;
     if (!allConfigs) {
         try {
@@ -4061,38 +4101,25 @@ window.printSingleFramerDecision = async function(docId) {
     }
     allConfigs = allConfigs || {};
     
-    // جلب كائن الدورة المختارة (s1 أو s2 أو s3) مع دعم التوافق التلقائي
     let dConfig = allConfigs[session] || (allConfigs.circNum ? allConfigs : {});
 
     let circNum = dConfig.circNum || "..........";
     let circYear = dConfig.circYear || "..........";
     let type = dConfig.type || "التكوين البيداغوجي";
     let year = dConfig.year || "2026/2025";
-    let startD = dConfig.start || ".........."; // تاريخ بداية هذه الدورة بالتحديد
-    let date = dConfig.date || "..........";       // تاريخ تحرير هذه الدورة بالتحديد
-
-    // 🌟 السنة الحالية المعتمدة دائماً لرقم المقرر في الأعلى ولقسيمة الاستلام 🌟
+    let startD = dConfig.start || "..........";
+    let date = dConfig.date || "..........";
     const currentYear = new Date().getFullYear();
-
-    // 3. استخراج رقم المقرر للدورة المحددة
-    let fieldName = 'decisionNumber_' + session;
-    let currentNum = f[fieldName];
-    if (currentNum === undefined && session === 's1' && f.decisionNumber) {
-        currentNum = f.decisionNumber;
-    }
-    let decNum = (currentNum !== undefined && currentNum !== null && currentNum !== "") ? currentNum : '..........';
 
     // 4. جلب إحداثيات موقع المركز للـ QR
     let centerName = (f.center || INSPECTOR_CENTER || '').trim();
     let mapUrl = "";
-    
     if (window.inspectorCenterLocation && window.inspectorCenterLocation.latitude && window.inspectorCenterLocation.longitude) {
         mapUrl = `https://maps.google.com/?q=${window.inspectorCenterLocation.latitude},${window.inspectorCenterLocation.longitude}`;
     } else {
         mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(centerName + " توقرت")}`;
     }
     let centerQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mapUrl)}`;
-
     const sealUrl = "https://lh3.googleusercontent.com/d/19RIAk1hOJzRoOmQq46CE3amYzdHkNUJt";
 
     let b = f.baseInfo || {};
@@ -4100,6 +4127,7 @@ window.printSingleFramerDecision = async function(docId) {
     let rank = b.grade || b.rank || '.............................................';
     let role = f.role || '.............................................';
 
+    // 5. فتح نافذة الطباعة بعد استيفاء الشرط بنجاح
     let printWindow = window.open('', '_blank');
     if (!printWindow) {
         return Swal.fire('تنبيه', 'يرجى السماح بالنوافذ المنبثقة للمتصفح للطباعة.', 'warning');
@@ -4115,388 +4143,64 @@ window.printSingleFramerDecision = async function(docId) {
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
         
         <style>
-            @page { 
-                size: A4 portrait; 
-                margin: 5mm 8mm; 
-            }
-            * { 
-                box-sizing: border-box; 
-                font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; 
-            }
-            body { 
-                background: #fff; 
-                margin: 0; 
-                padding: 0; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-                color: #0f172a; 
-            }
-            
-            .page-container { 
-                width: 100%; 
-                height: 280mm;
-                max-height: 280mm;
-                box-sizing: border-box; 
-                page-break-after: always; 
-                break-after: page;
-                page-break-inside: avoid;
-                break-inside: avoid;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                overflow: hidden;
-                background: #fff;
-            }
-
-            .decision-card {
-                border: 2px solid #0f172a;
-                border-radius: 4px;
-                padding: 5mm 8mm 3mm 8mm;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                background: #fff;
-            }
-
-            .header-top { 
-                text-align: center; 
-                font-weight: 800; 
-                font-size: 14px; 
-                line-height: 1.35; 
-                margin-bottom: 5px;
-                color: #0f172a;
-            }
-            .header-cols { 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: flex-start;
-                font-size: 13px; 
-                line-height: 1.4;
-                margin-bottom: 4px;
-            }
-            .header-right { 
-                text-align: right; 
-                font-weight: 700;
-            }
-            .header-left { 
-                text-align: left; 
-                font-weight: 800;
-                white-space: nowrap;
-                position: relative;
-            }
-
-            .copy-watermark {
-                position: absolute;
-                top: 36px;
-                left: 4px;
-                font-size: 20px;
-                font-weight: 900;
-                color: #c0392b;
-                border: 2px dashed #c0392b;
-                background: rgba(254, 242, 242, 0.75);
-                opacity: 0.85;
-                border-radius: 4px;
-                padding: 1px 15px;
-                transform: rotate(-10deg);
-                letter-spacing: 5px;
-                line-height: 1.3;
-                pointer-events: none;
-                user-select: none;
-                box-shadow: 0 1px 3px rgba(192, 57, 43, 0.15);
-            }
-
-            .main-title-wrap {
-                text-align: center;
-                margin: 2px 0 6px 0;
-            }
-            .main-title { 
-                display: inline-block;
-                font-size: 26px; 
-                font-weight: 900; 
-                letter-spacing: 5px;
-                padding: 1px 40px;
-                border-top: 2px solid #0f172a;
-                border-bottom: 2px solid #0f172a;
-                background: #f8fafc;
-                border-radius: 4px;
-                line-height: 1.2;
-                color: #0f172a;
-            }
-
-            .legal-text { 
-                font-size: 12.5px; 
-                font-weight: 600;
-                line-height: 1.5; 
-                text-align: justify; 
-                text-justify: inter-word;
-                margin-bottom: 4px; 
-                padding: 0 4px;
-                color: #1e293b;
-            }
-            .legal-item { 
-                margin-bottom: 2px; 
-                text-indent: -13px;
-                padding-right: 13px;
-            }
-            .proposal {
-                text-align: center; 
-                font-weight: 800; 
-                font-size: 13px; 
-                margin: 5px 0 3px 0;
-                letter-spacing: 0.5px;
-                color: #0f172a;
-            }
-
-            .decides-wrap { 
-                text-align: center; 
-                margin: 3px 0 5px 0; 
-            }
-            .decides { 
-                display: inline-block;
-                font-size: 20px; 
-                font-weight: 900; 
-                letter-spacing: 4px;
-                padding: 0 25px;
-                border-bottom: 2px solid #0f172a;
-                color: #0f172a;
-            }
-
-            .articles-container {
-                margin: 4px 0 6px 0;
-                padding: 6px 12px;
-                background: #f8fafc;
-                border: 1px solid #cbd5e1;
-                border-radius: 4px;
-            }
-            .article-row {
-                display: flex;
-                align-items: center;
-                font-size: 14px;
-                margin-bottom: 3px;
-                line-height: 1.5;
-            }
-            .article-row:last-child {
-                margin-bottom: 0;
-            }
-            .art-title {
-                width: 85px;
-                min-width: 85px;
-                font-weight: 700;
-                text-decoration: underline;
-                text-underline-offset: 3px;
-                color: #0f172a;
-            }
-            .art-title-spacer {
-                width: 85px;
-                min-width: 85px;
-            }
-            .art-label {
-                width: 175px;
-                min-width: 175px;
-                font-weight: 600;
-                color: #334155;
-            }
-            .art-val {
-                font-weight: 700;
-                font-size: 14.5px;
-                color: #0f172a;
-            }
-            .art-center-val {
-                font-weight: 700;
-                font-size: 15px;
-                color: #0f172a;
-            }
-
-            table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin: 6px 0; 
-                text-align: center; 
-            }
-            th, td { 
-                border: 1.5px solid #0f172a; 
-                padding: 6px 8px; 
-                font-size: 13.5px; 
-                font-weight: 700; 
-                vertical-align: middle;
-            }
-            th { 
-                background-color: #f1f5f9; 
-                font-weight: 800;
-                font-size: 14px;
-                color: #0f172a;
-            }
-
-            .signature-container { 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: flex-start;
-                padding: 0 4%; 
-                margin-top: 6px;
-                min-height: 105px;
-            }
-
-            .qr-box {
-                text-align: center;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                width: 130px;
-            }
-            .qr-title {
-                font-size: 11.5px;
-                font-weight: 800;
-                color: #0f172a;
-                margin-bottom: 2px;
-            }
-            .qr-slot {
-                width: 76px;
-                height: 76px;
-                background: #fff;
-                border: 1px solid #cbd5e1;
-                border-radius: 4px;
-                padding: 2px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            }
-            .qr-img {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-            }
-            .qr-desc {
-                font-size: 9px;
-                font-weight: 700;
-                color: #64748b;
-                margin-top: 2px;
-            }
-
-            .signature-box { 
-                text-align: center; 
-                position: relative; 
-                width: 290px;
-                min-height: 105px;
-            }
-            .signature-title { 
-                font-weight: 800; 
-                font-size: 16px; 
-                color: #0f172a; 
-                margin-bottom: 2px; 
-            }
-            .seal-img { 
-                width: 280px; 
-                max-width: 100%;
-                height: auto; 
-                object-fit: contain; 
-                mix-blend-mode: multiply; 
-                margin-top: -10px;
-            }
-
-            .card-bottom-bar {
-                margin-top: 6px;
-                padding-top: 4px;
-                border-top: 1px dashed #cbd5e1;
-                display: flex;
-                justify-content: flex-start;
-                align-items: center;
-                padding-right: 6px;
-            }
-            .card-bottom-text {
-                font-size: 11.5px;
-                font-weight: 800;
-                color: #1e293b;
-                letter-spacing: 0.5px;
-            }
-
-            .cut-divider {
-                position: relative;
-                text-align: center;
-                margin: 6px 0; 
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .cut-divider-line {
-                position: absolute;
-                width: 100%;
-                top: 50%;
-                left: 0;
-                border-top: 1.5px dashed #475569;
-                z-index: 1;
-            }
-            .cut-badge {
-                position: relative;
-                z-index: 2;
-                background: #fff;
-                padding: 1px 12px;
-                font-size: 11px;
-                font-weight: 700;
-                color: #475569;
-                border: 1px dashed #94a3b8;
-                border-radius: 12px;
-            }
-
-            .receipt-card {
-                border: 2px solid #0f172a;
-                border-radius: 4px;
-                background: #fafafa;
-                padding: 4px 12px 6px 12px;
-                font-size: 13px; 
-                line-height: 1.45; 
-                text-align: center;
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            .receipt-title { 
-                border: 1.5px solid #0f172a; 
-                display: inline-block; 
-                padding: 1px 22px; 
-                font-size: 13.5px; 
-                font-weight: 800; 
-                background: #e2e8f0; 
-                color: #0f172a;
-                margin-bottom: 3px; 
-                border-radius: 4px;
-            }
-            .receipt-text { 
-                text-align: center; 
-                margin-bottom: 2px; 
-                color: #1e293b;
-                font-weight: 600;
-                font-size: 12.5px;
-            }
-            .receipt-footer-row {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 2px 10px 0 10px;
-                margin-top: 3px;
-                font-size: 12.5px;
-            }
-            .receipt-date-box, .receipt-sign-box {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                color: #1e293b;
-            }
-            .receipt-dots { 
-                letter-spacing: 1px; 
-                color: #475569;
-            }
+            @page { size: A4 portrait; margin: 5mm 8mm; }
+            * { box-sizing: border-box; font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; }
+            body { background: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #0f172a; }
+            .page-container { width: 100%; height: 280mm; max-height: 280mm; box-sizing: border-box; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; background: #fff; }
+            .decision-card { border: 2px solid #0f172a; border-radius: 4px; padding: 5mm 8mm 3mm 8mm; display: flex; flex-direction: column; justify-content: space-between; background: #fff; }
+            .header-top { text-align: center; font-weight: 800; font-size: 14px; line-height: 1.35; margin-bottom: 5px; color: #0f172a; }
+            .header-cols { display: flex; justify-content: space-between; align-items: flex-start; font-size: 13px; line-height: 1.4; margin-bottom: 4px; }
+            .header-right { text-align: right; font-weight: 700; }
+            .header-left { text-align: left; font-weight: 800; white-space: nowrap; position: relative; }
+            .copy-watermark { position: absolute; top: 36px; left: 4px; font-size: 20px; font-weight: 900; color: #c0392b; border: 2px dashed #c0392b; background: rgba(254, 242, 242, 0.75); opacity: 0.85; border-radius: 4px; padding: 1px 15px; transform: rotate(-10deg); letter-spacing: 5px; line-height: 1.3; pointer-events: none; user-select: none; box-shadow: 0 1px 3px rgba(192, 57, 43, 0.15); }
+            .main-title-wrap { text-align: center; margin: 2px 0 6px 0; }
+            .main-title { display: inline-block; font-size: 26px; font-weight: 900; letter-spacing: 5px; padding: 1px 40px; border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; background: #f8fafc; border-radius: 4px; line-height: 1.2; color: #0f172a; }
+            .legal-text { font-size: 12.5px; font-weight: 600; line-height: 1.5; text-align: justify; text-justify: inter-word; margin-bottom: 4px; padding: 0 4px; color: #1e293b; }
+            .legal-item { margin-bottom: 2px; text-indent: -13px; padding-right: 13px; }
+            .proposal { text-align: center; font-weight: 800; font-size: 13px; margin: 5px 0 3px 0; letter-spacing: 0.5px; color: #0f172a; }
+            .decides-wrap { text-align: center; margin: 3px 0 5px 0; }
+            .decides { display: inline-block; font-size: 20px; font-weight: 900; letter-spacing: 4px; padding: 0 25px; border-bottom: 2px solid #0f172a; color: #0f172a; }
+            .articles-container { margin: 4px 0 6px 0; padding: 6px 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; }
+            .article-row { display: flex; align-items: center; font-size: 14px; margin-bottom: 3px; line-height: 1.5; }
+            .article-row:last-child { margin-bottom: 0; }
+            .art-title { width: 85px; min-width: 85px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; color: #0f172a; }
+            .art-title-spacer { width: 85px; min-width: 85px; }
+            .art-label { width: 175px; min-width: 175px; font-weight: 600; color: #334155; }
+            .art-val { font-weight: 700; font-size: 14.5px; color: #0f172a; }
+            .art-center-val { font-weight: 700; font-size: 15px; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin: 6px 0; text-align: center; }
+            th, td { border: 1.5px solid #0f172a; padding: 6px 8px; font-size: 13.5px; font-weight: 700; vertical-align: middle; }
+            th { background-color: #f1f5f9; font-weight: 800; font-size: 14px; color: #0f172a; }
+            .signature-container { display: flex; justify-content: space-between; align-items: flex-start; padding: 0 4%; margin-top: 6px; min-height: 105px; }
+            .qr-box { text-align: center; display: flex; flex-direction: column; align-items: center; width: 130px; }
+            .qr-title { font-size: 11.5px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+            .qr-slot { width: 76px; height: 76px; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            .qr-img { width: 100%; height: 100%; object-fit: contain; }
+            .qr-desc { font-size: 9px; font-weight: 700; color: #64748b; margin-top: 2px; }
+            .signature-box { text-align: center; position: relative; width: 290px; min-height: 105px; }
+            .signature-title { font-weight: 800; font-size: 16px; color: #0f172a; margin-bottom: 2px; }
+            .seal-img { width: 280px; max-width: 100%; height: auto; object-fit: contain; mix-blend-mode: multiply; margin-top: -10px; }
+            .card-bottom-bar { margin-top: 6px; padding-top: 4px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: flex-start; align-items: center; padding-right: 6px; }
+            .card-bottom-text { font-size: 11.5px; font-weight: 800; color: #1e293b; letter-spacing: 0.5px; }
+            .cut-divider { position: relative; text-align: center; margin: 6px 0; display: flex; align-items: center; justify-content: center; }
+            .cut-divider-line { position: absolute; width: 100%; top: 50%; left: 0; border-top: 1.5px dashed #475569; z-index: 1; }
+            .cut-badge { position: relative; z-index: 2; background: #fff; padding: 1px 12px; font-size: 11px; font-weight: 700; color: #475569; border: 1px dashed #94a3b8; border-radius: 12px; }
+            .receipt-card { border: 2px solid #0f172a; border-radius: 4px; background: #fafafa; padding: 4px 12px 6px 12px; font-size: 13px; line-height: 1.45; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+            .receipt-title { border: 1.5px solid #0f172a; display: inline-block; padding: 1px 22px; font-size: 13.5px; font-weight: 800; background: #e2e8f0; color: #0f172a; margin-bottom: 3px; border-radius: 4px; }
+            .receipt-text { text-align: center; margin-bottom: 2px; color: #1e293b; font-weight: 600; font-size: 12.5px; }
+            .receipt-footer-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 10px 0 10px; margin-top: 3px; font-size: 12.5px; }
+            .receipt-date-box, .receipt-sign-box { display: flex; align-items: center; gap: 6px; color: #1e293b; }
+            .receipt-dots { letter-spacing: 1px; color: #475569; }
         </style>
     </head>
     <body>
         <div class="page-container">
-            
             <div class="decision-card">
                 <div>
                     <div class="header-top">
                         الجمهورية الجزائرية الديمقراطية الشعبية<br>
                         وزارة التربية الوطنية
                     </div>
-                    
                     <div class="header-cols">
                         <div class="header-right">
                             مديرية التربية لولاية توقرت<br>
@@ -4504,17 +4208,14 @@ window.printSingleFramerDecision = async function(docId) {
                             مكتب التكوين و التفتيش<br>
                             الرقم : &nbsp; <b>${decNum}</b> &nbsp; / &nbsp; ${currentYear}
                         </div>
-                        
                         <div class="header-left">
                             توقرت في : <span dir="ltr"><b>${date}</b></span>
                             <div class="copy-watermark">« نـسـخـــــة »</div>
                         </div>
                     </div>
-
                     <div class="main-title-wrap">
                         <div class="main-title">مـــقـــــــــــــرر</div>
                     </div>
-
                     <div class="legal-text">
                         <div class="legal-item">- بمقتضى الأمر رقم 06-03 المؤرخ في جمادى الثانية عام 1427 الموافق 15 يوليو سنة 2006 ، و المتضمن القانون الأساسي العام للوظيفة العمومية.</div>
                         <div class="legal-item">- بمقتضى المرسوم التنفيذي رقم : 90/174 المؤرخ في 09 جوان 1990 المحدد لإجراءات تنظيم و تسيير مصالح التربية على مستوى الولاية.</div>
@@ -4525,11 +4226,9 @@ window.printSingleFramerDecision = async function(docId) {
                         <div class="legal-item">- بناء على المنشور الوزاري رقم: <b>${circNum}</b> المتعلق بتنظيم ${type} والتكوين المسبق للأساتذة المدمجين بعنوان سنة <b>${circYear}</b>.</div>
                         <div class="proposal">وبـاقـتــراح مـن الـسـيـد رئـيـس مـصـلـحـة المـسـتـخـدمـيـن و الـتـفـتـيـش</div>
                     </div>
-
                     <div class="decides-wrap">
                         <div class="decides">يــقــــرر</div>
                     </div>
-
                     <div class="articles-container">
                         <div class="article-row">
                             <span class="art-title">المــادة 01:</span>
@@ -4547,7 +4246,6 @@ window.printSingleFramerDecision = async function(docId) {
                             <span class="art-val art-center-val">${centerName}</span>
                         </div>
                     </div>
-
                     <table>
                         <thead>
                             <tr>
@@ -4566,7 +4264,6 @@ window.printSingleFramerDecision = async function(docId) {
                             </tr>
                         </tbody>
                     </table>
-
                     <div class="signature-container">
                         <div class="qr-box">
                             <div class="qr-title">موقع مركز التكوين</div>
@@ -4575,25 +4272,20 @@ window.printSingleFramerDecision = async function(docId) {
                             </div>
                             <div class="qr-desc">امسح لتحديد الموقع</div>
                         </div>
-
                         <div class="signature-box">
                             <div class="signature-title">مدير التربية</div>
                             <img src="${sealUrl}" class="seal-img" crossorigin="anonymous">
                         </div>
                     </div>
                 </div>
-
                 <div class="card-bottom-bar">
                     <span class="card-bottom-text">مستخرج من الأرضية الرقمية لمركز التكوين : <b>${centerName}</b></span>
                 </div>
-
             </div>
-
             <div class="cut-divider">
                 <div class="cut-divider-line"></div>
                 <span class="cut-badge">✂ قـطـع مـن هـنـا</span>
             </div>
-
             <div class="receipt-card">
                 <div><div class="receipt-title">قسيمة الإشعار بالاستلام</div></div>
                 <div class="receipt-text">
@@ -4603,7 +4295,6 @@ window.printSingleFramerDecision = async function(docId) {
                 <div class="receipt-text">
                     أعلن بأنني قد استلمت مقرر متعلق بـ <b>${type}</b> لسنة <b dir="ltr">${year}</b>
                 </div>
-                
                 <div class="receipt-footer-row">
                     <div class="receipt-date-box">
                         <b>تاريخ الاستلام :</b> 
@@ -4615,7 +4306,6 @@ window.printSingleFramerDecision = async function(docId) {
                     </div>
                 </div>
             </div>
-
         </div>
     </body>
     <script>

@@ -8687,25 +8687,85 @@ window.decModalFilters = {
     search: ""
 };
 
-// 🌟 1. حفظ رقم المقرر يدوياً في حقل الدورة المحددة الخاصة بالمؤطر 🌟
-window.updateSingleDecisionNumber = async function(docId, val) {
-    let cleanVal = val.trim();
+function showInModalToast(message, isError = false) {
+    let container = document.getElementById('decModalToastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'decModalToastContainer';
+        container.style.cssText = `
+            position: fixed;
+            top: 25px;
+            right: 25px;
+            z-index: 10000000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            direction: rtl;
+        `;
+        document.body.appendChild(container);
+    }
+    let toast = document.createElement('div');
+    toast.style.cssText = `
+        background: ${isError ? '#dc2626' : '#0FBA50'};
+        color: white;
+        padding: 10px 18px;
+        border-radius: 10px;
+        font-family: 'Cairo', sans-serif;
+        font-weight: bold;
+        font-size: 14px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        opacity: 0;
+        transform: translateY(-15px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: auto;
+    `;
+    toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-triangle-exclamation' : 'fa-circle-check'}" style="font-size: 16px;"></i> <span>${message}</span>`;
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }, 20);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-15px)';
+        setTimeout(() => toast.remove(), 350);
+    }, 2200);
+}
+// 🌟 1. حفظ رقم المقرر أو حذفه نهائياً من قاعدة البيانات مع بقاء النافذة مفتوحة 🌟
+window.updateSingleDecisionNumber = async function(docId, val, inputElement) {
+    let cleanVal = val ? String(val).trim() : "";
     let numVal = cleanVal === "" ? null : parseInt(cleanVal);
     let session = window.decModalFilters.session || 's1';
     let fieldName = 'decisionNumber_' + session;
 
-    if (cleanVal !== "" && isNaN(numVal)) {
-        return Swal.fire('تنبيه', 'يرجى إدخال رقم صحيح!', 'warning');
+    if (cleanVal !== "" && (isNaN(numVal) || numVal <= 0)) {
+        showInModalToast('يرجى إدخال رقم صحيح أكبر من الصفر!', true);
+        if (inputElement) inputElement.value = "";
+        return;
     }
     
-    let framer = adminFramersData.find(f => f.docId === docId);
+    let framer = adminFramersData.find(f => f.docId === docId || f.empId === docId);
     if (!framer) return;
+
     try {
         let updatePayload = {};
+        
         if (numVal === null) {
+            // 🌟 مسح حقل الدورة الحالية من فايربيز والذاكرة 🌟
             updatePayload[fieldName] = firebase.firestore.FieldValue.delete();
             delete framer[fieldName];
-            if (session === 's1') delete framer.decisionNumber;
+            framer[fieldName] = undefined;
+
+            // 🌟 الحذف النهائي للحقل القديم (decisionNumber) من فايربيز والذاكرة لمنع عودته نهائياً 🌟
+            updatePayload.decisionNumber = firebase.firestore.FieldValue.delete();
+            delete framer.decisionNumber;
+            framer.decisionNumber = undefined;
         } else {
             updatePayload[fieldName] = numVal;
             framer[fieldName] = numVal;
@@ -8715,18 +8775,26 @@ window.updateSingleDecisionNumber = async function(docId, val) {
             }
         }
         
+        // تطبيق الحذف/التحديث الفعلي في Firestore
         await db.collection("center_framers").doc(docId).update(updatePayload);
         
+        // تحديث مظهر الحقل فورياً (أخضر عند وجود رقم، وعادي فارغ عند الحذف)
+        if (inputElement) {
+            inputElement.value = numVal !== null ? numVal : '';
+            inputElement.style.borderColor = numVal ? '#0FBA50' : '#cbd5e1';
+            inputElement.style.backgroundColor = numVal ? '#f0fdf4' : '#fff';
+            inputElement.style.color = numVal ? '#0FBA50' : '#333';
+        }
+
         const sessionAr = session === 's1' ? 'الدورة 1' : (session === 's2' ? 'الدورة 2' : 'الدورة 3');
-        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1400 });
-        Toast.fire({ icon: 'success', title: numVal ? `تم حفظ مقرر (${sessionAr}): ${numVal}` : 'تم مسح رقم المقرر' });
+        showInModalToast(numVal ? `تم حفظ مقرر (${sessionAr}): ${numVal}` : `تم حذف رقم المقرر لـ (${sessionAr}) نهائياً`);
     } catch (e) {
         console.error(e);
-        Swal.fire('خطأ', 'فشل حفظ الرقم في قاعدة البيانات', 'error');
+        showInModalToast('فشل تحديث البيانات في قاعدة البيانات', true);
     }
 };
 
-// 🌟 2. عرض مؤطري الدورة المحددة مع استدعاء رقم المقرر 🌟
+// 🌟 2. عرض قائمة المؤطرين بعد التأكد من عدم استدعاء أي أرقام محذوفة 🌟
 window.renderDecModalFramersList = function() {
     let listContainer = document.getElementById('decModalFramersList');
     if (!listContainer) return;
@@ -8763,10 +8831,10 @@ window.renderDecModalFramersList = function() {
         let role = f.role || '-';
         
         let currentNum = f[fieldName];
-        if (currentNum === undefined && sessionF === 's1' && f.decisionNumber) {
+        if ((currentNum === undefined || currentNum === null || currentNum === "") && sessionF === 's1' && f.decisionNumber) {
             currentNum = f.decisionNumber;
         }
-        let numVal = (currentNum !== undefined && currentNum !== null) ? currentNum : '';
+        let numVal = (currentNum !== undefined && currentNum !== null && currentNum !== "") ? currentNum : '';
 
         html += `
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 8px; border-bottom:1px solid #f1f5f9; transition:0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">
@@ -8781,7 +8849,7 @@ window.renderDecModalFramersList = function() {
                     <span style="font-size:12px; font-weight:bold; color:#475569;">رقم المقرر:</span>
                     <input type="number" value="${numVal}" placeholder="بدون" min="1" 
                            style="width:75px; text-align:center; font-weight:900; font-family:'Cairo'; font-size:13px; color:#0FBA50; border:1.5px solid ${numVal ? '#0FBA50' : '#cbd5e1'}; border-radius:6px; padding:3px 5px; outline:none; background:${numVal ? '#f0fdf4' : '#fff'};"
-                           onchange="updateSingleDecisionNumber('${f.docId}', this.value)"
+                           onchange="updateSingleDecisionNumber('${f.docId}', this.value, this)"
                            title="رقم مقرر هذا المؤطر في هذه الدورة تحديداً">
                 </div>
             </div>
@@ -8972,10 +9040,11 @@ window.toggleAllDecisions = function(source) {
     document.querySelectorAll('.decision-cb').forEach(cb => cb.checked = source.checked);
 };
 
-// 🌟 4. دالة الترقيم الذكي بحفظ مستقل لكل دورة 🌟
+// 🌟 3. الترقيم الآلي الجماعي دون إغلاق النافذة 🌟
 window.applyAutoNumbering = async function() {
     let selectedIds = Array.from(document.querySelectorAll('.decision-cb:checked')).map(cb => cb.value);
-    if (selectedIds.length === 0) return Swal.showValidationMessage('الرجاء تحديد مؤطرين لترقيمهم!');
+    if (selectedIds.length === 0) return showInModalToast('الرجاء تحديد مؤطرين لترقيمهم!', true);
+    
     const method = document.getElementById('decNumberingMethod').value;
     const session = window.decModalFilters.session || 's1';
     const fieldName = 'decisionNumber_' + session;
@@ -8984,15 +9053,17 @@ window.applyAutoNumbering = async function() {
     if (method === 'keep_previous') {
         framersToNumber = adminFramersData.filter(f => selectedIds.includes(f.docId) && !f[fieldName]);
         if(framersToNumber.length === 0) {
-            return Swal.fire('تنبيه', 'جميع المؤطرين المحددين يمتلكون أرقاماً مسجلة في هذه الدورة!', 'info');
+            return showInModalToast('جميع المؤطرين المحددين يمتلكون أرقاماً مسجلة في هذه الدورة!', true);
         }
     } else {
         framersToNumber = adminFramersData.filter(f => selectedIds.includes(f.docId));
     }
+    
     const startInput = document.getElementById('startDecNumber');
     let customStart = (startInput && startInput.value.trim() !== "") ? parseInt(startInput.value.trim()) : null;
     const reuseRecycled = document.getElementById('decReuseRecycled') ? document.getElementById('decReuseRecycled').checked : false;
-    Swal.fire({ title: 'جاري الترقيم وحفظ السجلات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    showInModalToast('جاري الترقيم وحفظ السجلات...');
     
     try {
         let settingsDoc = await db.collection("site_settings").doc("main").get();
@@ -9034,80 +9105,62 @@ window.applyAutoNumbering = async function() {
         for (let b of batches) await b.commit();
         if(SITE_SETTINGS) SITE_SETTINGS.DECISION_NUMBERING = mainData.DECISION_NUMBERING;
         renderDecModalFramersList();
-        Swal.fire({ 
-            icon: 'success', 
-            title: 'تم الترقيم بنجاح', 
-            text: `تم حفظ أرقام المقررات لـ (${framersToNumber.length}) مؤطر.`, 
-            timer: 1800, 
-            showConfirmButton: false 
-        });
+        showInModalToast(`تم حفظ أرقام المقررات لـ (${framersToNumber.length}) مؤطر بنجاح.`);
     } catch (e) { 
         console.error(e); 
-        Swal.fire('خطأ', 'حدث مشكل أثناء الاتصال بقاعدة البيانات.', 'error'); 
+        showInModalToast('حدث مشكل أثناء الاتصال بقاعدة البيانات.', true); 
     }
 };
-
-// 🌟 5. دالة تفريغ أرقام الدورة 🌟
+// 🌟 4. تفريغ أرقام الدورة دون إغلاق النافذة 🌟
 window.clearAutoNumbering = async function() {
     let selectedIds = Array.from(document.querySelectorAll('.decision-cb:checked')).map(cb => cb.value);
     const session = window.decModalFilters.session || 's1';
     const fieldName = 'decisionNumber_' + session;
     let framersToClear = adminFramersData.filter(f => selectedIds.includes(f.docId) && f[fieldName]);
     
-    if(framersToClear.length === 0) return Swal.fire('تنبيه', 'المؤطرون ليس لديهم أرقام مقررات مسجلة في هذه الدورة.', 'info');
+    if(framersToClear.length === 0) return showInModalToast('المؤطرون ليس لديهم أرقام مقررات في هذه الدورة.', true);
     const sessionAr = session === 's1' ? 'الدورة الأولى' : (session === 's2' ? 'الدورة الثانية' : 'الدورة الثالثة');
     
-    Swal.fire({
-        title: 'تأكيد الحذف', 
-        text: `سيتم حذف أرقام المقررات الخاصة بـ (${sessionAr}) لـ (${framersToClear.length}) مؤطر.`, 
-        icon: 'warning', 
-        showCancelButton: true, 
-        confirmButtonText: 'نعم، احذف', 
-        cancelButtonText: 'إلغاء', 
-        confirmButtonColor: '#dc3545'
-    }).then(async res => {
-        if(res.isConfirmed) {
-            Swal.fire({ title: 'جاري الحذف والتفريغ...', didOpen: () => Swal.showLoading() });
-            try {
-                let settingsDoc = await db.collection("site_settings").doc("main").get();
-                let mainData = settingsDoc.exists ? settingsDoc.data() : {};
-                if (!mainData.DECISION_NUMBERING) mainData.DECISION_NUMBERING = { lastNumber: 0, recycledNumbers: [] };
-                if (!mainData.DECISION_NUMBERING.recycledNumbers) mainData.DECISION_NUMBERING.recycledNumbers = [];
-                
-                let batch = db.batch(); 
-                let opCount = 0; 
-                let batches = [];
-                
-                framersToClear.forEach(f => {
-                    let num = f[fieldName];
-                    if(num && !mainData.DECISION_NUMBERING.recycledNumbers.includes(num)) {
-                        mainData.DECISION_NUMBERING.recycledNumbers.push(num);
-                    }
-                    
-                    let deletePayload = { [fieldName]: firebase.firestore.FieldValue.delete() };
-                    if (session === 's1') deletePayload.decisionNumber = firebase.firestore.FieldValue.delete();
-                    
-                    batch.update(db.collection("center_framers").doc(f.docId), deletePayload);
-                    delete f[fieldName];
-                    if (session === 's1') delete f.decisionNumber;
-                    
-                    opCount++;
-                    if(opCount >= 400){ batches.push(batch); batch = db.batch(); opCount = 0; }
-                });
-                
-                batch.update(db.collection("site_settings").doc("main"), { DECISION_NUMBERING: mainData.DECISION_NUMBERING });
-                if(opCount > 0) batches.push(batch);
-                for(let b of batches) await b.commit();
-                
-                if(SITE_SETTINGS) SITE_SETTINGS.DECISION_NUMBERING = mainData.DECISION_NUMBERING;
-                renderDecModalFramersList();
-                Swal.fire({ icon: 'success', title: 'تم الحذف', text: 'تم تفريغ الأرقام بنجاح.', timer: 1500, showConfirmButton: false });
-            } catch(e) { 
-                console.error(e); 
-                Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error'); 
+    if (!confirm(`هل أنت متأكد من حذف أرقام المقررات الخاصة بـ (${sessionAr}) لـ (${framersToClear.length}) مؤطر؟`)) return;
+    showInModalToast('جاري الحذف والتفريغ...');
+    try {
+        let settingsDoc = await db.collection("site_settings").doc("main").get();
+        let mainData = settingsDoc.exists ? settingsDoc.data() : {};
+        if (!mainData.DECISION_NUMBERING) mainData.DECISION_NUMBERING = { lastNumber: 0, recycledNumbers: [] };
+        if (!mainData.DECISION_NUMBERING.recycledNumbers) mainData.DECISION_NUMBERING.recycledNumbers = [];
+        
+        let batch = db.batch(); 
+        let opCount = 0; 
+        let batches = [];
+        
+        framersToClear.forEach(f => {
+            let num = f[fieldName];
+            if(num && !mainData.DECISION_NUMBERING.recycledNumbers.includes(num)) {
+                mainData.DECISION_NUMBERING.recycledNumbers.push(num);
             }
-        }
-    });
+            
+            let deletePayload = { [fieldName]: firebase.firestore.FieldValue.delete() };
+            if (session === 's1') deletePayload.decisionNumber = firebase.firestore.FieldValue.delete();
+            
+            batch.update(db.collection("center_framers").doc(f.docId), deletePayload);
+            delete f[fieldName];
+            if (session === 's1') delete f.decisionNumber;
+            
+            opCount++;
+            if(opCount >= 400){ batches.push(batch); batch = db.batch(); opCount = 0; }
+        });
+        
+        batch.update(db.collection("site_settings").doc("main"), { DECISION_NUMBERING: mainData.DECISION_NUMBERING });
+        if(opCount > 0) batches.push(batch);
+        for(let b of batches) await b.commit();
+        
+        if(SITE_SETTINGS) SITE_SETTINGS.DECISION_NUMBERING = mainData.DECISION_NUMBERING;
+        renderDecModalFramersList();
+        showInModalToast('تم تفريغ الأرقام بنجاح.');
+    } catch(e) { 
+        console.error(e); 
+        showInModalToast('حدث مشكل في الاتصال بقاعدة البيانات.', true); 
+    }
 };
 
 // 🌟 دالة الطباعة السريعة والفورية (نسخة مصححة ومؤمنة بالكامل لمنع أي صفحة فارغة) 🌟
