@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   
-  <!-- مكتبة ماسح الباركود -->
+  <!-- مكتبة ماسح الباركود الموثوقة لتفادي أخطاء التحميل -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
   <!-- إعدادات Firebase -->
@@ -18,27 +18,104 @@
 
   <style>
     * { box-sizing: border-box; font-family: 'Cairo', sans-serif; margin: 0; padding: 0; }
-    body { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+    body { 
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); 
+        color: white; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center; 
+        min-height: 100vh; 
+        overflow: hidden; 
+    }
+    
     .header { text-align: center; margin-bottom: 30px; z-index: 10; }
     .header h1 { font-size: 26px; color: #4facfe; font-weight: 900; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
     .header p { font-size: 14px; color: #e0e0e0; margin-top: 5px; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px; display: inline-block; }
-    .scanner-container { position: relative; width: 90%; max-width: 350px; aspect-ratio: 1 / 1; border-radius: 30px; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 20px rgba(79, 172, 254, 0.4); background: #000; border: 4px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
+
+    /* الحاوية الرئيسية للماسح */
+    .scanner-container {
+        position: relative;
+        width: 90%;
+        max-width: 350px;
+        aspect-ratio: 1 / 1;
+        border-radius: 30px;
+        overflow: hidden;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 20px rgba(79, 172, 254, 0.4);
+        background: #000;
+        border: 4px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+
     #reader { width: 100%; height: 100%; }
     #reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 26px; }
+    
+    /* إخفاء عناصر المكتبة الافتراضية إن وجدت */
     #reader__dashboard_section_csr, #reader__dashboard_section_swaplink { display: none !important; }
-    .laser-line { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0FBA50; box-shadow: 0 0 15px 5px rgba(15, 186, 80, 0.5); animation: scan 2s infinite linear; z-index: 10; }
-    .scan-guide { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: 5; }
-    .scan-guide::before, .scan-guide::after, .scan-guide .bottom-guides::before, .scan-guide .bottom-guides::after { content: ''; position: absolute; width: 40px; height: 40px; border-color: rgba(255,255,255,0.8); border-style: solid; }
+
+    /* تأثير خط الليزر */
+    .laser-line {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: #0FBA50;
+        box-shadow: 0 0 15px 5px rgba(15, 186, 80, 0.5);
+        animation: scan 2s infinite linear;
+        z-index: 10;
+    }
+
+    /* إطارات التوجيه في الزوايا */
+    .scan-guide {
+        position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: 5;
+    }
+    .scan-guide::before, .scan-guide::after, .scan-guide .bottom-guides::before, .scan-guide .bottom-guides::after {
+        content: ''; position: absolute; width: 40px; height: 40px; border-color: rgba(255,255,255,0.8); border-style: solid;
+    }
     .scan-guide::before { top: 20px; left: 20px; border-width: 4px 0 0 4px; border-radius: 10px 0 0 0; }
     .scan-guide::after { top: 20px; right: 20px; border-width: 4px 4px 0 0; border-radius: 0 10px 0 0; }
     .scan-guide .bottom-guides::before { bottom: 20px; left: 20px; border-width: 0 0 4px 4px; border-radius: 0 0 0 10px; }
     .scan-guide .bottom-guides::after { bottom: 20px; right: 20px; border-width: 0 4px 4px 0; border-radius: 0 0 10px 0; }
-    @keyframes scan { 0% { top: 10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 90%; opacity: 0; } }
-    .status-panel { margin-top: 30px; background: rgba(255, 255, 255, 0.1); padding: 15px 25px; border-radius: 20px; text-align: center; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 5px 15px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px; font-weight: 600; z-index: 10; }
+
+    @keyframes scan {
+        0% { top: 10%; opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { top: 90%; opacity: 0; }
+    }
+
+    .status-panel { 
+        margin-top: 30px; 
+        background: rgba(255, 255, 255, 0.1); 
+        padding: 15px 25px; 
+        border-radius: 20px; 
+        text-align: center; 
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        z-index: 10;
+    }
+    
     .status-panel i { font-size: 20px; color: #4facfe; }
-    .btn-back { position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); color: white; padding: 10px 20px; border-radius: 15px; cursor: pointer; font-weight: bold; transition: 0.3s; backdrop-filter: blur(5px); z-index: 20; display: flex; align-items: center; gap: 8px; }
+
+    .btn-back { 
+        position: absolute; top: 20px; right: 20px; 
+        background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2); 
+        color: white; padding: 10px 20px; border-radius: 15px; 
+        cursor: pointer; font-weight: bold; font-family: 'Cairo';
+        transition: 0.3s; backdrop-filter: blur(5px); z-index: 20;
+        display: flex; align-items: center; gap: 8px;
+    }
     .btn-back:hover { background: #d90429; box-shadow: 0 0 15px rgba(217, 4, 41, 0.5); border-color: transparent;}
+    
+    /* تصميم النافذة الترحيبية (كما برمجتها أنت) */
     .swal-welcome-card { text-align: right; line-height: 2; font-size: 15px; }
+    .swal-welcome-card b { color: #1E68E8; }
     .swal-badge { display: inline-block; padding: 6px 15px; border-radius: 20px; color: white; font-weight: bold; margin-bottom: 15px; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
     .badge-present { background: linear-gradient(45deg, #0FBA50, #0a8a3a); }
     .badge-late { background: linear-gradient(45deg, #ff9800, #e65100); }
@@ -60,7 +137,9 @@
   <div class="scanner-container">
     <div id="reader"></div>
     <div class="laser-line"></div>
-    <div class="scan-guide"><div class="bottom-guides"></div></div>
+    <div class="scan-guide">
+        <div class="bottom-guides"></div>
+    </div>
   </div>
 
   <div class="status-panel">
@@ -68,488 +147,9 @@
     <span>قم بتوجيه الكاميرا نحو باركود البطاقة</span>
   </div>
 
-<script>
-// إعدادات Firebase الخاصة بك
-const firebaseConfig = {
-  apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
-  authDomain: "voyage-touggourt-48755.firebaseapp.com",
-  projectId: "voyage-touggourt-48755",
-  storageBucket: "voyage-touggourt-48755.firebasestorage.app",
-  messagingSenderId: "712694455348",
-  appId: "1:712694455348:web:5b4e8df57347edf944fe61"
-};
 
-if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-const db = firebase.firestore();
+  <script src="js/security.js" defer></script>
+  <script src="js/scanner.js" defer></script>
 
-let employeePhotosMap = {}; 
-const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
-
-let html5QrCode = null;
-let lastProcessedRequestId = "";
-let todayDate = "";
-let isScanningPaused = false; 
-let activeCenter = "";
-let scannedCardsCount = 0; 
-let currentTokenValue = "";
-
-function extractCoreId(val) {
-    if (!val) return "";
-    let str = String(val).trim().toUpperCase();
-    let digitsOnly = str.replace(/\D/g, "");
-    let core = digitsOnly.replace(/^0+/, ""); 
-    return core === "" ? digitsOnly : core;
-}
-
-// ================= دوال استخراج معلومات الهاتف وبصمته =================
-function getDeviceFingerprint() {
-    let deviceId = localStorage.getItem("scanner_device_id");
-    if (!deviceId) {
-        deviceId = 'dev_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-        localStorage.setItem("scanner_device_id", deviceId);
-    }
-    return deviceId;
-}
-
-async function getAccurateDeviceName() {
-    let brand = "جهاز غير معروف";
-    let model = "";
-    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-        try {
-            const hints = await navigator.userAgentData.getHighEntropyValues(['model', 'platform']);
-            if (hints.model) model = hints.model;
-        } catch (e) {}
-    }
-    const ua = navigator.userAgent;
-    if (!model && /Android/i.test(ua)) {
-        const match = ua.match(/Android\s+[\d\.]+;\s*([^;)]+)\s*[;)]/i);
-        if (match && match[1]) model = match[1].trim();
-    }
-
-    if (/SM-/i.test(model) || /SAMSUNG/i.test(ua)) brand = "سامسونج (Samsung)";
-    else if (/OPPO/i.test(ua) || /CPH/i.test(model)) brand = "أوبو (Oppo)";
-    else if (/RMX/i.test(model) || /Realme/i.test(ua)) brand = "ريلمي (Realme)";
-    else if (/Redmi/i.test(ua) || /Xiaomi/i.test(ua) || /POCO/i.test(ua)) brand = "شاومي (Xiaomi)";
-    else if (/iPhone/i.test(ua)) return "آبل (Apple iPhone)";
-    else if (/iPad/i.test(ua)) return "آبل (Apple iPad)";
-    else if (/Android/i.test(ua)) brand = "هاتف أندرويد";
-
-    return model ? `${brand} - ${model}` : brand;
-}
-
-// ================= دوال الموقع الجغرافي (GPS) =================
-function getUserLocation() {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject("المتصفح لا يدعم تحديد الموقع."); return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
-            (error) => { reject("يرجى السماح بالوصول للموقع الجغرافي."); },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    });
-}
-
-function getDistanceInMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; 
-    const phi1 = lat1 * Math.PI / 180;
-    const phi2 = lat2 * Math.PI / 180;
-    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
-    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; 
-}
-
-// ================= دالة التحقق من الموقع (متوافقة مع النطاق المخصص وبدون كشف الأرقام) =================
-async function verifyLocationInCenter(centerName) {
-    try {
-        let safeCenterId = centerName.replace(/\//g, '-').trim();
-        const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
-        
-        // إذا لم يحدد المفتش الموقع أصلاً، نسمح بالدخول
-        if (!centerDoc.exists || !centerDoc.data().latitude) return true;
-
-        const centerLoc = centerDoc.data();
-        const userLoc = await getUserLocation();
-        const distance = getDistanceInMeters(userLoc.lat, userLoc.lng, centerLoc.latitude, centerLoc.longitude);
-        
-        // 🌟 استخراج النطاق المسموح 🌟
-        const allowedRadius = centerLoc.radiusMeters || 100;
-
-        if (distance <= allowedRadius) {
-            return true;
-        } else {
-            Swal.fire({
-                icon: 'error', 
-                title: 'خارج النطاق الجغرافي',
-                // 🌟 تم تعديل الرسالة لتكون مبهمة أمنياً ولا تكشف الأرقام 🌟
-                text: 'أنت متواجد خارج النطاق الجغرافي المسموح به للمركز. يُمنع فتح الماسح أو تسجيل الحضور من خارج المركز.',
-                allowOutsideClick: false, 
-                showConfirmButton: false
-            });
-            return false;
-        }
-    } catch (e) {
-        Swal.fire('تنبيه أمني', e, 'warning');
-        return false;
-    }
-}
-
-
-// ================= دوال التصوير وحل مشكلة تداخل الكاميرتين =================
-async function takeFrontPhotoSilent() {
-    return new Promise(async (resolve) => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-            const video = document.createElement("video");
-            video.srcObject = stream;
-            video.setAttribute("playsinline", true);
-            await video.play();
-
-            setTimeout(() => {
-                const canvas = document.createElement("canvas");
-                canvas.width = 300; canvas.height = 300;
-                canvas.getContext("2d").drawImage(video, 0, 0, 300, 300);
-                stream.getTracks().forEach(track => track.stop());
-                resolve(canvas.toDataURL("image/jpeg", 0.5));
-            }, 500); 
-        } catch (error) {
-            resolve(null); 
-        }
-    });
-}
-
-// ================= دالة الاستماع لأوامر التصوير الحي من لوحة التحكم =================
-function listenForInspectorCommands(token) {
-    db.collection("scanner_tokens").doc(token).onSnapshot(async (doc) => {
-        if (!doc.exists) return;
-        const data = doc.data();
-        const cmd = data.remotePhotoCommand;
-        const myDeviceId = getDeviceFingerprint();
-
-        // التأكد من وجود أمر جديد لم تتم معالجته مسبقاً
-        if (cmd && cmd.requestId && cmd.requestId !== lastProcessedRequestId) {
-            
-            // 🌟 هل هذا الأمر موجه لي (جهازي) أو لجميع الأجهزة ("all")؟ 🌟
-            if (cmd.targetDevice === "all" || cmd.targetDevice === myDeviceId) {
-                
-                lastProcessedRequestId = cmd.requestId; // تسجيل الطلب كـ "منجز" لمنع التكرار
-                
-                // إيقاف ماسح الباركود مؤقتاً لتحرير الكاميرا للتصوير الحي
-                let wasScanning = false;
-                if (html5QrCode && html5QrCode.isScanning) {
-                    wasScanning = true;
-                    await html5QrCode.stop().catch(()=>{}); 
-                }
-
-                // التقاط الصورة الأمامية بصمت
-                const photoBase64 = await takeFrontPhotoSilent();
-                
-                if (photoBase64) {
-                    const devName = await getAccurateDeviceName();
-                    
-                    // حفظ الصورة داخل خريطة (Map) مخصصة للأجهزة المتعددة
-                    await db.collection("scanner_tokens").doc(token).update({
-                        [`lastRemotePhotosMap.${myDeviceId}`]: {
-                            photoUrl: photoBase64,
-                            capturedAt: new Date().toISOString(),
-                            requestId: cmd.requestId,
-                            deviceName: devName
-                        }
-                    });
-                }
-
-                // إعادة تشغيل ماسح الباركود بعد انتهاء التصوير
-                if (wasScanning) {
-                    startScanner();
-                }
-            }
-        }
-    });
-}
-
-
-window.onload = initScannerSystem;
-
-// ================= دالة طلب الموقع الجغرافي المنظمة =================
-function requestGPSPermission() {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject("متصفحك لا يدعم تحديد الموقع الجغرافي."); return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
-            (error) => { reject("الرجاء الموافقة على إذن الوصول للموقع الجغرافي (GPS) للتحقق من تواجدك داخل المركز."); },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    });
-}
-
-// ================= تهيئة وتشغيل النظام (مع المسح التلقائي للكاش للروابط الجديدة) =================
-async function initScannerSystem() {
-    const d = new Date();
-    todayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    currentTokenValue = token;
-
-    if (!token) {
-        Swal.fire({ icon: 'error', title: 'رابط غير صالح', text: 'الرابط غير كامل.', allowOutsideClick: false, showConfirmButton: false });
-        return; 
-    }
-
-    // 🌟 [الجديد]: نظام الفرمتة الذاتية (مسح الكاش عند دخول رابط جديد) 🌟
-    const lastUsedToken = localStorage.getItem('last_used_scanner_token');
-    if (lastUsedToken && lastUsedToken !== token) {
-        // إذا كان الرابط جديداً ومختلفاً عن القديم، نمسح كل بيانات الهاتف المحلية!
-        localStorage.clear();
-        console.log("تم مسح الكاش وبصمة الجهاز القديمة لأن الرابط جديد.");
-        // نعيد حفظ الرابط الجديد لكي لا يمسح الكاش في كل مرة نحدث فيها نفس الصفحة
-        localStorage.setItem('last_used_scanner_token', token);
-    } else if (!lastUsedToken) {
-        // أول مرة يفتح فيها النظام تماماً
-        localStorage.setItem('last_used_scanner_token', token);
-    }
-    // ==============================================================================
-
-    try {
-        // 1. طلب إذن الموقع الجغرافي أولاً بهدوء
-        document.getElementById("dateInfo").innerText = `يرجى السماح بالوصول للموقع الجغرافي...`;
-        await requestGPSPermission(); 
-
-        // 2. التحقق من الرابط والأجهزة (عمليات سريعة)
-        document.getElementById("dateInfo").innerText = `جاري التحقق من الرابط...`;
-        let tokenDoc = await db.collection('scanner_tokens').doc(token).get();
-        if (!tokenDoc.exists) {
-            Swal.fire({ icon: 'error', title: 'رابط منتهي', text: 'هذا الرابط تم إبطاله.', allowOutsideClick: false, showConfirmButton: false });
-            return;
-        }
-
-        let tokenData = tokenDoc.data();
-        activeCenter = tokenData.center;
-
-        const isLocationValid = await verifyLocationInCenter(activeCenter);
-        if (!isLocationValid) return; 
-
-        // دالة getDeviceFingerprint ستولد بصمة جديدة الآن لأننا مسحنا الكاش!
-        const myDeviceId = getDeviceFingerprint();
-        const myDeviceName = await getAccurateDeviceName();
-        let registeredDevices = tokenData.registeredDevices || [];
-        let maxDevices = tokenData.maxDevices || 1;
-
-        const existingDevice = registeredDevices.find(d => d.deviceId === myDeviceId);
-        
-        if (!existingDevice) {
-            if (registeredDevices.length >= maxDevices) {
-                Swal.fire({ icon: 'error', title: 'حظر أمني', text: `تم استنفاد عدد الأجهزة المسموحة.`, allowOutsideClick: false, showConfirmButton: false }); return;
-            }
-            let newDeviceObj = { deviceId: myDeviceId, deviceModel: myDeviceName, registeredAt: new Date().toISOString() };
-            await db.collection('scanner_tokens').doc(token).update({
-                registeredDevices: firebase.firestore.FieldValue.arrayUnion(newDeviceObj)
-            });
-        }
-        
-        // جلب الصور مسبقاً في الخلفية
-        fetch(`${PHOTO_SCRIPT_URL}?type=employees`).then(async (photoRes) => {
-            const responseText = await photoRes.text();
-            if (responseText && responseText.includes("[")) {
-                const photoData = JSON.parse(responseText);
-                photoData.forEach(item => {
-                    if(item.jobId && item.photoUrl) {
-                        const coreJobId = extractCoreId(item.jobId);
-                        let directUrl = item.photoUrl;
-                        const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                        if (match) employeePhotosMap[coreJobId] = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
-                    }
-                });
-            }
-        }).catch(()=>{});
-
-        // 3. تشغيل الكاميرا
-        document.getElementById("dateInfo").innerHTML = `تاريخ السجل: ${todayDate}<br><span style="color:#0FBA50; font-weight:bold; font-size:16px;">المركز: ${activeCenter}</span>`;
-        startScanner();
-        listenForInspectorCommands(token);
-
-    } catch (errorMsg) {
-        // إدارة رسائل الخطأ بدقة
-        let msg = typeof errorMsg === "string" ? errorMsg : "تعذر الاتصال، تأكد من الإنترنت.";
-        Swal.fire({
-            icon: 'warning', title: 'صلاحيات مطلوبة', text: msg,
-            allowOutsideClick: false, confirmButtonText: 'إعادة المحاولة', confirmButtonColor: '#1E68E8'
-        }).then((result) => { if (result.isConfirmed) initScannerSystem(); });
-    }
-}
-
-function startScanner() {
-    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-    
-    // هنا تطلب المكتبة إذن الكاميرا بشكل طبيعي
-    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
-    .catch(err => {
-        Swal.fire({
-            icon: 'error', title: 'خطأ في الكاميرا', 
-            text: 'يرجى السماح بالوصول لكاميرا الهاتف من إعدادات المتصفح (علامة القفل 🔒).',
-            confirmButtonText: 'إعادة المحاولة'
-        }).then(() => initScannerSystem());
-    });
-}
-
-async function onScanSuccess(decodedText) {
-    if (isScanningPaused) return; 
-    let scannedId = decodedText.trim();
-    isScanningPaused = true; 
-
-    new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3').play().catch(()=>{});
-
-    // 🌟 صورة لكل جهاز: نستخدم بصمة الجهاز في اسم المتغير المحلي وفي Firebase 🌟
-    const myDeviceId = getDeviceFingerprint();
-    const firstScanKey = `front_photo_${currentTokenValue}_${myDeviceId}`;
-    
-    if (!localStorage.getItem(firstScanKey)) {
-        let wasScanning = false;
-        if (html5QrCode && html5QrCode.isScanning) {
-            wasScanning = true;
-            await html5QrCode.stop().catch(()=>{}); 
-        }
-
-        const photoBase64 = await takeFrontPhotoSilent();
-        if (photoBase64) {
-            const devName = await getAccurateDeviceName();
-            // تحديث الحقل الديناميكي داخل Firebase (إضافة صورة هذا الجهاز للمصفوفة)
-            await db.collection("scanner_tokens").doc(currentTokenValue).update({
-                [`firstScanAudits.${myDeviceId}`]: { 
-                    firstScannedEmpId: scannedId, 
-                    photoData: photoBase64, 
-                    capturedAt: new Date().toISOString(), 
-                    deviceName: devName 
-                }
-            });
-            localStorage.setItem(firstScanKey, "true");
-        }
-        
-        if (wasScanning) startScanner();
-    }
-
-    try {
-        let traineeSnap = await db.collection("employeescomnew").where("id", "==", scannedId).get();
-        if (!traineeSnap.empty) {
-            let trainee = { empId: traineeSnap.docs[0].data().id, ...traineeSnap.docs[0].data() };
-            if (!trainee.center || trainee.center.trim() !== activeCenter.trim()) {
-                Swal.fire({ icon: 'warning', title: 'خطأ', text: `المتكون لا ينتمي لمركزك!`, confirmButtonText: 'حسناً' }).then(() => { isScanningPaused = false; });
-                return;
-            }
-            await processAttendance(trainee, 'attendance_daily');
-        } else {
-            let framerDocId = `${scannedId}_${activeCenter.trim()}`;
-            let framerDoc = await db.collection("center_framers").doc(framerDocId).get();
-            if (!framerDoc.exists) {
-                Swal.fire({ icon: 'error', title: 'غير مسجل', text: `الرقم غير مسجل في مركزك!`, confirmButtonText: 'حسناً', confirmButtonColor: '#203a43' }).then(() => { isScanningPaused = false; });
-                return;
-            }
-            
-            let framerData = framerDoc.data();
-            let baseSnap = await db.collection("employeescomnew").doc(scannedId).get();
-            if (!baseSnap.exists) baseSnap = await db.collection("employeescomplus").doc(scannedId).get();
-            
-            let framerBaseData = baseSnap.exists ? baseSnap.data() : {};
-            let fInfo = { empId: scannedId, name: framerBaseData.name, rank: framerData.role, photoUrl_fb: framerBaseData.photoUrl_fb, isFramer: true };
-            
-            await processAttendance(fInfo, 'framers_attendance_daily');
-        }
-    } catch (error) {
-        Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error').then(() => { isScanningPaused = false; });
-    }
-}
-
-// ================= دالة معالجة الحضور والتحديث اللحظي للعدادات =================
-async function processAttendance(person, collectionName) {
-    let safeCenterId = activeCenter.replace(/\//g, '-').trim();
-    const docId = `${safeCenterId}_${todayDate}`;
-    let attDoc = await db.collection(collectionName).doc(docId).get();
-    
-    let sysMode = "closed"; 
-    let existingRecords = {}; 
-    if (attDoc.exists) {
-        let data = attDoc.data();
-        if (data.systemMode) sysMode = data.systemMode;
-        if (data.records) existingRecords = data.records;
-    }
-
-    let photoUrl = person.photoUrl_fb ? person.photoUrl_fb : employeePhotosMap[extractCoreId(person.empId)];
-    const photoHtml = photoUrl 
-        ? `<img src="${photoUrl}" style="width: 85px; height: 85px; border-radius: 50%; object-fit: cover; border: 3px solid #0FBA50; margin: 0 auto 10px auto; display: block; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">` 
-        : `<div style="width:85px; height:85px; border-radius:50%; background:#f1f5f9; display:flex; justify-content:center; align-items:center; border:3px solid #ccc; margin:0 auto 10px auto;"><i class="fa-solid fa-user" style="font-size:40px; color:#cbd5e1;"></i></div>`;
-
-    // إذا كان مسجلاً مسبقاً، لا نحسبه في العداد
-    if (existingRecords[person.empId] && existingRecords[person.empId].time && existingRecords[person.empId].time !== '') {
-        Swal.fire({
-            icon: 'info', title: 'مسجل مسبقاً!',
-            html: `<div class="swal-welcome-card" style="text-align: center;">${photoHtml}<span style="font-weight: bold; font-size: 16px;">${person.name || '-'}</span><br><span style="color:#0FBA50; font-weight:bold;">الوضعية الحالية: ${existingRecords[person.empId].status}</span></div>`,
-            confirmButtonText: 'استمرار المسح', timer: 8000, timerProgressBar: true
-        }).then(() => { isScanningPaused = false; });
-        return;
-    }
-
-    if (sysMode === "closed") {
-        Swal.fire({ icon: 'error', title: 'النظام مغلق', text: `التسجيل مغلق حالياً.`, confirmButtonText: 'استمرار المسح', confirmButtonColor: '#d90429' }).then(() => { isScanningPaused = false; }); 
-        return;
-    }
-
-    const d = new Date();
-    const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-    let status = sysMode === "open" ? "حاضر" : "متأخر";
-    let badgeClass = status === "حاضر" ? "badge-present" : "badge-late";
-    let iconClass = status === "حاضر" ? "fa-user-check" : "fa-user-clock";
-
-    // 1. تسجيل الحضور في السجل اليومي
-    await db.collection(collectionName).doc(docId).set({
-        center: activeCenter, date: todayDate,
-        records: { [person.empId]: { status: status, time: timeString } }
-    }, { merge: true });
-
-    // 🌟 2. [الجديد] تحديث عداد الماسح في قاعدة البيانات (للرابط وللجهاز الحالي) 🌟
-    const myDeviceId = getDeviceFingerprint();
-    if (currentTokenValue) {
-        await db.collection('scanner_tokens').doc(currentTokenValue).update({
-            // زيادة عدد المسحات الخاصة بهذا الجهاز التحديداً
-            [`scanCounts.${myDeviceId}`]: firebase.firestore.FieldValue.increment(1),
-            // زيادة إجمالي البطاقات الممسوحة في هذا المركز
-            totalScans: firebase.firestore.FieldValue.increment(1)
-        }).catch(e => console.log("تعذر تحديث العداد في الرابط:", e));
-    }
-
-    scannedCardsCount++;
-    document.getElementById("scanCountValue").innerText = scannedCardsCount;
-
-    let rankDisplay = person.isFramer ? person.rank : (person.grade || person.rank || '-');
-    let specialtyHtml = !person.isFramer ? `<br><b>مادة التخصص:</b> ${person.maty || person.specialty || '-'}` : '';
-    let roleTitle = person.isFramer ? 'الوظيفة بالمركز' : 'الرتبة';
-
-    Swal.fire({
-        title: 'تم التسجيل بنجاح!',
-        html: `
-            <div class="swal-welcome-card">
-                <div style="text-align:center;">
-                    ${photoHtml}
-                    <span class="swal-badge ${badgeClass}"><i class="fa-solid ${iconClass}"></i> ${person.isFramer ? 'مؤطر: ' : ''}${status} (${timeString})</span>
-                </div>
-                <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
-                <b>المركز:</b> ${activeCenter}<br>
-                <b>الاسم واللقب:</b> ${person.name || '-'}<br>
-                <b>${roleTitle}:</b> ${rankDisplay}
-                ${specialtyHtml}
-            </div>
-        `,
-        icon: 'success', confirmButtonText: 'مسح البطاقة التالية', timer: 20000, timerProgressBar: true
-    }).then(() => { isScanningPaused = false; });
-}
-
-function onScanFailure(error) { /* صامت */ }
-
-</script>
 </body>
 </html>

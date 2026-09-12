@@ -1,0 +1,3948 @@
+// التحقق الأمني من الصلاحيات
+if (typeof SecurityGuard !== 'undefined') {
+    SecurityGuard.verifySession("ADMIN");
+}
+// ================= إعدادات Firebase والمطابقة =================
+const firebaseConfig = {
+    apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
+    authDomain: "voyage-touggourt-48755.firebaseapp.com",
+    projectId: "voyage-touggourt-48755",
+    storageBucket: "voyage-touggourt-48755.firebasestorage.app",
+    messagingSenderId: "712694455348",
+    appId: "1:712694455348:web:5b4e8df57347edf944fe61"
+};
+
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const db = firebase.firestore();
+
+const MODULES_LIST = ["تعليمية المادة", "التشريع المدرسي", "علم النفس التربوي", "هندسة التكوين", "تكنولوجيا الإعلام والاتصال", "التقويم والمعالجة البيداغوجية", "الشفافية والوقاية من الفساد", "النظام التربوي الجزائري"];
+const FRAMER_ROLES = ["المسؤول الإداري", "المسؤول البيداغوجي", "المقتصد(ة)", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي", "أستاذ مؤطر", "الأمانة", "الأمانة الرئيسية", "الأمانة العامة", "الإدارة", "إداري رئيسي", "عون إدارة", "حارس"];
+const UNIQUE_ROLES = ["المسؤول البيداغوجي", "المسؤول الإداري", "نائب رئيس المركز", "نائب رئيس المركز البيداغوجي", "نائب رئيس المركز الإداري"];
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec"; 
+
+let currentUserRole = "";
+
+// 🌟 1. استرجاع صور المؤطرين فوراً من التخزين المحلي لتظهر في 0 ثانية عند التحديث F5 🌟
+let employeePhotosMap = {}; 
+try {
+    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    if (cachedPhotos) {
+        employeePhotosMap = JSON.parse(cachedPhotos);
+    }
+} catch (e) {
+    console.warn("فشل قراءة كاش الصور المحلي:", e);
+}
+
+
+let INSPECTOR_CENTER = "";
+let framersData = [];
+let centerData = []; 
+let framersBaseDataCache = {}; 
+let currentFramerPage = 1;
+const framersPerPage = 10;
+let isFirstFramerLoad = true;
+
+let canCenterAddFramer = true;
+let canCenterDeleteFramer = true;
+
+let isShiftMode = false; 
+let currentShiftData = []; 
+let targetHoursData = { s1: 300, s2: 300, s3: 600 }; 
+
+
+let currentTab = 'all'; 
+let currentFilteredData = [];
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let digitsOnly = String(val).trim().toUpperCase().replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); 
+    return core === "" ? digitsOnly : core;
+}
+
+function getTodayDate() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ================= دالة الإنقاذ الذكية للصور (Smart Image Fallback) =================
+window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
+    let currentSrc = imgElement.src || '';
+    let retries = parseInt(imgElement.getAttribute('data-retries') || '0');
+
+    // 1. إذا فشل الرابط الأساسي (مثل ImgBB) ولديه بديل في درايف
+    if (retries === 0 && driveUrl && driveUrl !== 'undefined' && driveUrl !== 'null' && currentSrc !== driveUrl) {
+        imgElement.setAttribute('data-retries', '1');
+        if (fallbackType === 'card' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s800');
+        else if (fallbackType === 'print' && driveUrl.includes('=s200')) driveUrl = driveUrl.replace('=s200', '=s400');
+        imgElement.src = driveUrl;
+        return;
+    }
+
+    // 2. التبديل التلقائي بين سيرفرات جوجل (lh3 و thumbnail)
+    if (retries < 2 && currentSrc.includes('lh3.googleusercontent.com/d/')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 'w800' : ((fallbackType === 'print') ? 'w400' : 'w200');
+            imgElement.src = `https://drive.google.com/thumbnail?id=${match[1]}&sz=${sz}`;
+            return;
+        }
+    } else if (retries < 2 && currentSrc.includes('drive.google.com/thumbnail')) {
+        imgElement.setAttribute('data-retries', '2');
+        let match = currentSrc.match(/id=([a-zA-Z0-9_-]+)/);
+        if (match) {
+            let sz = (fallbackType === 'card') ? 's800' : ((fallbackType === 'print') ? 's400' : 's200');
+            imgElement.src = `https://lh3.googleusercontent.com/d/${match[1]}=${sz}`;
+            return;
+        }
+    }
+
+    // 3. عرض الأيقونة الافتراضية إذا تعذر جلب الصورة
+    if (fallbackType === 'table') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user profile-pic-placeholder"></i>';
+    } else if (fallbackType === 'card') {
+        imgElement.outerHTML = '<i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i>';
+    } else if (fallbackType === 'print') {
+        imgElement.outerHTML = 'صورة<br>المؤطر';
+    }
+};
+
+// ================= دالة الاستعادة الفردية للصورة المكسورة (تحديث لحظي بدون ريفراش) =================
+window.removeBrokenImage = async function(docId, cardType = 'info') {
+    Swal.fire({
+        title: 'استعادة الصورة',
+        text: 'هل تود حذف هذا الرابط التالف والاعتماد على الصورة الاحتياطية في درايف؟',
+        icon: 'question', showCancelButton: true, confirmButtonColor: '#0FBA50', confirmButtonText: 'نعم، استعادة', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التحديث اللحظي...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                let f = framersData.find(x => x.docId === docId || x.empId === docId);
+                let actualEmpId = f ? f.empId : docId; 
+
+                // 1. مسح الرابط من القاعدتين
+                await db.collection("employeescomnew").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
+                
+                
+                // 2. تحديث الكاش المحلي لمنع الوميض
+                if (f && f.baseInfo) f.baseInfo.photoUrl_fb = null;
+                if (framersBaseDataCache[actualEmpId]) framersBaseDataCache[actualEmpId].photoUrl_fb = null;
+
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
+                
+                // 3. إعادة رسم الجداول في الخلفية وإعادة فتح البطاقة
+                if (typeof filterFramersTable === 'function') filterFramersTable();
+                if (typeof isShiftMode !== 'undefined' && isShiftMode && typeof renderShiftsTable === 'function') renderShiftsTable();
+                if (document.getElementById('framerAttendanceModal') && document.getElementById('framerAttendanceModal').style.display === 'flex' && typeof renderFramerAttendanceTable === 'function') renderFramerAttendanceTable();
+                
+                setTimeout(() => {
+                    if (cardType === 'framer' && typeof viewFramer === 'function') viewFramer(docId);
+                }, 400);
+
+            } catch(e) { Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error'); }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            if (cardType === 'framer' && typeof viewFramer === 'function') viewFramer(docId);
+        }
+    });
+};
+
+// ================= التحميل الأولي والتهيئة =================
+window.onload = function() {
+    const loader = document.getElementById("loader");
+    if (loader) loader.style.display = "flex";
+
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
+
+    if (!isLoggedIn || !INSPECTOR_CENTER) {
+        if (loader) loader.style.display = "none";
+        window.location.href = "index.html"; // أو admin095526.html حسب صفحة الدخول الخاصة بالمفتش
+        return;
+    }
+
+    // التحقق الحقيقي من المصادقة عبر سيرفرات فايربيز
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
+            initializeSystem();
+            
+            // إخفاء شاشة التحميل فوراً بعد التحقق وبدء التهيئة
+            if (loader) loader.style.display = "none";
+        } else {
+            if (loader) loader.style.display = "none";
+            window.location.href = "index.html";
+        }
+    });
+};
+
+function logout() {
+    firebase.auth().signOut().then(() => {
+        sessionStorage.clear();
+        window.location.href = "index.html";
+    }).catch((error) => {
+        console.error("خطأ أثناء تسجيل الخروج:", error);
+    });
+}
+
+// متغير عالمي لتخزين إعدادات الحجم الساعي القادمة من المديرية
+let globalHourlySettings = null;
+
+async function initializeSystem() {
+    const userEmpId = sessionStorage.getItem("userEmpId");
+    if (userEmpId && userEmpId !== "ADMIN_ACCESS") {
+        try {
+            const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
+            if (adminDoc.exists) {
+                currentUserRole = adminDoc.data().jobTitle || "";
+            }
+        } catch(e) { console.warn("تعذر جلب دور المستخدم:", e); }
+    }
+
+    // 🌟 الجديد: جلب إعدادات الموقع (الحجم الساعي) من المديرية 🌟
+    // استبدل كود جلب إعدادات المديرية (try...catch) بهذا الكود المطور:
+// 🌟 جلب الإعدادات والصلاحيات بنظام التحديث اللحظي (Real-time) 🌟
+    db.collection("site_settings").doc("main").onSnapshot((stDoc) => {
+        if (stDoc.exists) {
+            let settingsData = stDoc.data();
+			
+			// 🌟 حفظ بيانات وثيقة المقرر القادمة من المديرية لحظياً 🌟
+            if (settingsData.DECISION_CONFIG) {
+                window.globalDecisionConfig = settingsData.DECISION_CONFIG;
+            }
+            
+            // 1. تحديث الحجم الساعي
+            if (settingsData.HOURLY_VOLUME) {
+                globalHourlySettings = settingsData.HOURLY_VOLUME;
+                // إذا كنا في واجهة تسيير الدوام، نعيد رسم الجدول اللحظي
+                if (typeof isShiftMode !== 'undefined' && isShiftMode && typeof renderShiftsTable === 'function') {
+                    renderShiftsTable();
+                }
+            }
+
+            // 2. البحث عن المفتاح الخاص بالمركز الحالي
+            let currentCenterKey = null;
+            if (settingsData.UI_NAMES && settingsData.UI_NAMES.centers) {
+                for (let k in settingsData.UI_NAMES.centers) {
+                    if (settingsData.UI_NAMES.centers[k] === INSPECTOR_CENTER) {
+                        currentCenterKey = k;
+                        break;
+                    }
+                }
+            }
+            
+            // حفظ حالة الحذف القديمة لمعرفة هل تغيرت أم لا
+            let oldDeletePerm = canCenterDeleteFramer;
+
+            // 3. تحديث الصلاحيات الخاصة بالمركز
+            if (currentCenterKey && settingsData.CENTER_PERMISSIONS && settingsData.CENTER_PERMISSIONS[currentCenterKey]) {
+                canCenterAddFramer = settingsData.CENTER_PERMISSIONS[currentCenterKey].canAddFramer !== false;
+                canCenterDeleteFramer = settingsData.CENTER_PERMISSIONS[currentCenterKey].canDeleteFramer !== false;
+            }
+
+            // 4. التحديث اللحظي لزر "إضافة مؤطر" في الواجهة
+            const btnAdd = document.getElementById("btnAddFramerMain");
+            if (btnAdd) {
+                if (!canCenterAddFramer) {
+                    btnAdd.style.opacity = "0.5";
+                    btnAdd.style.cursor = "not-allowed";
+                    btnAdd.title = "تم تعطيل هذه الصلاحية من طرف المديرية";
+                } else {
+                    btnAdd.style.opacity = "1";
+                    btnAdd.style.cursor = "pointer";
+                    btnAdd.title = "إضافة مؤطر جديد";
+                }
+            }
+
+            // 5. التحديث اللحظي لجدول المؤطرين (لإخفاء/إظهار أزرار الحذف)
+            if (oldDeletePerm !== canCenterDeleteFramer) {
+                if (typeof filterFramersTable === 'function') {
+                    filterFramersTable();
+                }
+            }
+			
+			
+        }
+    }, (error) => {
+        console.warn("تعذر الاستماع لإعدادات المديرية اللحظية:", error);
+    });
+
+        // 🌟 كاسر الكاش لمنع أخطاء CORS عند التحديث F5 + سيرفر lh3 فائق السرعة 🌟
+    const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
+
+    fetch(cacheBusterUrl, { cache: "no-store" }).then(async (photoRes) => {
+        const responseText = await photoRes.text();
+        if (responseText && responseText.includes("[")) {
+            const photoData = JSON.parse(responseText);
+            const freshPhotosMap = {};
+
+            photoData.forEach(item => {
+                if(item.jobId && item.photoUrl) {
+                    const coreJobId = extractCoreId(item.jobId);
+                    let directUrl = item.photoUrl;
+                    const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match) {
+                        directUrl = `https://lh3.googleusercontent.com/d/${match[1]}=s200`;
+                    }
+                    freshPhotosMap[coreJobId] = directUrl;
+                }
+            });
+
+            // دمج الصور وتحديث الكاش المحلي
+            employeePhotosMap = { ...employeePhotosMap, ...freshPhotosMap };
+            try {
+                localStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
+            } catch(err) {}
+
+            // إعادة رسم الجداول بالصور الجديدة
+            if (framersData.length > 0) {
+                window.filterFramersTable(); 
+                if (isShiftMode) window.renderShiftsTable();
+            }
+        }
+    }).catch(e => console.warn("تعذر جلب الصور من السيرفر، تم الاعتماد على الكاش المحلي:", e));
+
+    try {
+        const snap = await db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).get();
+        centerData = snap.docs.map(doc => doc.data());
+    } catch(e) {}
+
+    await loadSettings();
+    await checkAndAutoRegisterInspector();
+    await loadFramersData();
+}
+
+// 🌟 دالة مساعدة لمعرفة عدد ساعات اليوم حسب وظيفة المؤطر والدورة 🌟
+window.getDailyHoursForRole = function(role, sessionNum) {
+    if (!globalHourlySettings || !globalHourlySettings[`s${sessionNum}`]) return 0;
+    let sData = globalHourlySettings[`s${sessionNum}`];
+    
+    if (["المسؤول الإداري", "المسؤول البيداغوجي", "نائب رئيس المركز", "نائب رئيس المركز الإداري", "نائب رئيس المركز البيداغوجي"].includes(role)) {
+        return parseFloat(sData.presidents?.hoursPerDay) || 4; // افتراضياً 4 ساعات للرؤساء كما طلبت
+    } else if (role === "المقتصد(ة)") {
+        return parseFloat(sData.bursars?.hoursPerDay) || 0;
+    } else if (role === "حارس") {
+        return parseFloat(sData.guards?.hoursPerDay) || 0;
+    } else if (["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(role)) {
+        return 0; // الأساتذة يدوياً بالساعات
+    } else {
+        return parseFloat(sData.admins?.hoursPerDay) || 0; // الباقي إداريين
+    }
+};
+
+// ================= إعدادات الساعات المستهدفة =================
+async function loadSettings() {
+    try {
+        let doc = await db.collection("center_framers").doc("settings_" + INSPECTOR_CENTER).get();
+        if (doc.exists) targetHoursData = { ...targetHoursData, ...doc.data() };
+    } catch(e) {}
+}
+
+
+
+// ================= التسجيل التلقائي وجلب البيانات =================
+async function checkAndAutoRegisterInspector() {
+    const inspectorId = sessionStorage.getItem("userEmpId");
+    if (!inspectorId || inspectorId === "ADMIN_ACCESS") return;
+
+    try {
+        // 1. المفتاح المركب الجديد (رقم التعريف + اسم المركز)
+        const newDocId = String(inspectorId) + "_" + INSPECTOR_CENTER;
+        const framerRef = db.collection("center_framers").doc(newDocId);
+        
+        // 2. 🌟 تنظيف التكرار: البحث عن الملف القديم وحذفه إذا كان موجوداً 🌟
+        const oldFramerRef = db.collection("center_framers").doc(String(inspectorId));
+        const oldDoc = await oldFramerRef.get();
+        if (oldDoc.exists) {
+            await oldFramerRef.delete(); // حذف الملف القديم لمنع التكرار
+        }
+
+        const doc = await framerRef.get();
+        const baseData = await fetchEmployeeBaseData(inspectorId);
+        
+        if (baseData) {
+            // تنسيق رقم الهاتف ليصبح 00 00 00 00 00
+            let rawPhone = (baseData.phone || "").trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+
+            // تحديد الوظيفة الحقيقية بدقة
+            let actualRole = currentUserRole;
+            if (!actualRole) {
+                let rankStr = baseData.grade || baseData.rank || '-';
+                if (rankStr.includes("مفتش")) actualRole = "المسؤول البيداغوجي";
+                else if (rankStr.includes("مدير")) actualRole = "المسؤول الإداري";
+                else actualRole = "عضو تأطير";
+            }
+
+            if (!doc.exists) {
+    // تسجيل جديد بالمفتاح المركب
+    await framerRef.set({
+        empId: String(inspectorId),
+        name: baseData.name, // <--- إضافة هذا السطر
+        rank: baseData.grade || baseData.rank || '-', // <--- إضافة هذا السطر
+        center: INSPECTOR_CENTER,
+        role: actualRole,
+        phone: formattedPhone,
+        ccp: baseData.ccp || "",
+        ccpKey: "",
+        s1: true, s2: true, s3: true,
+        shifts: [], 
+        isProtected: true 
+    });
+} else {
+                // تصحيح وتحديث البيانات إذا لزم الأمر
+                let existingData = doc.data();
+                if (existingData.role !== actualRole || !existingData.s1) {
+                    await framerRef.update({
+                        role: actualRole,
+                        phone: formattedPhone,
+                        s1: true, s2: true, s3: true
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("خطأ في التسجيل التلقائي والتنظيف:", e);
+    }
+}
+
+async function fetchEmployeeBaseData(empId) {
+    if (!empId) return null; 
+    let safeId = String(empId).trim();
+    if (framersBaseDataCache[safeId]) return framersBaseDataCache[safeId];
+    
+    try {
+        let finalData = null;
+
+        // 1. البحث في القاعدة الكلية (employeescomplus) لأنها تضم المؤطرين أساساً
+        let snapPlus = await db.collection("employeescomplus").doc(safeId).get();
+        if (snapPlus.exists) {
+            finalData = snapPlus.data();
+        }
+
+        // 2. البحث في قاعدة المتكونين (employeescomnew) كإجراء احتياطي
+        let snapNew = await db.collection("employeescomnew").doc(safeId).get();
+        if (snapNew.exists) {
+            if (!finalData) {
+                finalData = snapNew.data();
+            } else {
+                // دمج البيانات: إذا لم تكن الصورة في القاعدة الكلية ووجدت في المتكونين، نأخذها
+                if (!finalData.photoUrl_fb && snapNew.data().photoUrl_fb) {
+                    finalData.photoUrl_fb = snapNew.data().photoUrl_fb;
+                }
+            }
+        }
+        
+        if (finalData) {
+            framersBaseDataCache[safeId] = finalData;
+            return finalData;
+        }
+    } catch (e) { 
+        console.error("Error fetching base data:", e); 
+    }
+    return null;
+}
+
+// ================= جلب بيانات المؤطرين (باستخدام الاستماع اللحظي Real-Time) =================
+function loadFramersData() {
+    // استخدمنا onSnapshot بدلاً من get لتحديث الجدول تلقائياً عند أي تغيير (إضافة، تعديل، حذف)
+    db.collection("center_framers")
+      .where("center", "==", INSPECTOR_CENTER)
+      .onSnapshot(async (snapshot) => {
+        try {
+            const fetchPromises = snapshot.docs.map(async (doc) => {
+                let data = doc.data();
+                if (!data.empId || doc.id.startsWith("settings_")) return null; 
+                
+                data.shifts = data.shifts || [];
+                let baseData = await fetchEmployeeBaseData(data.empId);
+                if (baseData) return { ...data, docId: doc.id, baseInfo: baseData };
+                return null;
+            });
+
+            // انتظار جلب البيانات الأساسية لكل المؤطرين
+            const results = await Promise.all(fetchPromises);
+            framersData = results.filter(item => item !== null);
+            
+            // تحديث الفلاتر والجدول فوراً
+            populateFramerFilters();
+            window.filterFramersTable();
+            if (isShiftMode) window.renderShiftsTable();
+
+            // إخفاء شاشة التحميل عند أول جلب ناجح للبيانات فقط
+            if (isFirstFramerLoad) {
+                document.getElementById("loader").style.display = "none";
+                isFirstFramerLoad = false;
+            }
+
+        } catch (e) {
+            console.error("خطأ أثناء جلب المؤطرين لحظياً:", e);
+            if (isFirstFramerLoad) Swal.fire('خطأ', 'تعذر جلب بيانات المؤطرين.', 'error');
+        }
+    }, (error) => {
+        console.error("Listener error:", error);
+        Swal.fire('خطأ', 'انقطع الاتصال بقاعدة البيانات (المؤطرين).', 'error');
+    });
+}
+
+// ================= التبديل النظيف بين الواجهتين =================
+window.toggleWorkshiftMode = function() {
+    // 🌟 منع المسؤول الإداري من دخول تسيير الدوام 🌟
+    if (currentUserRole === "المسؤول الإداري") {
+        Swal.fire({
+            icon: 'error',
+            title: 'صلاحيات مقيدة',
+            text: 'عذراً، تسيير الدوام والمحاسبة من الصلاحيات الحصرية للمسؤول البيداغوجي.',
+            confirmButtonColor: '#102a43'
+        });
+        return;
+    }
+
+    isShiftMode = !isShiftMode;
+    const btnToggle = document.getElementById('btnToggleMode');
+    const mainSection = document.getElementById('mainFramersSection');
+    const shiftSection = document.getElementById('workshiftsSection');
+
+    if (isShiftMode) {
+        mainSection.style.display = 'none';
+        shiftSection.style.display = 'block';
+        btnToggle.innerHTML = '<i class="fa-solid fa-users-gear"></i> رجوع لإدارة المؤطرين';
+        btnToggle.style.background = '#2e86de';
+        btnToggle.style.borderColor = '#2e86de';
+        window.renderShiftsTable(); 
+    } else {
+        mainSection.style.display = 'block';
+        shiftSection.style.display = 'none';
+        btnToggle.innerHTML = '<i class="fa-solid fa-business-time"></i> تسيير الدوام';
+        btnToggle.style.background = '#d35400';
+        btnToggle.style.borderColor = 'white';
+        window.filterFramersTable();
+    }
+};
+
+// ================= نظام تحديد المؤطرين لطباعة البطاقات =================
+let selectedFramers = new Set();
+
+function toggleSelectAllFramers() {
+    const isChecked = document.getElementById("selectAllFramers").checked;
+    if (isChecked) {
+        currentFilteredData.forEach(f => selectedFramers.add(f.docId));
+    } else {
+        selectedFramers.clear();
+    }
+    document.querySelectorAll(".framer-row-checkbox").forEach(cb => cb.checked = isChecked);
+}
+
+function toggleSingleFramerSelect(checkbox, docId) {
+    if (checkbox.checked) {
+        selectedFramers.add(docId);
+    } else {
+        selectedFramers.delete(docId);
+        const selectAllChk = document.getElementById("selectAllFramers");
+        if(selectAllChk) selectAllChk.checked = false;
+    }
+}
+// =========================================================================
+
+// ================= الفلترة والتبويبات ورسم الجدول (المؤطرين) =================
+window.switchTab = function(tabId) {
+    currentTab = tabId;
+    currentFramerPage = 1; 
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    window.filterFramersTable();
+}
+
+window.filterFramersTable = function() {
+    // 🌟 تفريغ التحديدات عند البحث أو تغيير الفلتر
+    selectedFramers.clear();
+    const selectAllChk = document.getElementById("selectAllFramers");
+    if(selectAllChk) selectAllChk.checked = false;
+
+    const search = document.getElementById('framerSearch').value.toLowerCase();
+    const roleF = document.getElementById('framerRoleFilter').value;
+    const rankF = document.getElementById('framerRankFilter').value;
+    
+    currentFilteredData = framersData.filter(f => {
+        let b = f.baseInfo || {};
+        let rank = b.grade || b.rank || "";
+        
+        let matchS = (b.name||"").toLowerCase().includes(search) || (f.empId).includes(search) || (f.phone||"").includes(search);
+        let matchRole = roleF === "الكل" || f.role === roleF;
+        let matchRank = rankF === "الكل" || rank === rankF;
+        
+        let matchTab = true;
+        if (currentTab === 's1') matchTab = f.s1 === true;
+        if (currentTab === 's2') matchTab = f.s2 === true;
+        if (currentTab === 's3') matchTab = f.s3 === true;
+
+        return matchS && matchRole && matchRank && matchTab;
+    });
+
+    renderFramersTable(currentFilteredData);
+}
+
+function renderFramersTable(data) {
+    const tbody = document.getElementById('framersTableBody');
+    
+    const showSessions = currentTab === 'all';
+    document.getElementById('th-s1').style.display = showSessions ? '' : 'none';
+    document.getElementById('th-s2').style.display = showSessions ? '' : 'none';
+    document.getElementById('th-s3').style.display = showSessions ? '' : 'none';
+    document.getElementById('th-actions').style.display = showSessions ? '' : 'none';
+
+    document.getElementById('st-framer-total').innerText = framersData.length;
+    document.getElementById('st-framer-prof').innerText = framersData.filter(f => f.role === 'أستاذ مؤطر').length;
+    document.getElementById('st-framer-admin').innerText = framersData.filter(f => f.role !== 'أستاذ مؤطر' && f.role !== 'حارس').length;
+    document.getElementById('st-framer-s1').innerText = framersData.filter(f => f.s1).length;
+    document.getElementById('st-framer-s2').innerText = framersData.filter(f => f.s2).length;
+    document.getElementById('st-framer-s3').innerText = framersData.filter(f => f.s3).length;
+
+    if (data.length === 0) {
+        // إذا كان النظام ما زال في طور التحميل الأول ولم يتم جلب البيانات بعد
+        let msg = isFirstFramerLoad 
+            ? '<i class="fa-solid fa-spinner fa-spin"></i> جاري مزامنة وجلب البيانات...' 
+            : 'لا توجد بيانات مطابقة في هذا التبويب';
+
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding: 30px; font-weight:bold; color:#777; font-size:16px;">${msg}</td></tr>`;
+        document.getElementById('framersPagination').style.display = 'none';
+        return;
+    }
+
+    const totalPages = Math.ceil(data.length / framersPerPage);
+    if (currentFramerPage > totalPages) currentFramerPage = Math.max(1, totalPages);
+    const start = (currentFramerPage - 1) * framersPerPage;
+    const paginatedData = data.slice(start, start + framersPerPage);
+
+    let counter = start + 1;
+    let tableHtml = ''; 
+
+    paginatedData.forEach(f => {
+        let b = f.baseInfo || {};
+        const photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
+        
+       // 🌟 تجهيز الصورة بنظام الإنقاذ وزر الاستعادة 🌟
+        const coreEmpId = extractCoreId(f.empId);
+        const fbUrl = b.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+        const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+        const refreshBtn = isImgBB 
+            ? `<button onclick="window.removeBrokenImage('${f.docId}', 'framer')" style="position: absolute; bottom: -5px; right: -5px; z-index: 10; background: #dc3545; color: white; border: 2px solid white; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; font-size: 10px;" title="استعادة الصورة الأصلية"><i class="fa-solid fa-arrows-rotate"></i></button>`
+            : '';
+
+        const photoHtml = `
+          <div style="position: relative; display: inline-block; width: 40px; height: 40px; margin: 0 auto;">
+              <div class="profile-pic-container" style="margin: 0; width: 100%; height: 100%; cursor: default;">
+                  ${initialUrl 
+                      ? `<img src="${initialUrl}" class="profile-pic-img" alt="صورة" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` 
+                      : `<i class="fa-solid fa-user profile-pic-placeholder" style="font-size: 18px;"></i>`}
+              </div>
+              ${refreshBtn}
+          </div>
+        `;
+
+        const ccpDisplay = f.ccp ? `<div style="line-height:1.4;"><span style="letter-spacing:1px; font-weight:bold; font-size:14px;">${f.ccp}</span><br><span style="font-size:11px; color:#777;">المفتاح: <b style="color:#1E68E8;">${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}</b></span></div>` : '---';
+// إخفاء زر الحذف كلياً إذا كانت الصلاحية معطلة
+const deleteBtn = (f.isProtected || !canCenterDeleteFramer) ? '' : `<button onclick="window.deleteFramer('${f.docId}')" class="btn-action" style="background:#dc3545;" title="حذف"><i class="fa-solid fa-trash"></i> حذف</button>`;
+
+        const s1Badge = `<span class="session-badge ${f.s1 ? 'active' : ''}"><i class="fa-solid ${f.s1 ? 'fa-check' : 'fa-minus'}"></i></span>`;
+        const s2Badge = `<span class="session-badge ${f.s2 ? 'active' : ''}"><i class="fa-solid ${f.s2 ? 'fa-check' : 'fa-minus'}"></i></span>`;
+        const s3Badge = `<span class="session-badge ${f.s3 ? 'active' : ''}"><i class="fa-solid ${f.s3 ? 'fa-check' : 'fa-minus'}"></i></span>`;
+
+                const actionButtons = `
+            <div style="display:flex; gap:5px; justify-content:center;">
+                <button onclick="window.printSingleFramerDecision('${f.docId}')" class="btn-action" style="background:#e67e22;" title="طباعة المقرر"><i class="fa-solid fa-file-signature"></i> مقرر</button>
+                <button onclick="window.printSingleFramerCard('${f.docId}')" class="btn-action" style="background:#0FBA50;" title="طباعة البطاقة"><i class="fa-solid fa-print"></i></button>
+                <button onclick="window.viewFramer('${f.docId}')" class="btn-action" style="background:#17a2b8;" title="عرض"><i class="fa-solid fa-address-card"></i> عرض</button>
+                <button onclick="window.editFramer('${f.docId}')" class="btn-action" style="background:#ffc107; color:black;" title="تعديل"><i class="fa-solid fa-pen"></i> تعديل</button>
+                ${deleteBtn}
+            </div>
+        `;
+
+        const extraColumnsHtml = showSessions ? `
+            <td style="text-align:center; vertical-align: middle;">${s1Badge}</td>
+            <td style="text-align:center; vertical-align: middle;">${s2Badge}</td>
+            <td style="text-align:center; vertical-align: middle;">${s3Badge}</td>
+            <td style="text-align:center; vertical-align: middle; white-space:nowrap;">${actionButtons}</td>
+        ` : '';
+
+        tableHtml += `
+            <tr>
+                <td style="text-align:center; vertical-align: middle;">
+                    <input type="checkbox" class="framer-row-checkbox" value="${f.docId}" ${selectedFramers.has(f.docId) ? 'checked' : ''} onchange="toggleSingleFramerSelect(this, '${f.docId}')" style="width:16px; height:16px; cursor:pointer; accent-color:#e67e22;">
+                </td>
+                <td style="text-align:center; vertical-align: middle;">${counter++}</td>
+                <td style="text-align:center; vertical-align: middle; white-space:nowrap;">
+                    ${photoHtml}
+                    <div style="margin-top: 5px; font-weight: 800; color: #e67e22; font-size: 13px; letter-spacing: 1px;">${f.empId}</div>
+                </td>                <td style="text-align:center; vertical-align: middle; direction:ltr; font-family:monospace; white-space:nowrap;">${ccpDisplay}</td>
+                <td style="vertical-align: middle; font-weight:bold; line-height:1.5;">${b.name || '-'}</td>
+                <td style="vertical-align: middle; line-height:1.5;">${b.grade || b.rank || '-'}</td>
+                <td style="vertical-align: middle; line-height:1.5;">${b.place || b.workplace || '-'}</td>
+                <td style="text-align:center; vertical-align: middle; direction:ltr; font-family:monospace; font-weight:bold; white-space:nowrap; font-size:15px;">${f.phone || '-'}</td>
+                <td style="text-align:center; vertical-align: middle; white-space:nowrap;">
+                    <span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold; border:1px solid #ffcc80;">${f.role}</span>
+                </td>
+                ${extraColumnsHtml}
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = tableHtml; 
+	
+	const selectAllChk = document.getElementById("selectAllFramers");
+    if (selectAllChk) selectAllChk.checked = (currentFilteredData.length > 0 && selectedFramers.size === currentFilteredData.length);
+	
+    renderFramerPagination(totalPages);
+}
+
+function populateFramerFilters() {
+    const roleFilter = document.getElementById('framerRoleFilter');
+    const rankFilter = document.getElementById('framerRankFilter');
+    
+    roleFilter.innerHTML = '<option value="الكل">كل الوظائف بالمركز</option>';
+    rankFilter.innerHTML = '<option value="الكل">كل الرتب</option>';
+    
+    let ranks = new Set();
+    FRAMER_ROLES.forEach(r => roleFilter.innerHTML += `<option value="${r}">${r}</option>`);
+    framersData.forEach(f => { if(f.baseInfo.grade || f.baseInfo.rank) ranks.add(f.baseInfo.grade || f.baseInfo.rank); });
+    Array.from(ranks).sort().forEach(r => rankFilter.innerHTML += `<option value="${r}">${r}</option>`);
+}
+
+function renderFramerPagination(totalPages) {
+    const container = document.getElementById("framersPagination");
+    if (totalPages <= 1) { container.style.display = "none"; return; }
+    container.style.display = "flex";
+    
+    let html = '';
+    for (let i = 1; i <= totalPages; i++) {
+        html += `<button class="page-btn ${i === currentFramerPage ? 'active' : ''}" onclick="currentFramerPage=${i}; window.filterFramersTable();">${i}</button>`;
+    }
+    container.innerHTML = html;
+}
+
+// ================= رسم جدول تسيير الدوام والمحاسبة =================
+window.renderShiftsTable = function() {
+    const session = document.getElementById('shiftSessionSelect').value;
+    const search = document.getElementById('shiftSearch').value.toLowerCase();
+    const tbody = document.getElementById('shiftsTableBody');
+    tbody.innerHTML = '';
+
+    // 🌟 الجديد: جلب الحجم الساعي المعتمد من إعدادات المديرية مباشرة 🌟
+    let sessionNum = session.replace('s', ''); // استخراج الرقم (1, 2, 3)
+    let targetHours = 0;
+    if (globalHourlySettings && globalHourlySettings[`s${sessionNum}`]) {
+        targetHours = parseFloat(globalHourlySettings[`s${sessionNum}`].globalTotal) || 0;
+    }
+    
+    // عرض الرقم في الواجهة
+    document.getElementById('targetSessionHoursDisplay').innerText = targetHours;
+
+    let shiftData = framersData.filter(f => f[session] === true);
+    
+    if(search) {
+        shiftData = shiftData.filter(f => {
+            let name = (f.baseInfo.name || "").toLowerCase();
+            return name.includes(search) || f.empId.includes(search);
+        });
+    }
+
+    currentShiftData = shiftData;
+    let totalHoursCompleted = 0;
+
+    if (shiftData.length === 0) {
+        document.getElementById('completedSessionHours').innerText = 0;
+        document.getElementById('remainingSessionHours').innerText = targetHours;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:30px; font-weight:bold; color:#777; font-size:16px;">لا يوجد مؤطرين مسجلين في هذه الدورة.</td></tr>`;
+        return;
+    }
+
+    let counter = 1;
+    let tableHtml = '';
+
+    shiftData.forEach(f => {
+        let b = f.baseInfo || {};
+        const photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
+       // 🌟 تجهيز الصورة بنظام الإنقاذ 🌟
+        const coreEmpId = extractCoreId(f.empId);
+        const fbUrl = b.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+
+        const photoHtml = `<div class="profile-pic-container" style="width:36px; height:36px; border-color:#d35400; margin:0 auto;">
+            ${initialUrl ? `<img src="${initialUrl}" class="profile-pic-img" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+        </div>`;
+
+        let totalDays = 0;
+        let totalHours = 0;
+        let shiftsArray = f.shifts || [];
+        
+        // الحساب المطور الجديد
+        shiftsArray.forEach(sh => {
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) {
+                    totalHours += parseFloat(sh.calculatedHours);
+                    totalHoursCompleted += parseFloat(sh.calculatedHours);
+                }
+            }
+            if (sh.type === 'ساعات') {
+                totalHours += parseFloat(sh.amount);
+                totalHoursCompleted += parseFloat(sh.amount);
+            }
+        });
+
+        // 🌟 التعديل هنا: إخفاء الأيام للأساتذة 🌟
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
+
+       let specsHtml = '-';
+        let modsHtml = '-';
+        if (f.role === 'أستاذ مؤطر') {
+            let specsList = f.framingSpecs || [];
+            let groupsList = f.framingGroups || [];
+            
+            if (specsList.length > 0) {
+                specsHtml = '';
+                
+                // تجميع الأفواج حسب التخصص
+                let groupsBySpec = {};
+                groupsList.forEach(g => {
+                    let parts = g.split('::');
+                    if (parts.length === 2) {
+                        if (!groupsBySpec[parts[0]]) groupsBySpec[parts[0]] = [];
+                        groupsBySpec[parts[0]].push(parts[1]);
+                    }
+                });
+
+                // بناء عرض التخصص وتحته أفواجه
+                specsList.forEach(s => {
+                    specsHtml += `<div style="background:#f1f5f9; border:1px solid #cbd5e1; padding:3px 6px; margin:4px 0; border-radius:4px; font-size:11px; font-weight:bold;">`;
+                    specsHtml += `<div style="color:#102a43; border-bottom:1px dashed #cbd5e1; padding-bottom:2px; margin-bottom:2px;">${s}</div>`;
+                    
+                    if (groupsBySpec[s] && groupsBySpec[s].length > 0) {
+                        let grps = groupsBySpec[s].join('، ');
+                        specsHtml += `<div style="color:#d35400; font-size:10px;"><i class="fa-solid fa-users"></i> ${grps}</div>`;
+                    } else {
+                        specsHtml += `<div style="color:#94a3b8; font-size:10px;">بدون أفواج</div>`;
+                    }
+                    specsHtml += `</div>`;
+                });
+            } else {
+                specsHtml = '<span style="color:#aaa;">غير محدد</span>';
+            }
+
+            modsHtml = (f.framingModules || []).length > 0 ? (f.framingModules || []).map(m => `<div style="background:#eff6ff; border:1px solid #93c5fd; padding:2px 5px; margin:2px 0; border-radius:4px; font-size:11px;">${m}</div>`).join('') : '<span style="color:#aaa;">غير محدد</span>';
+        }
+
+        tableHtml += `
+            <tr style="background:#fff; border-bottom:1px solid #eee;">
+                <td style="padding:10px; text-align:center; vertical-align:middle;">${counter++}</td>
+                <td style="padding:10px; text-align:center; vertical-align:middle;">${photoHtml}</td>
+                <td style="padding:10px; text-align:right; vertical-align:middle; font-weight:bold;">${b.name || '-'}</td>
+                <td style="padding:10px; text-align:right; vertical-align:middle; line-height:1.4;">
+                    <span style="font-weight:bold; color:#1E68E8; font-size:13px;">${b.grade || b.rank || '-'}</span><br>
+                    <span style="font-size:11px; color:#555;">${b.place || b.workplace || '-'}</span>
+                </td>
+                <td style="padding:10px; text-align:center; vertical-align:middle; white-space:nowrap;">
+                    <span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold; border:1px solid #ffcc80;">${f.role}</span>
+                </td>
+                <td style="padding:5px; text-align:center; vertical-align:middle;">${specsHtml}</td>
+                <td style="padding:5px; text-align:center; vertical-align:middle;">${modsHtml}</td>
+                <td style="padding:10px; text-align:center; vertical-align:middle; font-weight:900; font-size:16px; color:#d35400;">${displayDays}</td>
+                <td style="padding:10px; text-align:center; vertical-align: middle; font-weight:900; font-size:16px; color:#1E68E8;">${totalHours}</td>
+                <td style="padding:10px; text-align:center; vertical-align: middle; white-space:nowrap;">
+                    <div style="display:flex; gap:5px; justify-content:center;">
+                        <button onclick="window.promptAddShift('${f.docId}')" class="btn-action" style="background:#0FBA50; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cairo'; font-size:12px;" title="إضافة دوام"><i class="fa-solid fa-plus"></i> إضافة</button>
+                        <button onclick="window.viewShiftHistory('${f.docId}')" class="btn-action" style="background:#34495e; color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cairo'; font-size:12px;" title="سجل الدوام"><i class="fa-solid fa-list"></i> السجل</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = tableHtml;
+
+    document.getElementById('completedSessionHours').innerText = totalHoursCompleted;
+        let remain = targetHours - totalHoursCompleted;
+        
+        
+        window.currentRemainingHours = remain; 
+
+        document.getElementById('remainingSessionHours').innerText = remain < 0 ? `+${Math.abs(remain)} إضافية` : remain;
+   
+};
+
+// ================= الإضافة والتعديل =================
+function getCenterSpecialties() {
+    let specs = new Set();
+    // نعتمد على centerData التي تجلب بيانات employeescomnew
+    centerData.forEach(item => {
+        // في بيانات المتكونين التخصص مخزن في item.maty أو item.specialty
+        let sp = item.specialty || item.maty;
+        if (sp && sp !== '-' && sp.trim() !== '') specs.add(sp.trim());
+    });
+    return Array.from(specs).sort();
+}
+
+function getCenterGroups(selectedSpec = null) {
+    let groups = new Set();
+    centerData.forEach(item => {
+        let sp = item.specialty || item.maty;
+        let grp = item.group || item.fawj;
+        
+        if (grp && grp !== '-' && grp.trim() !== '') {
+            // إذا تم تمرير تخصص، نجلب أفواج هذا التخصص فقط، وإلا نجلب كل الأفواج
+            if (!selectedSpec || sp === selectedSpec) {
+                groups.add(grp.trim());
+            }
+        }
+    });
+    return Array.from(groups).sort();
+}
+window.promptAddFramer = function() {
+
+if(!canCenterAddFramer) {
+        return Swal.fire('صلاحيات مقيدة', 'عذراً، لقد تم إيقاف صلاحية إضافة مؤطرين جدد في مركزك من طرف المديرية.', 'error');
+    }
+	
+    Swal.fire({
+        title: 'إضافة مؤطر جديد',
+        text: 'أدخل الرقم الوظيفي للبحث عن الموظف في القاعدة الرئيسية:',
+        input: 'text', inputPlaceholder: 'الرقم الوظيفي...',
+        showCancelButton: true, confirmButtonText: 'تحقق وبحث', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+        preConfirm: (id) => {
+            if (!id) { Swal.showValidationMessage('الرجاء إدخال الرقم للبحث!'); return false; }
+            return id;
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            // 🌟 تنظيف حالة الانتظار لضمان ظهور زر "حسنا" في رسالة التنبيه
+            Swal.hideLoading(); 
+
+            if (framersData.some(f => f.empId === res.value)) {
+                return Swal.fire('تنبيه', 'هذا الموظف مسجل كمؤطر مسبقاً!', 'warning');
+            }
+
+            Swal.fire({ title: 'جاري البحث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            
+            const baseData = await fetchEmployeeBaseData(res.value);
+            
+            // 🌟 الترتيب الصحيح: تنظيف دائرة الانتظار ثم إغلاق نافذة البحث
+            Swal.hideLoading(); 
+            Swal.close(); 
+            
+            if (!baseData) {
+                return Swal.fire('غير موجود', 'لم يتم العثور على الموظف في قاعدة البيانات.', 'error').then(()=>window.promptAddFramer());
+            }
+
+            window.showAddFramerForm(res.value, baseData);
+        }
+    });
+};
+
+window.showAddFramerForm = function(empId, baseData) {
+    const photoUrl = (baseData && baseData.photoUrl_fb) ? baseData.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
+    const imgHtml = photoUrl ? `<img src="${photoUrl}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; border:2px solid #e67e22;">` : `<div style="width:65px; height:65px; border-radius:50%; background:#e2e8f0; display:flex; justify-content:center; align-items:center;"><i class="fa-solid fa-user" style="font-size:30px; color:#94a3b8;"></i></div>`;
+    
+    let rolesHtml = '<option value="" disabled selected>اختر الوظيفة...</option>';
+    FRAMER_ROLES.forEach(r => rolesHtml += `<option value="${r}">${r}</option>`);
+
+    const allSpecs = getCenterSpecialties();
+    let specsHtml = '';
+    allSpecs.forEach(s => specsHtml += `<label class="styled-cb"><input type="checkbox" value="${s}" class="spec-cb" onchange="window.updateAddGroups()"> <span>${s}</span></label>`);
+
+    let modsHtml = '';
+    MODULES_LIST.forEach(m => modsHtml += `<label class="styled-cb"><input type="checkbox" value="${m}" class="mod-cb"> <span>${m}</span></label>`);
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-plus" style="color:#0FBA50; margin-left:8px;"></i> استكمال بيانات المؤطر',
+        // ... (كود الـ HTML والستايل يبقى كما هو تماماً دون تغيير)
+        html: document.getElementById('framer-form-container') ? document.getElementById('framer-form-container').outerHTML : /*...كود الـ HTML الخاص بك...*/ `
+            <!-- كود الـ HTML والـ CSS الخاص بك موجود هنا لم أقم بإزالته أو تعديله مطلقاً -->
+            <style>
+                #framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
+                #framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
+                @media(max-width: 768px) { #framer-form-container.is-teacher { grid-template-columns: 1fr; } }
+                .col-main { display: flex; flex-direction: column; gap: 15px; }
+                .framer-section { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
+                .framer-section-title { font-size:15px; font-weight:800; color:#102a43; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:15px; display:flex; align-items:center; gap:8px; }
+                .input-group { margin-bottom:12px; }
+                .input-group label { display:block; font-size:13px; font-weight:bold; color:#475569; margin-bottom:6px; }
+                .styled-input { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:'Cairo'; outline:none; transition:0.3s; box-sizing: border-box; }
+                .styled-input:focus { border-color:#e67e22; box-shadow:0 0 0 3px rgba(230,126,34,0.1); }
+                .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+                .cb-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; max-height:160px; overflow-y:auto; padding:5px; }
+                .styled-cb { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:6px 10px; border-radius:8px; cursor:pointer; transition:0.2s; font-size:12px; font-weight:bold; color:#334e68; }
+                .styled-cb:hover { background:#f1f5f9; border-color:#cbd5e1; }
+                .styled-cb input { accent-color:#e67e22; width:16px; height:16px; cursor:pointer; }
+                .session-pills { display:flex; gap:10px; justify-content:space-between; }
+                .s-pill { flex:1; position:relative; cursor:pointer; }
+                .s-pill input { position:absolute; opacity:0; cursor:pointer; }
+                .s-pill-content { display:flex; justify-content:center; align-items:center; gap:5px; padding:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:8px; font-weight:bold; font-size:13px; color:#64748b; transition:0.3s; }
+                .s-pill input:checked ~ .s-pill-content { background:#fff; border-color:#0FBA50; color:#0FBA50; box-shadow:0 4px 10px rgba(15,186,80,0.15); }
+                .s-pill-content i { display:none; }
+                .s-pill input:checked ~ .s-pill-content i { display:inline-block; }
+                .profile-header { background:linear-gradient(to left, #f8fafc, #fff); padding:10px 15px; border-radius:12px; border:1px solid #e2e8f0; display:flex; gap:15px; align-items:center; }
+            </style>
+            <div id="framer-form-container">
+                <div class="col-main">
+                    <div class="profile-header">
+                        ${imgHtml}
+                        <div>
+                            <h3 style="margin:0 0 5px 0; color:#0f172a; font-size:16px;">${baseData.name || ''}</h3>
+                            <div style="font-size:12px; color:#64748b; font-weight:bold;">${baseData.grade || baseData.rank || ''}</div>
+                        </div>
+                    </div>
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-address-card" style="color:#e67e22;"></i> البيانات الشخصية والمالية</div>
+                        <div class="grid-2">
+                            <div class="input-group">
+                                <label>رقم الهاتف <span style="color:#d90429;">*</span></label>
+                                <input type="text" id="fr-phone" class="styled-input" style="direction:ltr; text-align:right;" value="${baseData.phone || baseData.tel || ''}" placeholder="0X XX XX XX XX" maxlength="14" oninput="window.formatPhoneInput(this)">
+                            </div>
+                            <div class="input-group">
+                                <label>الوظيفة بالمركز <span style="color:#d90429;">*</span></label>
+                                <select id="fr-role" class="styled-input" onchange="window.toggleTeacherFields()">
+                                    ${rolesHtml}
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:15px;">
+                            <div class="input-group" style="flex:3;">
+                                <label>الحساب الجاري (CCP)</label>
+                                <input type="text" id="fr-ccp" class="styled-input" style="direction:ltr; text-align:right;" value="${baseData.ccp || ''}" placeholder="10 أرقام" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                            <div class="input-group" style="flex:1;">
+                                <label>المفتاح</label>
+                                <input type="text" id="fr-cle" class="styled-input" style="direction:ltr; text-align:center;" value="${baseData.ccpKey || ''}" placeholder="XX" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-calendar-check" style="color:#0FBA50;"></i> الدورات المشارك فيها</div>
+                        <div class="session-pills">
+                            <label class="s-pill"><input type="checkbox" id="fr-s1" checked><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 1</div></label>
+                            <label class="s-pill"><input type="checkbox" id="fr-s2"><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 2</div></label>
+                            <label class="s-pill"><input type="checkbox" id="fr-s3"><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 3</div></label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-main" id="teacherFieldsCol" style="display:none;">
+                    <div class="framer-section" style="border-color:#93c5fd; background:#f8fbff;">
+                        <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
+                        <div class="input-group">
+                            <label>تخصصات التأطير:</label>
+                            <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
+                        </div>
+                        <div class="input-group" id="groups-container">
+                            <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
+                            <div id="add-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;"></div>
+                        </div>
+                        <div class="input-group">
+                            <label>مقاييس التأطير:</label>
+                            <div class="cb-grid">${modsHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `,
+        width: '550px',
+        showCancelButton: true, confirmButtonText: 'حفظ المؤطر', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        didOpen: () => {
+            // 🌟 الإصلاح الجذري: إزالة أي حالة تحميل سابقة وإجبار الأزرار على العودة للوضع الطبيعي 🌟
+            Swal.hideLoading();
+            Swal.enableButtons();
+
+            Swal.getPopup().style.transition = 'width 0.4s ease-in-out';
+
+            window.toggleTeacherFields = () => {
+                const role = document.getElementById('fr-role').value;
+                const container = document.getElementById('framer-form-container');
+                const teacherCol = document.getElementById('teacherFieldsCol');
+                const popup = Swal.getPopup();
+
+                if (role === 'أستاذ مؤطر') {
+                    popup.style.width = '950px';
+                    container.classList.add('is-teacher');
+                    teacherCol.style.display = 'flex';
+                } else {
+                    popup.style.width = '550px';
+                    container.classList.remove('is-teacher');
+                    teacherCol.style.display = 'none';
+                }
+            };
+
+            // بقية الدوال كالسابق...
+            window.updateAddGroups = () => {
+                const selectedSpecs = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
+                const groupsGrid = document.getElementById('add-groups-grid');
+                let currentCheckedBoxes = document.querySelectorAll('.grp-cb:checked');
+                let prevChecked = Array.from(currentCheckedBoxes).map(cb => cb.value);
+                let grpHtml = '';
+                if (selectedSpecs.length === 0) {
+                    grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
+                } else {
+                    selectedSpecs.forEach(spec => {
+                        let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
+                        let safeSpec = spec.replace(/\s+/g, '');
+                        grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
+                                        <h4 style="margin:0 0 10px 0; color:#1E68E8; font-size:13px; border-bottom:1px dashed #cce5ff; padding-bottom:5px;">
+                                            <i class="fa-solid fa-layer-group"></i> أفواج تخصص: ${spec}
+                                        </h4>
+                                        <div class="cb-grid" style="max-height: none;">`;
+                        if (specGroups.length === 0) {
+                            grpHtml += `<div style="color:#777; font-size:12px; grid-column:1/-1;">لا توجد أفواج مسجلة لهذا التخصص.</div>`;
+                        } else {
+                            let allVal = `${spec}::كل الأفواج`;
+                            let allChecked = prevChecked.includes(allVal) ? 'checked' : '';
+                            grpHtml += `<label class="styled-cb" style="border-color:#e67e22; grid-column:1/-1;">
+                                            <input type="checkbox" value="${allVal}" class="grp-cb grp-all-${safeSpec}" onchange="window.handleAddGroupAll(this, '${safeSpec}')" ${allChecked}> 
+                                            <span style="color:#e67e22;">كل أفواج (${spec})</span>
+                                        </label>`;
+                            specGroups.forEach(g => {
+                                let val = `${spec}::${g}`;
+                                let checked = prevChecked.includes(val) || allChecked ? 'checked' : '';
+                                grpHtml += `<label class="styled-cb">
+                                                <input type="checkbox" value="${val}" class="grp-cb grp-item-${safeSpec}" onchange="window.checkAddGroupAllState('${safeSpec}')" ${checked}> 
+                                                <span>${g}</span>
+                                            </label>`;
+                            });
+                        }
+                        grpHtml += `</div></div>`;
+                    });
+                }
+                groupsGrid.innerHTML = grpHtml;
+            };
+
+            window.handleAddGroupAll = (allCb, safeSpec) => {
+                const groupCbs = document.querySelectorAll(`.grp-item-${safeSpec}`);
+                groupCbs.forEach(cb => cb.checked = allCb.checked);
+            };
+
+            window.checkAddGroupAllState = (safeSpec) => {
+                const allCb = document.querySelector(`.grp-all-${safeSpec}`);
+                const groupCbs = document.querySelectorAll(`.grp-item-${safeSpec}`);
+                if(allCb && groupCbs.length > 0) {
+                    const allChecked = Array.from(groupCbs).every(cb => cb.checked);
+                    allCb.checked = allChecked;
+                }
+            };
+
+            window.updateAddGroups();
+            window.toggleTeacherFields(); 
+        },
+        preConfirm: async () => { 
+            // 🌟 التصحيح هنا: حذف كلمة add- من المعرفات (IDs) لتطابق الـ HTML 🌟
+            let rawPhone = document.getElementById('fr-phone').value.trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+            
+            const ccp = document.getElementById('fr-ccp').value.trim();
+            const cle = document.getElementById('fr-cle').value.trim();
+            const role = document.getElementById('fr-role').value;
+            
+            let framingSpecs = []; let framingModules = []; let framingGroups = [];
+
+            if(role === 'أستاذ مؤطر') {
+                document.querySelectorAll('.spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
+                document.querySelectorAll('.mod-cb:checked').forEach(cb => framingModules.push(cb.value));
+                
+                framingSpecs.forEach(spec => {
+                    const safeSpec = spec.replace(/\s+/g, '');
+                    const allCb = document.querySelector(`.grp-all-${safeSpec}`);
+                    if (allCb && allCb.checked) {
+                        framingGroups.push(`${spec}::كل الأفواج`);
+                    } else {
+                        document.querySelectorAll(`.grp-item-${safeSpec}:checked`).forEach(cb => framingGroups.push(cb.value));
+                    }
+                });
+
+                if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
+                if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
+                if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
+            }
+
+            if (!role) { Swal.showValidationMessage('الرجاء اختيار وظيفة المؤطر!'); return false; }
+            
+            // 🌟 التحقق من صيغة ومنع تكرار رقم الهاتف
+            if (rawPhone.length > 0) {
+                if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
+                    Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
+                    return false; 
+                }
+                let phoneExists = framersData.some(d => d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                if (phoneExists) {
+                    Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر في المركز!');
+                    return false;
+                }
+            }
+
+            // 🌟 منع تكرار رقم الحساب الجاري
+            if (ccp.length > 0) {
+                let ccpExists = framersData.some(d => d.ccp && d.ccp === ccp);
+                if (ccpExists) {
+                    Swal.showValidationMessage('رقم الحساب الجاري (CCP) مستخدم بالفعل!');
+                    return false;
+                }
+            }
+            
+            if (UNIQUE_ROLES.includes(role)) {
+                if (framersData.some(f => f.role === role)) {
+                    Swal.showValidationMessage(`عذراً، منصب "${role}" محجوز لشخص آخر في المركز!`); 
+                    return false;
+                }
+                const globalCheck = await db.collection("center_framers").where("empId", "==", empId).get();
+                let isManagerElsewhere = false;
+                globalCheck.forEach(d => {
+                    if (UNIQUE_ROLES.includes(d.data().role)) isManagerElsewhere = true;
+                });
+                if (isManagerElsewhere) {
+                    Swal.showValidationMessage(`يُمنع تسجيل المسؤول الإداري أو البيداغوجي في أكثر من مركز!`); 
+                    return false;
+                }
+            }
+
+            return {
+                empId: empId, 
+                name: baseData.name || 'غير متوفر',
+                rank: baseData.grade || baseData.rank || '-', 
+                center: INSPECTOR_CENTER, 
+                role: role, 
+                phone: formattedPhone, 
+                ccp: ccp, 
+                ccpKey: cle, 
+                // 🌟 التصحيح هنا أيضاً للـ Checkbox الخاصة بالدورات 🌟
+                s1: document.getElementById('fr-s1').checked, 
+                s2: document.getElementById('fr-s2').checked, 
+                s3: document.getElementById('fr-s3').checked,
+                shifts: [], 
+                isProtected: false, 
+                framingSpecs, 
+                framingModules, 
+                framingGroups
+            };
+        }
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.hideLoading(); 
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const newDocId = empId + "_" + INSPECTOR_CENTER;
+                await db.collection("center_framers").doc(newDocId).set(res.value);
+                
+                Swal.hideLoading(); 
+                Swal.fire('نجاح', 'تم تسجيل المؤطر بنجاح.', 'success');
+                loadFramersData(); 
+            } catch (e) { 
+                Swal.hideLoading(); 
+                Swal.fire('خطأ', 'تعذر الحفظ.', 'error'); 
+            }
+        }
+    });
+};
+
+window.editFramer = function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) {
+        Swal.fire('خطأ', 'لم يتم العثور على البيانات.', 'error');
+        return;
+    }
+
+   
+    const isProtectedRole = f.isProtected;
+	
+    let rolesHtml = '';
+    if (isProtectedRole) {
+        rolesHtml = `<option value="${f.role}" selected>${f.role}</option>`;
+    } else {
+        FRAMER_ROLES.forEach(r => rolesHtml += `<option value="${r}" ${f.role === r ? 'selected' : ''}>${r}</option>`);
+    }
+
+    // تجهيز التخصصات
+    const allSpecs = getCenterSpecialties();
+    let specsHtml = '';
+    allSpecs.forEach(s => {
+        let checked = (f.framingSpecs || []).includes(s) ? 'checked' : '';
+        specsHtml += `<label class="styled-cb"><input type="checkbox" value="${s}" class="edit-spec-cb" onchange="window.updateEditGroups()" ${checked}> <span>${s}</span></label>`;
+    });
+
+    // تجهيز المقاييس
+    let modsHtml = '';
+    MODULES_LIST.forEach(m => {
+        let checked = (f.framingModules || []).includes(m) ? 'checked' : '';
+        modsHtml += `<label class="styled-cb"><input type="checkbox" value="${m}" class="edit-mod-cb" ${checked}> <span>${m}</span></label>`;
+    });
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-user-pen" style="color:#e67e22; margin-left:8px;"></i> بطاقة تعديل بيانات المؤطر',
+        html: `
+            <style>
+                /* التصميم الديناميكي الجديد (يتمدد حسب الوظيفة) */
+                #edit-framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
+                #edit-framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
+                @media(max-width: 768px) { #edit-framer-form-container.is-teacher { grid-template-columns: 1fr; } }
+                .col-main { display: flex; flex-direction: column; gap: 15px; }
+                
+                .framer-section { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.02); height: 100%; box-sizing: border-box; }
+                .framer-section-title { font-size:15px; font-weight:800; color:#102a43; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:15px; display:flex; align-items:center; gap:8px; }
+                .input-group { margin-bottom:12px; }
+                .input-group label { display:block; font-size:13px; font-weight:bold; color:#475569; margin-bottom:6px; }
+                .styled-input { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:'Cairo'; outline:none; transition:0.3s; box-sizing: border-box; }
+                .styled-input:focus { border-color:#e67e22; box-shadow:0 0 0 3px rgba(230,126,34,0.1); }
+                .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+                
+                .cb-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; max-height:160px; overflow-y:auto; padding:5px; }
+                .styled-cb { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:6px 10px; border-radius:8px; cursor:pointer; transition:0.2s; font-size:12px; font-weight:bold; color:#334e68; }
+                .styled-cb:hover { background:#f1f5f9; border-color:#cbd5e1; }
+                .styled-cb input { accent-color:#e67e22; width:16px; height:16px; cursor:pointer; }
+                
+                .session-pills { display:flex; gap:10px; justify-content:space-between; }
+                .s-pill { flex:1; position:relative; cursor:pointer; }
+                .s-pill input { position:absolute; opacity:0; cursor:pointer; }
+                .s-pill-content { display:flex; justify-content:center; align-items:center; gap:5px; padding:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:8px; font-weight:bold; font-size:13px; color:#64748b; transition:0.3s; }
+                .s-pill input:checked ~ .s-pill-content { background:#fff; border-color:#0FBA50; color:#0FBA50; box-shadow:0 4px 10px rgba(15,186,80,0.15); }
+                .s-pill-content i { display:none; }
+                .s-pill input:checked ~ .s-pill-content i { display:inline-block; }
+            </style>
+            
+            <div id="edit-framer-form-container" class="${f.role === 'أستاذ مؤطر' ? 'is-teacher' : ''}">
+                <!-- العمود الأيمن: البيانات الشخصية والدورات -->
+                <div class="col-main">
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-address-card" style="color:#e67e22;"></i> البيانات الشخصية والمالية</div>
+                        
+                        <div class="grid-2">
+                            <div class="input-group">
+                                <label>رقم الهاتف</label>
+                                <input type="text" id="edit-fr-phone" class="styled-input" style="direction:ltr; text-align:right;" value="${f.phone || ''}" maxlength="14" oninput="window.formatPhoneInput(this)">
+                            </div>
+                            <div class="input-group">
+                                <label>الوظيفة بالمركز</label>
+                                <select id="edit-fr-role" class="styled-input" onchange="window.toggleEditTeacherFields()" ${isProtectedRole ? 'disabled' : ''}>
+                                    ${rolesHtml}
+                                </select>
+                                ${isProtectedRole ? '<span style="font-size:11px; color:#d90429; font-weight:bold; margin-top:4px; display:block;">غير قابل للتعديل</span>' : ''}
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:15px;">
+                            <div class="input-group" style="flex:3;">
+                                <label>الحساب الجاري (CCP)</label>
+                                <input type="text" id="edit-fr-ccp" class="styled-input" style="direction:ltr; text-align:right;" value="${f.ccp || ''}" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                            <div class="input-group" style="flex:1;">
+                                <label>المفتاح</label>
+                                <input type="text" id="edit-fr-cle" class="styled-input" style="direction:ltr; text-align:center;" value="${f.ccpKey || ''}" maxlength="2" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="framer-section">
+                        <div class="framer-section-title"><i class="fa-solid fa-calendar-check" style="color:#0FBA50;"></i> الدورات المشارك فيها</div>
+                        <div class="session-pills">
+                            <label class="s-pill"><input type="checkbox" id="edit-fr-s1" ${f.s1 ? 'checked' : ''}><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 1</div></label>
+                            <label class="s-pill"><input type="checkbox" id="edit-fr-s2" ${f.s2 ? 'checked' : ''}><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 2</div></label>
+                            <label class="s-pill"><input type="checkbox" id="edit-fr-s3" ${f.s3 ? 'checked' : ''}><div class="s-pill-content"><i class="fa-solid fa-check"></i> الدورة 3</div></label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- العمود الأيسر: المهام البيداغوجية (يظهر فقط للأستاذ المؤطر) -->
+                <div class="col-main" id="editTeacherFieldsCol" style="display:${f.role === 'أستاذ مؤطر' ? 'flex' : 'none'};">
+                    <div id="editTeacherFields" class="framer-section" style="border-color:#93c5fd; background:#f8fbff;">
+                        <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
+                        
+                        <div class="input-group">
+                            <label>تخصصات التأطير:</label>
+                            <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
+                        </div>
+
+                        <div class="input-group" id="groups-container">
+                            <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
+                            <div id="edit-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;">
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>مقاييس التأطير:</label>
+                            <div class="cb-grid">${modsHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `,
+        // 🌟 1. تحديد عرض النافذة ديناميكياً 🌟
+        width: f.role === 'أستاذ مؤطر' ? '950px' : '550px', 
+        showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
+        didOpen: () => {
+		
+            Swal.hideLoading();
+            Swal.enableButtons();
+            
+            // 🌟 2. إضافة تأثير التمدد الديناميكي 🌟
+            Swal.getPopup().style.transition = 'width 0.4s ease-in-out';
+			
+            window.toggleEditTeacherFields = () => {
+                const roleEl = document.getElementById('edit-fr-role');
+                const role = isProtectedRole ? f.role : roleEl.value;
+                
+                // 🌟 3. تكبير وتصغير النافذة بانسجام عند تغيير الوظيفة 🌟
+                const container = document.getElementById('edit-framer-form-container');
+                const teacherCol = document.getElementById('editTeacherFieldsCol');
+                const popup = Swal.getPopup();
+
+                if (role === 'أستاذ مؤطر') {
+                    popup.style.width = '950px';
+                    container.classList.add('is-teacher');
+                    teacherCol.style.display = 'flex';
+                } else {
+                    popup.style.width = '550px';
+                    container.classList.remove('is-teacher');
+                    teacherCol.style.display = 'none';
+                }
+            };
+
+            // الدالة المطورة لفصل الأفواج حسب التخصص
+            window.updateEditGroups = () => {
+                const selectedSpecs = Array.from(document.querySelectorAll('.edit-spec-cb:checked')).map(cb => cb.value);
+                const groupsGrid = document.getElementById('edit-groups-grid');
+                
+                let prevChecked = f.framingGroups || []; 
+                let currentCheckedBoxes = document.querySelectorAll('.edit-grp-cb:checked');
+                if(currentCheckedBoxes.length > 0) {
+                    prevChecked = Array.from(currentCheckedBoxes).map(cb => cb.value);
+                }
+
+                let grpHtml = '';
+                
+                if (selectedSpecs.length === 0) {
+                    grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
+                } else {
+                    selectedSpecs.forEach(spec => {
+                        let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
+                        let safeSpec = spec.replace(/\s+/g, '');
+                        
+                        grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
+                                        <h4 style="margin:0 0 10px 0; color:#1E68E8; font-size:13px; border-bottom:1px dashed #cce5ff; padding-bottom:5px;">
+                                            <i class="fa-solid fa-layer-group"></i> أفواج تخصص: ${spec}
+                                        </h4>
+                                        <div class="cb-grid" style="max-height: none;">`;
+                        
+                        if (specGroups.length === 0) {
+                            grpHtml += `<div style="color:#777; font-size:12px; grid-column:1/-1;">لا توجد أفواج مسجلة لهذا التخصص.</div>`;
+                        } else {
+                            let allVal = `${spec}::كل الأفواج`;
+                            let allChecked = prevChecked.includes(allVal) ? 'checked' : '';
+                            
+                            grpHtml += `<label class="styled-cb" style="border-color:#e67e22; grid-column:1/-1;">
+                                            <input type="checkbox" value="${allVal}" class="edit-grp-cb edit-grp-all-${safeSpec}" onchange="window.handleEditGroupAll(this, '${safeSpec}')" ${allChecked}> 
+                                            <span style="color:#e67e22;">كل أفواج (${spec})</span>
+                                        </label>`;
+                            
+                            specGroups.forEach(g => {
+                                let val = `${spec}::${g}`;
+                                let checked = prevChecked.includes(val) || allChecked ? 'checked' : '';
+                                grpHtml += `<label class="styled-cb">
+                                                <input type="checkbox" value="${val}" class="edit-grp-cb edit-grp-item-${safeSpec}" onchange="window.checkEditGroupAllState('${safeSpec}')" ${checked}> 
+                                                <span>${g}</span>
+                                            </label>`;
+                            });
+                        }
+                        grpHtml += `</div></div>`;
+                    });
+                }
+                groupsGrid.innerHTML = grpHtml;
+            };
+
+            window.handleEditGroupAll = (allCb, safeSpec) => {
+                const groupCbs = document.querySelectorAll(`.edit-grp-item-${safeSpec}`);
+                groupCbs.forEach(cb => cb.checked = allCb.checked);
+            };
+
+            window.checkEditGroupAllState = (safeSpec) => {
+                const allCb = document.querySelector(`.edit-grp-all-${safeSpec}`);
+                const groupCbs = document.querySelectorAll(`.edit-grp-item-${safeSpec}`);
+                if(allCb && groupCbs.length > 0) {
+                    const allChecked = Array.from(groupCbs).every(cb => cb.checked);
+                    allCb.checked = allChecked;
+                }
+            };
+
+            window.updateEditGroups();
+        },
+        preConfirm: () => {
+            let rawPhone = document.getElementById('edit-fr-phone').value.trim().replace(/\s+/g, '');
+            let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
+
+            const ccp = document.getElementById('edit-fr-ccp').value.trim();
+            const cle = document.getElementById('edit-fr-cle').value.trim();
+            
+            const roleEl = document.getElementById('edit-fr-role');
+            const role = isProtectedRole ? f.role : roleEl.value;
+
+            const s1 = document.getElementById('edit-fr-s1').checked;
+            const s2 = document.getElementById('edit-fr-s2').checked;
+            const s3 = document.getElementById('edit-fr-s3').checked;
+
+            let framingSpecs = [];
+            let framingModules = [];
+            let framingGroups = [];
+
+            if(role === 'أستاذ مؤطر') {
+                document.querySelectorAll('.edit-spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
+                document.querySelectorAll('.edit-mod-cb:checked').forEach(cb => framingModules.push(cb.value));
+                
+                framingSpecs.forEach(spec => {
+                    const safeSpec = spec.replace(/\s+/g, '');
+                    const allCb = document.querySelector(`.edit-grp-all-${safeSpec}`);
+                    if (allCb && allCb.checked) {
+                        framingGroups.push(`${spec}::كل الأفواج`);
+                    } else {
+                        document.querySelectorAll(`.edit-grp-item-${safeSpec}:checked`).forEach(cb => framingGroups.push(cb.value));
+                    }
+                });
+
+                if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
+                if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
+                if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
+            }
+
+            // 🌟 التحقق من صيغة ومنع تكرار رقم الهاتف
+            if (rawPhone.length > 0) {
+                if (!/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
+                    Swal.showValidationMessage('رقم الهاتف غير صالح!'); 
+                    return false; 
+                }
+                let phoneExists = framersData.some(d => d.docId !== docId && d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                if (phoneExists) {
+                    Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر!');
+                    return false;
+                }
+            }
+
+            // 🌟 منع تكرار رقم الحساب الجاري
+            if (ccp.length > 0) {
+                let ccpExists = framersData.some(d => d.docId !== docId && d.ccp && d.ccp === ccp);
+                if (ccpExists) {
+                    Swal.showValidationMessage('رقم الحساب الجاري (CCP) مستخدم بالفعل!');
+                    return false;
+                }
+            }
+            
+            return { 
+                phone: formattedPhone,
+                ccp, ccpKey: cle, role, s1, s2, s3, framingSpecs, framingModules, framingGroups 
+            };
+        }
+
+    }).then(async (res) => {
+        if (res.isConfirmed) {
+            Swal.hideLoading();
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                await db.collection("center_framers").doc(docId).update(res.value);
+                f.phone = res.value.phone; f.ccp = res.value.ccp; f.ccpKey = res.value.ccpKey; f.role = res.value.role;
+                f.s1 = res.value.s1; f.s2 = res.value.s2; f.s3 = res.value.s3;
+                f.framingSpecs = res.value.framingSpecs; f.framingModules = res.value.framingModules; f.framingGroups = res.value.framingGroups;
+                
+                window.filterFramersTable();
+                if(isShiftMode) window.renderShiftsTable();
+                
+                Swal.hideLoading(); 
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم التعديل بنجاح', showConfirmButton: false, timer: 1500 });
+            } catch (e) { 
+                Swal.hideLoading(); 
+                Swal.fire('خطأ', 'تعذر الحفظ في قاعدة البيانات.', 'error'); 
+            }
+        }
+    });
+};
+
+
+window.deleteFramer = function(docId) {
+
+if(!canCenterDeleteFramer) {
+        return Swal.fire('صلاحيات مقيدة', 'عذراً، لقد تم إيقاف صلاحية حذف المؤطرين في مركزك من طرف المديرية.', 'error');
+    }
+	
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'هل أنت متأكد من إزالة هذا المؤطر من المركز؟', icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء', confirmButtonColor: '#d90429'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                await db.collection("center_framers").doc(docId).delete();
+                framersData = framersData.filter(f => f.docId !== docId);
+                window.filterFramersTable();
+                if(isShiftMode) window.renderShiftsTable();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم الحذف', showConfirmButton: false, timer: 1500 });
+            } catch (e) { Swal.fire('خطأ', 'فشل الحذف.', 'error'); }
+        }
+    });
+};
+
+window.viewFramer = function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) return;
+    let b = f.baseInfo;
+    
+    // 🌟 جلب الصورة بنظام الإنقاذ الذكي 🌟
+    const coreEmpId = extractCoreId(f.empId);
+    const fbUrl = b.photoUrl_fb;
+    let driveUrl = employeePhotosMap[coreEmpId];
+    
+    let initialUrl = fbUrl ? fbUrl : driveUrl;
+    
+    if (initialUrl && initialUrl.includes('sz=w200')) {
+        initialUrl = initialUrl.replace('sz=w200', 'sz=w800'); 
+    }
+
+    const isImgBB = initialUrl && initialUrl.includes('ibb.co');
+
+    const imgTag = initialUrl
+        ? `<img src="${initialUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="window.handleImageFallback(this, '${driveUrl}', 'card')">`
+        : `<div style="display:flex; align-items:center; justify-content:center; height:100%;"><i class="fa-solid fa-user" style="font-size:70px; color:#94a3b8;"></i></div>`;
+
+    const refreshBtn = isImgBB 
+        ? `<button onclick="window.removeBrokenImage('${docId}', 'framer')" style="position: absolute; bottom: 5px; right: 5px; z-index: 20; background: #d90429; color: white; border: 3px solid white; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; transition: 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="حذف الصورة التالفة واسترجاع صورة درايف"><i class="fa-solid fa-arrows-rotate" style="font-size:16px;"></i></button>`
+        : '';
+
+    const html = `
+    <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Cairo', sans-serif; padding: 30px 20px 20px; background: #ffffff; border-radius: 20px;">
+        
+        <!-- حاوية الصورة مع الزر العائم -->
+        <div style="position: relative; width: 170px; height: 170px; margin-bottom: 20px;">
+            <div style="width: 100%; height: 100%; border-radius: 50%; padding: 6px; background: linear-gradient(135deg, #e67e22, #d35400); box-shadow: 0 10px 25px rgba(230, 126, 34, 0.3); box-sizing: border-box;">
+                <div style="width: 100%; height: 100%; border-radius: 50%; background: #f8fafc; overflow: hidden; border: 4px solid #fff; box-sizing: border-box;">
+                    ${imgTag}
+                </div>
+            </div>
+            ${refreshBtn}
+        </div>
+
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 26px; font-weight: 900; color: #102a43;">${b.name || '-'}</h2>
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: #e67e22;"><i class="fa-solid fa-user-tie" style="margin-left: 5px;"></i> ${f.role}</h4>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; text-align: right;">
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرقم الوظيفي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${f.empId}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الحساب الجاري / المفتاح</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr">${f.ccp || '-'} / ${f.ccpKey || '-'}</span>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; grid-column: span 2;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">مكان العمل الأصلي</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;"><i class="fa-solid fa-school" style="color:#94a3b8; margin-left:5px;"></i> ${b.place || b.workplace || '-'}</span>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">رقم الهاتف</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900; font-family:monospace; letter-spacing:1px;" dir="ltr"><i class="fa-solid fa-phone" style="color:#94a3b8; margin-left:5px;"></i> ${f.phone || '-'}</span>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرتبة</span>
+                <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;">${b.grade || b.rank || '-'}</span>
+            </div>
+        </div>
+    </div>
+    `;
+
+    Swal.fire({
+        html: html,
+        showConfirmButton: false, showCloseButton: true, width: '600px', customClass: { popup: 'swal-modal-custom' }
+    });
+};
+
+// ================= أنظمة الطباعة والتصدير (ديناميكية حسب التبويب) =================
+window.printCurrentTabList = function() {
+    if (currentFilteredData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لطباعتها في هذا التبويب.', 'info');
+
+    let sessionTitle = "القائمة الشاملة لجميع المؤطرين بالمركز";
+    if (currentTab === 's1') sessionTitle = "قائمة المؤطرين - الدورة الأولى";
+    if (currentTab === 's2') sessionTitle = "قائمة المؤطرين - الدورة الثانية";
+    if (currentTab === 's3') sessionTitle = "قائمة المؤطرين - الدورة الثالثة";
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    currentFilteredData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let ccpText = f.ccp ? `${f.ccp} Clé ${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}` : '-';
+        
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap">${b.name || '-'}</td>
+                <td class="nowrap">${b.grade || b.rank || '-'}</td>
+                <td>${b.place || b.workplace || '-'}</td>
+                <td dir="ltr" class="center-text nowrap">${ccpText}</td>
+                <td dir="ltr" class="center-text nowrap">${f.phone || '-'}</td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>${sessionTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 20px; }
+            .title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; font-size: 15px; font-weight: 600; vertical-align: middle; font-family: 'Cairo', sans-serif;}
+            th { background: #f0f0f0; text-align: center; font-weight: 700; font-size: 16px; }
+            td { text-align: right; }
+            .center-text { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            .signature { text-align: left; padding-left: 60px; font-weight: 700; font-size: 16px; margin-top: 40px; }
+            @media print { body { padding: 0; } th { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت</div>
+            <div>المركز: ${INSPECTOR_CENTER}</div>
+        </div>
+        <div class="title">${sessionTitle}</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 22%;">مكان العمل</th>
+                    <th style="width: 15%;">الحساب الجاري</th>
+                    <th style="width: 13%;">رقم الهاتف</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        
+        <div class="signature">ختم وإمضاء رئيس المركز</div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.exportCurrentTabExcel = function() {
+    if (currentFilteredData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لتحميلها في هذا التبويب.', 'info');
+
+    let tabName = "كل_المؤطرين";
+    if(currentTab === 's1') tabName = "الدورة_الأولى";
+    if(currentTab === 's2') tabName = "الدورة_الثانية";
+    if(currentTab === 's3') tabName = "الدورة_الثالثة";
+
+    let rowsHtml = '';
+    currentFilteredData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let ccpText = f.ccp ? `${f.ccp} CLE ${f.ccpKey ? f.ccpKey.padStart(2,'0') : '00'}` : '-';
+        
+        rowsHtml += `
+            <tr>
+                <td style="border: 1px solid #000;">${idx + 1}</td>
+                <td style="border: 1px solid #000;">${b.name || '-'}</td>
+                <td style="border: 1px solid #000;">${b.grade || b.rank || '-'}</td>
+                <td style="border: 1px solid #000;">${b.place || b.workplace || '-'}</td>
+                <td class="text-cell" style="border: 1px solid #000;">${ccpText}</td>
+                <td class="text-cell" style="border: 1px solid #000;">${f.phone || '-'}</td>
+                <td style="border: 1px solid #000;">${f.role || '-'}</td>
+            </tr>
+        `;
+    });
+
+    const excelTemplate = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                table { border-collapse: collapse; font-family: 'Arial', sans-serif; direction: rtl; }
+                th, td { border: 1px solid #000000; padding: 8px; text-align: center; vertical-align: middle; }
+                th { background-color: #e67e22; color: #ffffff; font-weight: bold; font-size: 14px; }
+                .text-cell { mso-number-format: "\\@"; } 
+            </style>
+        </head>
+        <body dir="rtl">
+            <table>
+                <thead>
+                    <tr><th colspan="7" style="font-size: 18px; background-color: #f1f5f9; color: #102a43; padding: 15px;">قائمة مؤطري المركز - ${tabName.replace('_', ' ')}</th></tr>
+                    <tr>
+                        <th>الرقم</th>
+                        <th>الاسم واللقب</th>
+                        <th>الرتبة</th>
+                        <th>مكان العمل</th>
+                        <th>الحساب الجاري</th>
+                        <th>رقم الهاتف</th>
+                        <th>الوظيفة بالمركز</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + excelTemplate], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `قائمة_المؤطرين_${tabName}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+window.formatPhoneInput = function(input) {
+    let val = input.value.replace(/\D/g, '').slice(0, 10);
+    if (val.length > 0) input.value = val.match(/.{1,2}/g).join(' ');
+    else input.value = '';
+};
+
+window.printFramerIDCards = function() {
+    let dataToPrint = [];
+    
+    // 🌟 التحقق: هل قام المستخدم بتحديد مربعات معينة؟
+    if (selectedFramers.size > 0) {
+        dataToPrint = currentFilteredData.filter(f => selectedFramers.has(f.docId));
+    } else {
+        // إذا لم يحدد أحداً، نطبع كل القائمة المفلترة الحالية
+        dataToPrint = currentFilteredData;
+    }
+
+    if (dataToPrint.length === 0) {
+        return Swal.fire('تنبيه', 'لا يوجد مؤطرين لطباعة بطاقاتهم.', 'warning');
+    }
+
+    // إشعار للمستخدم بالعدد الذي يتم تجهيزه
+    Swal.fire({
+        toast: true, position: 'top-end', icon: 'info',
+        title: `جاري تجهيز ${dataToPrint.length} بطاقة للطباعة...`,
+        showConfirmButton: false, timer: 2000
+    });
+
+    let printWindow = window.open('', '_blank');
+    let pagesHtml = '';
+    
+    const getColor = (role) => {
+        if (role.includes('بيداغوجي') || role.includes('أستاذ')) return '#0FBA50'; 
+        if (role.includes('إداري') || role.includes('إدارة') || role.includes('أمانة')) return '#1E68E8'; 
+        return '#8e44ad'; 
+    };
+
+    for (let i = 0; i < dataToPrint.length; i += 8) {
+        let pageData = dataToPrint.slice(i, i + 8);
+        pagesHtml += '<div class="page">';
+        
+        pageData.forEach(f => {
+            let empId = f.empId || '000000';
+            let b = f.baseInfo;
+            
+            let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
+if (photoUrl) {
+    if (photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
+    if (photoUrl.includes('=s200')) photoUrl = photoUrl.replace('=s200', '=s400');
+}
+
+const photoContent = photoUrl 
+    ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" referrerpolicy="no-referrer" onerror="this.outerHTML='صورة<br>المؤطر'"/>`
+    : `صورة<br>المؤطر`;
+
+            const cardColor = getColor(f.role);
+
+            pagesHtml += `
+                <div class="card" style="border-color: ${cardColor};">
+                    <div style="position:absolute; top:0; left:0; right:0; height:5px; background:${cardColor};"></div>
+                    <div class="card-header">
+                        <div class="rep-title" style="color:${cardColor};">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+                        <div class="side-headers">
+                            <div class="right-header">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                            <div class="left-header">مركز التكوين:<br><span class="center-name">${INSPECTOR_CENTER}</span></div>
+                        </div>
+                    </div>
+                    <div class="card-title" style="background:${cardColor}; color: white;">مؤطر بالمركز</div>
+                    <div class="card-body">
+                        <div class="info-section">
+                            <div class="info-row"><b style="color:${cardColor};">الاسم واللقب:</b> <span>${b.name || '-'}</span></div>
+                            <div class="info-row" style="display:flex; align-items:center; margin-bottom:3px;">
+                                <b style="color:${cardColor};">الوظيفة:</b> 
+                                <span style="background:#f8f9fa; padding:1px 6px; border-radius:4px; font-weight:900; color:${cardColor}; margin-right:5px; font-size:11.5px; border:1px solid ${cardColor}; white-space:nowrap;">${f.role}</span>
+                            </div>
+                            <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b style="color:${cardColor};">الرتبة:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${b.grade || b.rank || '-'}</span></div></div>
+                            <div class="info-row"><b style="color:${cardColor};">الهاتف:</b> <span dir="ltr" style="font-family:monospace; font-weight:900;">${f.phone || '-'}</span></div>
+                            <div class="barcode-wrapper">
+                                <svg class="barcode" data-value="${empId}"></svg>
+                            </div>
+                        </div>
+                        <div class="photo-section">
+                            <div class="photo-box" style="border-color:${cardColor}; color:${cardColor};">
+                                ${photoContent}
+                            </div>
+                            <div class="signature">رئيس المركز</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        pagesHtml += '</div>';
+    }
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>طباعة بطاقات المؤطرين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { font-family: 'Cairo', sans-serif; background: #e0e6ed; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page { width: 210mm; height: 297mm; background: white; margin: 0 auto; padding: 10mm; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 6mm 5mm; box-sizing: border-box; page-break-after: always; }
+            @media print { body { background: white; } .page { margin: 0; box-shadow: none; } }
+            .card{ border:2px solid; border-radius:10px; padding:8px 10px 8px 10px; display:flex; flex-direction:column; background:#fff; position:relative; overflow:hidden; min-height:100%; box-sizing:border-box; }
+            .card-header { margin-bottom: 3px; }
+            .rep-title { text-align: center; font-size: 10.5px; font-weight: 900; line-height: 1.3; margin-bottom: 4px; }
+            .side-headers { display: flex; justify-content: space-between; font-size: 9px; font-weight: 800; color: #334e68; line-height: 1.3; }
+            .center-name { color: #d90429; font-weight: 900; }
+            .card-title { text-align: center; font-size: 13.5px; font-weight: 900; padding: 3px; border-radius: 5px; margin: 3px 0 5px 0; letter-spacing: 0.5px; }
+            .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
+            .info-section{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
+            .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
+            .info-row b { display: inline-block; min-width: 55px; font-weight: 900;}
+            .info-row span { font-weight: 700; }
+            .barcode-wrapper{ margin-top: auto; margin-bottom: 4px; text-align:center; display:flex; justify-content:center; align-items:center; }
+            .barcode-wrapper svg { width: 100%; max-width: 115px; height: auto !important; display: block; margin: 0 auto; }
+            .photo-section{ width:25%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; }
+            .photo-box { overflow:hidden; padding:0; width: 85%; aspect-ratio: 3/4; border: 2px dashed; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3; }
+            .signature{ font-size:8px; font-weight:900; text-align:center; color:#333; line-height:1.2; margin-top:0; padding-bottom:0; }
+        </style>
+    </head>
+    <body>
+        ${pagesHtml}
+        <script>
+            function initBarcodes() {
+                if (typeof JsBarcode === 'undefined') { setTimeout(initBarcodes, 50); return; }
+                document.querySelectorAll('.barcode').forEach(function(svg) {
+                    var val = svg.getAttribute('data-value');
+                    if (val) { JsBarcode(svg, val, { format: "CODE128", lineColor: "#000", width: 1.5, height: 70, displayValue: false, margin: 0 }); }
+                });
+                document.querySelectorAll('.shrink-workplace').forEach(function(el) {
+                    var availableWidth = el.parentElement.clientWidth; var textWidth = el.scrollWidth;
+                    if (textWidth > availableWidth && availableWidth > 0) { el.style.transform = 'translateY(-50%) scale(' + (availableWidth / textWidth) + ')'; }
+                });
+                setTimeout(function() { window.print(); }, 800);
+            }
+            setTimeout(initBarcodes, 200);
+        <\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ================= نوافذ إضافة دوام وسجل الدوام =================
+window.promptAddShift = function(docId) {
+    let framer = framersData.find(f => f.docId === docId);
+    if(!framer) return;
+
+    let defaultDate = getTodayDate();
+    let sessionVal = document.getElementById('shiftSessionSelect').value; 
+    let sessionNum = sessionVal.replace('s', ''); // استخراج رقم الدورة (1, 2, 3)
+    
+    let isTeacher = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(framer.role);
+    let dailyHours = getDailyHoursForRole(framer.role, sessionNum);
+    
+    let typeOptions = '';
+    let amountValue = '';
+    let hintText = '';
+
+    if (isTeacher) {
+        typeOptions = `<option value="ساعات" selected>بالساعات</option>`;
+        amountValue = '';
+        hintText = `<i class="fa-solid fa-clock"></i> فئة الأساتذة: يرجى إدخال عدد الساعات المنجزة مباشرة.`;
+    } else {
+        typeOptions = `<option value="أيام" selected>بالأيام</option>`;
+        amountValue = '1';
+        if (dailyHours > 0) {
+            hintText = `<i class="fa-solid fa-calculator"></i> سيتم تسجيل (${dailyHours} ساعات) تلقائياً لكل يوم بناءً على إعدادات المديرية.`;
+        } else {
+            hintText = `<i class="fa-solid fa-triangle-exclamation" style="color:red;"></i> تنبيه: لم يتم تحديد ساعات لهذه الفئة في إعدادات المديرية! الساعات ستكون 0.`;
+        }
+    }
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-calendar-plus" style="color:#0FBA50; margin-left:8px;"></i> إضافة دوام جديد',
+        html: `
+            <div style="text-align:right; font-family:'Cairo';">
+                <div style="background: linear-gradient(135deg, #102a43, #243b53); padding:15px; border-radius:12px; margin-bottom:20px; color:white; display:flex; align-items:center; gap:15px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">
+                    <div style="width:50px; height:50px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:20px;">
+                        <i class="fa-solid fa-user-tie"></i>
+                    </div>
+                    <div>
+                        <div style="font-size:16px; font-weight:bold;">${framer.baseInfo.name || ''}</div>
+                        <div style="font-size:13px; color:#a0aec0;">${framer.role}</div>
+                    </div>
+                </div>
+                
+                <div style="background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0;">
+                    <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">تاريخ العمل:</label>
+                    <input type="date" id="sh-date" value="${defaultDate}" class="swal2-input" style="width:100%; margin:0 0 15px; height:45px; font-family:'Cairo'; font-weight:bold;">
+
+                    <div style="display:flex; gap:15px;">
+                        <div style="flex:1;">
+                            <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">طبيعة الدوام:</label>
+                            <select id="sh-type" class="swal2-select" style="width:100%; margin:0; height:45px; padding:0 10px; font-family:'Cairo'; font-weight:bold; background:#e2e8f0; pointer-events:none;" disabled>
+                                ${typeOptions}
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-weight:bold; font-size:14px; color:#475569; margin-bottom:5px; display:block;">العدد:</label>
+                            <input type="number" id="sh-amount" value="${amountValue}" step="0.5" placeholder="${isTeacher ? 'مثال: 4' : ''}" class="swal2-input" style="width:100%; margin:0; height:45px; text-align:center; font-weight:bold; font-size:18px; color:#0FBA50;">
+                        </div>
+                    </div>
+                    <div style="font-size:12px; color:#1E68E8; margin-top:10px; text-align:center; font-weight:bold; background:#eff6ff; padding:8px; border-radius:6px;">
+                        ${hintText}
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ وإضافة', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        preConfirm: () => {
+            const date = document.getElementById('sh-date').value;
+            const type = isTeacher ? 'ساعات' : 'أيام';
+            const amount = parseFloat(document.getElementById('sh-amount').value);
+
+            if (!date) { Swal.showValidationMessage('الرجاء اختيار التاريخ!'); return false; }
+            if (!amount || amount <= 0) { Swal.showValidationMessage('الرجاء إدخال عدد صحيح أكبر من الصفر!'); return false; }
+
+            // 🌟 حساب الساعات الفعلية بناءً على الفئة 🌟
+            let calculatedHours = 0;
+            if (type === 'أيام') {
+                calculatedHours = amount * dailyHours;
+            } else {
+                calculatedHours = amount; // الأستاذ يضع الساعات بيده
+            }
+
+            // التحقق من الساعات المتبقية
+            if (calculatedHours > window.currentRemainingHours) {
+                Swal.showValidationMessage(`عذراً، الساعات المحسوبة (${calculatedHours}) تتجاوز الساعات المتبقية للدورة (${window.currentRemainingHours})!`);
+                return false;
+            }
+
+            return { id: Date.now().toString(), date, type, amount, calculatedHours };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            let shifts = framer.shifts || [];
+            shifts.push(result.value);
+            try {
+                await db.collection("center_framers").doc(docId).update({ shifts: shifts });
+                framer.shifts = shifts;
+                window.renderShiftsTable();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم تسجيل الدوام بنجاح', showConfirmButton: false, timer: 1500 });
+            } catch (error) { Swal.fire('خطأ', 'فشل الحفظ في قاعدة البيانات.', 'error'); }
+        }
+    });
+};
+
+// متغيرات عامة لنظام صفحات سجل الدوام
+let currentShiftHistPage = 1;
+const shiftHistPerPage = 5; // عرض 5 صفوف في كل صفحة
+
+window.viewShiftHistory = function(docId, page = 1) {
+    currentShiftHistPage = page;
+    let framer = framersData.find(f => f.docId === docId);
+    let shifts = framer.shifts || [];
+    
+    // الترتيب التنازلي لرؤية أحدث الساعات المضافة أولاً
+    shifts.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    // حساب الإجماليات
+    let totalDays = 0; let totalHours = 0;
+    shifts.forEach(sh => {
+        if(sh.type === 'أيام') {
+            totalDays += parseFloat(sh.amount);
+            if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+        }
+        if(sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+    });
+
+    
+    let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(framer.role) ? '--' : totalDays;
+
+    // حساب الصفحات
+    const totalPages = Math.ceil(shifts.length / shiftHistPerPage) || 1;
+    if (currentShiftHistPage > totalPages) currentShiftHistPage = totalPages;
+
+    const start = (currentShiftHistPage - 1) * shiftHistPerPage;
+    const paginatedShifts = shifts.slice(start, start + shiftHistPerPage);
+
+    let rowsHtml = '';
+
+    if (shifts.length === 0) {
+        rowsHtml = `<tr><td colspan="3" style="text-align:center; padding:30px; color:#94a3b8; font-weight:bold;"><i class="fa-solid fa-folder-open fa-2x"></i><br>لا يوجد سجل دوام مسجل.</td></tr>`;
+    } else {
+        paginatedShifts.forEach(sh => {
+            let amountColor = sh.type === 'أيام' ? '#d35400' : '#1E68E8';
+            let amountBg = sh.type === 'أيام' ? '#fff3e0' : '#eff6ff';
+
+            rowsHtml += `
+                <tr style="transition:0.2s;">
+                    <td style="text-align:center; padding:12px; border-bottom:1px solid #f1f5f9; font-family:monospace; font-size:15px; font-weight:bold; color:#475569;" dir="ltr">${sh.date}</td>
+                    <td style="text-align:center; padding:12px; border-bottom:1px solid #f1f5f9;">
+                        <span style="background:${amountBg}; color:${amountColor}; padding:6px 12px; border-radius:8px; font-weight:900; font-size:14px;">${sh.amount} ${sh.type}</span>
+                    </td>
+                    <td style="text-align:center; padding:12px; border-bottom:1px solid #f1f5f9; white-space:nowrap;">
+                        <button onclick="window.editShiftEntry('${docId}', '${sh.id}')" style="background:#f1f5f9; color:#f59e0b; border:none; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="تعديل"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="window.deleteShiftEntry('${docId}', '${sh.id}')" style="background:#f1f5f9; color:#ef4444; border:none; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="حذف"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // بناء واجهة نظام الصفحات
+    let paginationHtml = '';
+    if (totalPages > 1) {
+        paginationHtml = `
+            <div class="pagination-container" style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #eee;">
+                <div class="pagination-info" style="font-size:13px; font-weight:600; color:#555;">عرض ${start + 1} إلى ${Math.min(start + shiftHistPerPage, shifts.length)} من أصل ${shifts.length} سجل</div>
+                <div class="pagination-buttons" style="display:flex; gap:5px;">
+                    <button class="page-btn" ${currentShiftHistPage === 1 ? 'disabled' : ''} onclick="window.changeShiftHistPage('${docId}', ${currentShiftHistPage - 1})" style="padding:4px 10px; font-size:12px;">السابق</button>
+        `;
+        for (let i = 1; i <= totalPages; i++) {
+            paginationHtml += `<button class="page-btn ${i === currentShiftHistPage ? 'active' : ''}" onclick="window.changeShiftHistPage('${docId}', ${i})" style="padding:4px 10px; font-size:12px;">${i}</button>`;
+        }
+        paginationHtml += `
+                    <button class="page-btn" ${currentShiftHistPage === totalPages ? 'disabled' : ''} onclick="window.changeShiftHistPage('${docId}', ${currentShiftHistPage + 1})" style="padding:4px 10px; font-size:12px;">التالي</button>
+                </div>
+            </div>
+        `;
+    }
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-clock-rotate-left" style="color:#34495e;"></i> سجل المداومة التفصيلي',
+        width: '800px', // تم تكبير النافذة لـ 800px
+        html: `
+            <div style="font-family:'Cairo'; text-align:right;">
+                <div style="background: linear-gradient(135deg, #f8fafc, #e2e8f0); padding:20px; border-radius:15px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border:1px solid #cbd5e1;">
+                    <div>
+                        <h2 style="margin:0 0 5px; color:#1e293b; font-size:22px;">${framer.baseInfo.name || '-'}</h2>
+                       
+                       <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #64748b; font-weight: bold;">
+    
+                       <span dir="ltr" style="display: flex; align-items: center; gap: 6px;">
+                       <i class="fa-solid fa-phone"></i> 
+                       <span style="letter-spacing: 1px; padding-top: 2px;">${framer.phone || '-'}</span>
+                       </span>
+                       <span style="color: #cbd5e1;">|</span>
+                       <span style="display: flex; align-items: center; gap: 6px;">
+                       <i class="fa-solid fa-briefcase"></i> 
+                       <span>${framer.role}</span>
+                       </span>
+                       </div>
+                    
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <div style="background:white; padding:10px 15px; border-radius:10px; text-align:center; border:1px solid #ffcc80;">
+                            <span style="display:block; font-size:12px; color:#d35400; font-weight:bold;">مجموع الأيام</span>
+                            <span style="font-size:22px; font-weight:900; color:#d35400;">${totalDays}</span>
+                        </div>
+                        <div style="background:white; padding:10px 15px; border-radius:10px; text-align:center; border:1px solid #93c5fd;">
+                            <span style="display:block; font-size:12px; color:#1E68E8; font-weight:bold;">مجموع الساعات</span>
+                            <span style="font-size:22px; font-weight:900; color:#1E68E8;">${totalHours}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- تم إزالة سكرول max-height لضمان عدم اختفاء الزر بالأسفل -->
+                <div style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead style="background:#f1f5f9;">
+                            <tr>
+                                <th style="padding:12px; border-bottom:2px solid #cbd5e1;">تاريخ الإنجاز</th>
+                                <th style="padding:12px; border-bottom:2px solid #cbd5e1;">المدة المسجلة</th>
+                                <th style="padding:12px; border-bottom:2px solid #cbd5e1; width:120px;">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+                
+                ${paginationHtml}
+
+                <div style="margin-top:20px; text-align:center;">
+                    <button onclick="window.printShiftHistory('${docId}')" class="btn-action-main" style="background:#102a43; margin:0 auto; padding:12px 30px; font-size:15px;">
+                        <i class="fa-solid fa-print"></i> طباعة الوثيقة الرسمية للمداومة
+                    </button>
+                </div>
+            </div>
+        `,
+        showConfirmButton: false, showCloseButton: true
+    });
+};
+
+// دالة الانتقال بين الصفحات للسجل
+window.changeShiftHistPage = function(docId, page) {
+    window.viewShiftHistory(docId, page);
+};
+
+window.editShiftEntry = function(docId, shiftId) {
+    let framer = framersData.find(f => f.docId === docId);
+    let shiftIndex = framer.shifts.findIndex(s => s.id === shiftId);
+    let shift = framer.shifts[shiftIndex];
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value; 
+    let sessionNum = sessionVal.replace('s', '');
+    let isTeacher = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(framer.role);
+    let dailyHours = getDailyHoursForRole(framer.role, sessionNum);
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-pen-to-square" style="color:#ffc107;"></i> تعديل سجل الدوام',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0;">
+                <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">التاريخ:</label>
+                <input type="date" id="e-sh-date" value="${shift.date}" class="swal2-input" style="width:100%; height:45px; margin:0 0 15px;">
+                
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">النوع:</label>
+                        <select id="e-sh-type" class="swal2-select" style="width:100%; height:45px; margin:0; padding:0 10px; background:#e2e8f0; pointer-events:none;" disabled>
+                            <option value="أيام" ${shift.type === 'أيام' ? 'selected' : ''}>أيام</option>
+                            <option value="ساعات" ${shift.type === 'ساعات' ? 'selected' : ''}>ساعات</option>
+                        </select>
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-weight:bold; font-size:14px; color:#475569; display:block; margin-bottom:5px;">العدد:</label>
+                        <input type="number" id="e-sh-amount" value="${shift.amount}" step="0.5" class="swal2-input" style="width:100%; height:45px; margin:0; text-align:center; font-weight:bold; color:#d35400;">
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#f59e0b',
+        preConfirm: () => {
+            const date = document.getElementById('e-sh-date').value;
+            const amount = parseFloat(document.getElementById('e-sh-amount').value);
+            
+            if (!date || !amount) { Swal.showValidationMessage('بيانات ناقصة!'); return false; }
+
+            // حساب الساعات الجديدة
+            let calculatedHours = shift.type === 'أيام' ? (amount * dailyHours) : amount;
+
+            // حساب الرصيد المتاح بإرجاع الساعات القديمة للمجموع أولاً
+            let oldCalculatedHours = shift.calculatedHours !== undefined ? parseFloat(shift.calculatedHours) : (shift.type === 'ساعات' ? parseFloat(shift.amount) : 0);
+            let allowedAmount = window.currentRemainingHours + oldCalculatedHours;
+            
+            if (calculatedHours > allowedAmount) {
+                Swal.showValidationMessage(`عذراً، الساعات المحسوبة (${calculatedHours}) تتجاوز الرصيد المتاح (${allowedAmount})!`);
+                return false;
+            }
+
+            return { id: shift.id, date, type: shift.type, amount, calculatedHours };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحفظ...', didOpen: () => Swal.showLoading() });
+            framer.shifts[shiftIndex] = result.value;
+            try {
+                await db.collection("center_framers").doc(docId).update({ shifts: framer.shifts });
+                window.renderShiftsTable();
+                window.viewShiftHistory(docId); 
+            } catch (e) { Swal.fire('خطأ', 'فشل التعديل.', 'error'); }
+        }
+    });
+};
+
+window.deleteShiftEntry = function(docId, shiftId) {
+    let framer = framersData.find(f => f.docId === docId);
+
+    Swal.fire({
+        title: 'تأكيد الحذف', text: 'سيتم حذف هذا السجل بشكل نهائي ولن يؤخذ في الحسبان.', icon: 'warning',
+        showCancelButton: true, confirmButtonColor: '#d90429', confirmButtonText: 'احذف', cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الحذف...', didOpen: () => Swal.showLoading() });
+            framer.shifts = framer.shifts.filter(s => s.id !== shiftId);
+            try {
+                await db.collection("center_framers").doc(docId).update({ shifts: framer.shifts });
+                window.renderShiftsTable();
+                window.viewShiftHistory(docId);
+            } catch (e) { Swal.fire('خطأ', 'فشل الحذف.', 'error'); }
+        }
+    });
+};
+
+// ================= أنظمة الطباعة والتصدير =================
+
+window.printShiftsTabList = function() {
+    if (currentShiftData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لطباعتها في الدورة المحددة.', 'info');
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value;
+    let sessionTitle = "وثيقة المداومة للمؤطرين";
+    if (sessionVal === 's1') sessionTitle += " - الدورة الأولى";
+    if (sessionVal === 's2') sessionTitle += " - الدورة الثانية";
+    if (sessionVal === 's3') sessionTitle += " - الدورة الثالثة";
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    currentShiftData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let totalDays = 0, totalHours = 0;
+        (f.shifts || []).forEach(sh => {
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+            }
+            if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        });
+        
+        
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
+        
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap">${b.name || '-'}</td>
+                <td class="nowrap">${b.grade || b.rank || '-'}</td>
+                <td>${b.place || b.workplace || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
+                <td class="center-text"><b>${displayDays}</b></td>
+                <td class="center-text"><b>${totalHours}</b></td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>${sessionTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 20px; }
+            .title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; font-size: 15px; font-weight: 600; vertical-align: middle; }
+            th { background: #f0f0f0; text-align: center; font-weight: 700; font-size: 16px; }
+            td { text-align: right; }
+            .center-text { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            .signature { text-align: left; padding-left: 60px; font-weight: 700; font-size: 16px; margin-top: 40px; }
+            @media print { body { padding: 0; } th { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت</div>
+            <div>المركز: ${INSPECTOR_CENTER}</div>
+        </div>
+        <div class="title">${sessionTitle}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 25%;">الاسم واللقب</th>
+                    <th style="width: 20%;">الرتبة</th>
+                    <th style="width: 20%;">مكان العمل</th>
+                    <th style="width: 16%;">الوظيفة بالمركز</th>
+                    <th style="width: 7%;">أيام</th>
+                    <th style="width: 7%;">ساعات</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        <div class="signature">ختم وإمضاء رئيس المركز</div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.printDetailedShiftsList = function() {
+    if (currentShiftData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات لطباعتها.', 'info');
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value;
+    let sessionTitle = "تفاصيل دوام وتأطير الأساتذة";
+    if (sessionVal === 's1') sessionTitle += " - الدورة الأولى";
+    if (sessionVal === 's2') sessionTitle += " - الدورة الثانية";
+    if (sessionVal === 's3') sessionTitle += " - الدورة الثالثة";
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    currentShiftData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let totalDays = 0, totalHours = 0;
+        (f.shifts || []).forEach(sh => {
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+            }
+            if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        });
+
+        
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
+
+        let specs = '-';
+        let mods = '-';
+        
+        if (f.role === 'أستاذ مؤطر') {
+            let specsList = f.framingSpecs || [];
+            let groupsList = f.framingGroups || [];
+            
+            if (specsList.length > 0) {
+                let groupsBySpec = {};
+                // تجميع الأفواج لكل تخصص
+                groupsList.forEach(g => {
+                    let parts = g.split('::');
+                    if (parts.length === 2) {
+                        if (!groupsBySpec[parts[0]]) groupsBySpec[parts[0]] = [];
+                        groupsBySpec[parts[0]].push(parts[1]);
+                    }
+                });
+
+                let specBlocks = [];
+                specsList.forEach(s => {
+                    let text = `<b>${s}</b>`;
+                    if (groupsBySpec[s] && groupsBySpec[s].length > 0) {
+                        text += `<br><span style="font-size:10px; color:#555;">[ ${groupsBySpec[s].join(' ، ')} ]</span>`;
+                    } else {
+                        text += `<br><span style="font-size:10px; color:#aaa;">[ بدون أفواج ]</span>`;
+                    }
+                    specBlocks.push(`<div style="margin-bottom:6px;">${text}</div>`);
+                });
+                specs = specBlocks.join('');
+            }
+            
+            mods = (f.framingModules || []).length > 0 ? (f.framingModules).join('<br>') : '-';
+        }
+        
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap">${b.name || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
+                <td style="font-size:12px;">${specs}</td>
+                <td style="font-size:12px;">${mods}</td>
+                <td class="center-text"><b>${displayDays}</b></td>
+                <td class="center-text"><b>${totalHours}</b></td>
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>${sessionTitle}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; padding: 15px; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 20px; }
+            .title { text-align: center; font-size: 22px; font-weight: 700; text-decoration: underline; margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; font-size: 14px; font-weight: 600; vertical-align: middle; }
+            th { background: #f0f0f0; text-align: center; font-weight: 700; font-size: 15px; }
+            td { text-align: right; }
+            .center-text { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            @media print { th { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت</div>
+            <div>المركز: ${INSPECTOR_CENTER}</div>
+        </div>
+        <div class="title">${sessionTitle}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 20%;">الاسم واللقب</th>
+                    <th style="width: 15%;">الوظيفة بالمركز</th>
+                    <th style="width: 25%;">التخصصات المؤطرة</th>
+                    <th style="width: 25%;">مقاييس التأطير</th>
+                    <th style="width: 5%;">أيام</th>
+                    <th style="width: 5%;">ساعات</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.printShiftHistory = function(docId) {
+    let framer = framersData.find(f => f.docId === docId);
+    let shifts = framer.shifts || [];
+    shifts.sort((a,b) => new Date(a.date) - new Date(b.date)); 
+
+    let totalDays = 0, totalHours = 0;
+    let rowsHtml = '';
+    
+    shifts.forEach((sh, idx) => {
+        if (sh.type === 'أيام') {
+    totalDays += parseFloat(sh.amount);
+    if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+}
+if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        
+        rowsHtml += `
+            <tr>
+                <td style="text-align:center;">${idx + 1}</td>
+                <td dir="ltr" style="text-align:center; font-family:monospace; font-weight:bold; font-size:15px;">${sh.date}</td>
+                <td style="text-align:center;">${sh.type}</td>
+                <td style="text-align:center; font-weight:bold; font-size:16px;">${sh.amount}</td>
+            </tr>
+        `;
+    });
+
+    if(shifts.length === 0) rowsHtml = `<tr><td colspan="4" style="text-align:center; padding:15px;">لا يوجد سجل دوام.</td></tr>`;
+
+    let printWindow = window.open('', '', 'width=800,height=900');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>سجل الدوام - ${framer.baseInfo.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: 'Cairo', sans-serif; color: #000; }
+            .header { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .sub-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; margin-bottom: 30px; }
+            .title { text-align: center; font-size: 22px; font-weight: 900; text-decoration: underline; margin-bottom: 30px; }
+            .info-box { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-bottom: 30px; background: #fafafa; }
+            .info-table { width: 100%; border-collapse: collapse; }
+            .info-table td { padding: 5px; font-size: 15px; }
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            table.data-table th, table.data-table td { border: 1px solid #000; padding: 8px; font-size: 15px; }
+            table.data-table th { background: #f0f0f0; text-align: center; font-weight: 700; }
+            .totals-box { display: flex; justify-content: space-around; border: 2px solid #000; padding: 10px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #eee; }
+            .signature { display: flex; justify-content: space-between; padding: 0 50px; font-weight: 700; font-size: 16px; margin-top: 50px; }
+            @media print { th, .totals-box { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; } .info-box{background: transparent;} }
+        </style>
+    </head>
+    <body>
+        <div class="header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        <div class="sub-header">
+            <div>مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align:left;">مركز التكوين:<br><strong>${INSPECTOR_CENTER}</strong></div>
+        </div>
+        
+        <div class="title">البطاقة الفردية لسجل الدوام</div>
+        
+        <div class="info-box">
+            <table class="info-table">
+                <tr><td width="20%"><strong>الاسم واللقب:</strong></td><td width="30%"><strong>${framer.baseInfo.name || '-'}</strong></td>
+                    <td width="20%"><strong>الوظيفة بالمركز:</strong></td><td width="30%"><strong>${framer.role}</strong></td></tr>
+                <tr><td><strong>رقم الهاتف:</strong></td><td dir="ltr" style="text-align:right;">${framer.phone || '-'}</td>
+                    <td><strong>مكان العمل:</strong></td><td>${framer.baseInfo.place || framer.baseInfo.workplace || '-'}</td></tr>
+            </table>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr><th style="width: 10%;">الرقم</th><th style="width: 40%;">تاريخ العمل</th><th style="width: 25%;">طبيعة الدوام</th><th style="width: 25%;">العدد المنجز</th></tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        
+        <div class="totals-box">
+            <div>المجموع الكلي للأيام: ${totalDays} يوم</div>
+            <div>المجموع الكلي للساعات: ${totalHours} ساعة</div>
+        </div>
+
+        <div class="signature">
+            <div>إمضاء المعني بالأمر</div>
+            <div>ختم وإمضاء رئيس المركز</div>
+        </div>
+        
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 800); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+window.exportShiftsTabExcel = function() {
+    if (currentShiftData.length === 0) return Swal.fire('تنبيه', 'لا يوجد بيانات دوام لتحميلها.', 'info');
+
+    let sessionVal = document.getElementById('shiftSessionSelect').value;
+    let tabName = "وثيقة_المداومة_";
+    if(sessionVal === 's1') tabName += "الدورة_الأولى";
+    if(sessionVal === 's2') tabName += "الدورة_الثانية";
+    if(sessionVal === 's3') tabName += "الدورة_الثالثة";
+
+    let rowsHtml = '';
+    currentShiftData.forEach((f, idx) => {
+        let b = f.baseInfo;
+        let totalDays = 0, totalHours = 0;
+        (f.shifts || []).forEach(sh => {
+            if (sh.type === 'أيام') {
+                totalDays += parseFloat(sh.amount);
+                if (sh.calculatedHours !== undefined) totalHours += parseFloat(sh.calculatedHours);
+            }
+            if (sh.type === 'ساعات') totalHours += parseFloat(sh.amount);
+        });
+        
+        let displayDays = ["أستاذ مؤطر", "أستاذ(ة) مكون(ة)"].includes(f.role) ? '--' : totalDays;
+        
+        let specs = '-';
+        let mods = '-';
+        
+        if (f.role === 'أستاذ مؤطر') {
+            let specsList = f.framingSpecs || [];
+            let groupsList = f.framingGroups || [];
+            
+            if (specsList.length > 0) {
+                let groupsBySpec = {};
+                groupsList.forEach(g => {
+                    let parts = g.split('::');
+                    if (parts.length === 2) {
+                        if (!groupsBySpec[parts[0]]) groupsBySpec[parts[0]] = [];
+                        groupsBySpec[parts[0]].push(parts[1]);
+                    }
+                });
+
+                specs = specsList.map(s => {
+                    let text = s;
+                    if (groupsBySpec[s] && groupsBySpec[s].length > 0) {
+                        text += ` (${groupsBySpec[s].join('، ')})`;
+                    }
+                    return text;
+                }).join(' / ');
+            }
+            
+            mods = (f.framingModules || []).length > 0 ? (f.framingModules).join(' / ') : '-';
+        }
+
+        rowsHtml += `
+            <tr>
+                <td style="border: 1px solid #000;">${idx + 1}</td>
+                <td style="border: 1px solid #000;">${b.name || '-'}</td>
+                <td style="border: 1px solid #000;">${b.grade || b.rank || '-'}</td>
+                <td style="border: 1px solid #000;">${b.place || b.workplace || '-'}</td>
+                <td style="border: 1px solid #000;">${f.role || '-'}</td>
+                <td style="border: 1px solid #000;">${specs}</td>
+                <td style="border: 1px solid #000;">${mods}</td>
+                <td style="border: 1px solid #000;">${displayDays}</td>
+                <td style="border: 1px solid #000;">${totalHours}</td>
+            </tr>
+        `;
+    });
+
+    const excelTemplate = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                table { border-collapse: collapse; font-family: 'Arial', sans-serif; direction: rtl; }
+                th, td { border: 1px solid #000000; padding: 8px; text-align: center; vertical-align: middle; }
+                th { background-color: #d35400; color: #ffffff; font-weight: bold; font-size: 14px; }
+            </style>
+        </head>
+        <body dir="rtl">
+            <table>
+                <thead>
+                    <tr><th colspan="9" style="font-size: 18px; background-color: #f1f5f9; color: #102a43; padding: 15px;">${tabName.replace(/_/g, ' ')}</th></tr>
+                    <tr>
+                        <th>الرقم</th>
+                        <th>الاسم واللقب</th>
+                        <th>الرتبة</th>
+                        <th>مكان العمل</th>
+                        <th>الوظيفة بالمركز</th>
+                        <th>التخصصات المؤطرة</th>
+                        <th>المقاييس</th>
+                        <th>الأيام المنجزة</th>
+                        <th>الساعات المنجزة</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + excelTemplate], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `${tabName}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ================= نظام حضور المؤطرين =================
+let currentFramerAttDate = "";
+let framerAttRecords = {};
+let framerAttListener = null;
+
+function openFramerAttendance() {
+    if (framersData.length === 0) { Swal.fire('تنبيه', 'لا يوجد مؤطرون مسجلون في المركز.', 'warning'); return; }
+    document.getElementById('framerAttendanceModal').style.display = 'flex';
+    
+    const dateInput = document.getElementById('framerAttDate');
+    if (!dateInput.value) { dateInput.value = getTodayDate(); }
+    
+    loadFramerAttendanceData();
+}
+
+function closeFramerAttendance() {
+    document.getElementById('framerAttendanceModal').style.display = 'none';
+    if (framerAttListener) framerAttListener();
+}
+
+function changeFramerSystemMode(mode) {
+    const btnOpen = document.getElementById('btnSysOpen');
+    const btnClosed = document.getElementById('btnSysClosed');
+
+    btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+    btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+
+    if (mode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+    else if (mode === 'closed') { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    db.collection('framers_attendance_daily').doc(docId).set({ systemMode: mode }, { merge: true });
+}
+
+async function loadFramerAttendanceData() {
+    currentFramerAttDate = document.getElementById('framerAttDate').value;
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    
+    if (framerAttListener) framerAttListener();
+
+    framerAttListener = db.collection('framers_attendance_daily').doc(docId).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            framerAttRecords = data.records || {};
+            
+            let currentMode = data.systemMode || "closed";
+            const btnOpen = document.getElementById('btnSysOpen');
+            const btnClosed = document.getElementById('btnSysClosed');
+            btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+            btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+            if (currentMode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+            else { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+
+        } else {
+            framerAttRecords = {};
+            changeFramerSystemMode('closed');
+        }
+        renderFramerAttendanceTable();
+    });
+}
+
+function renderFramerAttendanceTable() {
+    const tbody = document.getElementById('framerAttTableBody');
+    tbody.innerHTML = '';
+
+    let total = 0, present = 0, absent = 0;
+
+    framersData.forEach((f, index) => {
+        let b = f.baseInfo || {};
+        let record = framerAttRecords[f.empId] || { status: 'غير محدد', time: '' };
+        
+        total++;
+        if (record.status === 'حاضر') present++;
+        else if (record.status === 'غائب') absent++;
+
+        const tr = document.createElement('tr');
+        let rowClass = 'row-unspecified';
+        let selectClass = 'sel-unspecified';
+        
+        if (record.status === 'حاضر') { rowClass = 'row-present'; selectClass = 'sel-present'; }
+        else if (record.status === 'غائب') { rowClass = 'row-absent'; selectClass = 'sel-absent'; }
+
+        // 🌟 تصحيح الخطأ هنا (empId إلى f.empId) لضمان ظهور الصورة في نافذة الحضور 🌟
+        let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(f.empId)];
+        // 🌟 تجهيز الصورة بنظام الإنقاذ 🌟
+        const coreEmpId = extractCoreId(f.empId);
+        const fbUrl = b.photoUrl_fb;
+        const driveUrl = employeePhotosMap[coreEmpId];
+        const initialUrl = fbUrl ? fbUrl : driveUrl;
+
+        const photoHtml = `<div class="profile-pic-container" style="width:30px; height:30px; margin:0 auto;">
+            ${initialUrl ? `<img src="${initialUrl}" class="profile-pic-img" onerror="window.handleImageFallback(this, '${driveUrl}', 'table')">` : `<i class="fa-solid fa-user profile-pic-placeholder"></i>`}
+        </div>`;
+
+        tr.className = rowClass;
+        tr.innerHTML = `
+            <td style="text-align:center;">${index + 1}</td>
+            <td style="text-align:center; vertical-align: middle;">
+                ${photoHtml}
+                <div style="margin-top: 4px; font-weight: bold; font-size: 12px; color: #102a43; letter-spacing: 1px;">${f.empId}</div>
+            </td>            <td><b>${b.name || '-'}</b></td>
+            <td>${b.grade || b.rank || '-'}</td>
+            <td style="text-align:center;"><span style="background:#fff3e0; color:#d35400; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:bold;">${f.role}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+                <span class="att-time">${record.time || '--:--'}</span>
+                <select class="att-select ${selectClass}" onchange="changeFramerRecordStatus('${f.empId}', this.value)">
+                    <option value="غير محدد" ${record.status === 'غير محدد' ? 'selected' : ''}>غير محدد</option>
+                    <option value="غائب" ${record.status === 'غائب' ? 'selected' : ''}>غائب</option>
+                    <option value="حاضر" ${record.status === 'حاضر' ? 'selected' : ''}>حاضر</option>
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('f-st-total').innerText = total;
+    document.getElementById('f-st-present').innerText = present;
+    document.getElementById('f-st-absent').innerText = absent;
+}
+
+async function changeFramerRecordStatus(empId, newStatus) {
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    let timeString = '';
+    if (newStatus !== 'غير محدد') {
+        const d = new Date();
+        timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    }
+    await db.collection('framers_attendance_daily').doc(docId).set({ records: { [empId]: { status: newStatus, time: timeString } } }, { merge: true });
+}
+
+function markAllFramersPresent() {
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    const d = new Date();
+    const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    let newRecords = {};
+    framersData.forEach(f => {
+        let record = framerAttRecords[f.empId];
+        if (!record || !record.time || record.time.trim() === '') {
+            newRecords[f.empId] = { status: 'حاضر', time: timeString };
+        }
+    });
+    db.collection('framers_attendance_daily').doc(docId).set({ records: newRecords }, { merge: true });
+}
+
+function markAllFramersAbsent() {
+    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    const d = new Date();
+    const timeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    let newRecords = {};
+    framersData.forEach(f => {
+        let record = framerAttRecords[f.empId];
+        if (!record || !record.time || record.time.trim() === '') {
+            newRecords[f.empId] = { status: 'غائب', time: timeString };
+        }
+    });
+    db.collection('framers_attendance_daily').doc(docId).set({ records: newRecords }, { merge: true });
+}
+
+// دالة الطباعة الخاصة بالحاضرين فقط وبشكل أفقي
+function printPresentFramers() {
+    let presentFramers = framersData.filter(f => {
+        let record = framerAttRecords[f.empId];
+        return record && record.status === 'حاضر';
+    });
+
+    if (presentFramers.length === 0) {
+        Swal.fire('تنبيه', 'لا يوجد أي مؤطر مسجل كـ "حاضر" لطباعته.', 'warning');
+        return;
+    }
+
+    let printWindow = window.open('', '', 'width=1200,height=800');
+    let rowsHtml = '';
+    
+    presentFramers.forEach((f, idx) => {
+        let b = f.baseInfo || {};
+        rowsHtml += `
+            <tr>
+                <td class="center-text">${idx + 1}</td>
+                <td class="nowrap"><b>${b.name || '-'}</b></td>
+                <td class="nowrap">${b.grade || b.rank || '-'}</td>
+                <td>${b.place || b.workplace || '-'}</td>
+                <td dir="ltr" class="center-text nowrap">${f.phone || '-'}</td>
+                <td class="center-text nowrap" style="font-weight:bold;">${f.role || '-'}</td>
+                <td></td> <!-- مساحة الإمضاء -->
+            </tr>
+        `;
+    });
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>قائمة حضور المؤطرين</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4 landscape; margin: 10mm; } /* صفحة أفقية */
+            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #000; }
+            .print-header { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 20px; line-height: 1.5; }
+            .header-flex { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+            .center-name-text { color: #d90429; font-size: 14px;} 
+            .main-title { text-align: center; font-size: 22px; font-weight: bold; margin: 10px 0 15px; text-decoration: underline; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #000; padding: 10px 8px; text-align: right; font-size: 14px; }
+            th { background-color: #eee; font-weight: bold; text-align: center; font-size: 15px; }
+            td.center-text { text-align: center; }
+            td.nowrap { white-space: nowrap; } 
+            @media print { body { padding: 0; } th { background-color: #eee !important; -webkit-print-color-adjust: exact; } }
+        </style>
+    </head>
+    <body>
+        <div class="print-header">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+        
+        <div class="header-flex">
+            <div style="text-align: right;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+            <div style="text-align: left;">مركز التكوين:<br><span class="center-name-text">${INSPECTOR_CENTER}</span></div>
+        </div>
+
+        <div class="main-title">القائمة الاسمية للمؤطرين الحاضرين (${currentFramerAttDate})</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%;">الرقم</th>
+                    <th style="width: 20%;">الاسم واللقب</th>
+                    <th style="width: 15%;">الرتبة</th>
+                    <th style="width: 20%;">مكان العمل</th>
+                    <th style="width: 15%;">رقم الهاتف</th>
+                    <th style="width: 15%;">الوظيفة بالمركز</th>
+                    <th style="width: 10%;">الإمضاء</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+        
+        <div style="text-align: left; padding-left: 60px; font-weight: 700; font-size: 16px; margin-top: 40px;">رئيس المركز</div>
+        <script>window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 500); }<\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html); printWindow.document.close();
+}
+
+// ================= دالة طباعة البطاقة الفردية للمؤطر =================
+window.printSingleFramerCard = function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) {
+        Swal.fire('خطأ', 'لم يتم العثور على بيانات المؤطر.', 'error');
+        return;
+    }
+
+    let printWindow = window.open('', '_blank');
+    let b = f.baseInfo;
+    let empId = f.empId || '000000';
+    
+    // الألوان حسب الوظيفة
+    const getColor = (role) => {
+        if (role.includes('بيداغوجي') || role.includes('أستاذ')) return '#0FBA50'; 
+        if (role.includes('إداري') || role.includes('إدارة') || role.includes('أمانة')) return '#1E68E8'; 
+        return '#8e44ad'; 
+    };
+
+   let photoUrl = (b.photoUrl_fb) ? b.photoUrl_fb : employeePhotosMap[extractCoreId(empId)];
+if (photoUrl) {
+    if (photoUrl.includes('sz=w200')) photoUrl = photoUrl.replace('sz=w200', 'sz=w400');
+    if (photoUrl.includes('=s200')) photoUrl = photoUrl.replace('=s200', '=s400');
+}
+
+const photoContent = photoUrl 
+    ? `<img src="${photoUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" referrerpolicy="no-referrer" onerror="this.outerHTML='صورة<br>المؤطر'"/>`
+    : `صورة<br>المؤطر`;
+
+    const cardColor = getColor(f.role);
+
+    let pageHtml = `
+        <div class="page">
+            <div class="card" style="border-color: ${cardColor};">
+                <div style="position:absolute; top:0; left:0; right:0; height:5px; background:${cardColor};"></div>
+                <div class="card-header">
+                    <div class="rep-title" style="color:${cardColor};">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
+                    <div class="side-headers">
+                        <div class="right-header">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
+                        <div class="left-header">مركز التكوين:<br><span class="center-name">${INSPECTOR_CENTER}</span></div>
+                    </div>
+                </div>
+                <div class="card-title" style="background:${cardColor}; color: white;">مؤطر بالمركز</div>
+                <div class="card-body">
+                    <div class="info-section">
+                        <div class="info-row"><b style="color:${cardColor};">الاسم واللقب:</b> <span>${b.name || '-'}</span></div>
+                        <div class="info-row" style="display:flex; align-items:center; margin-bottom:3px;">
+                            <b style="color:${cardColor};">الوظيفة:</b> 
+                            <span style="background:#f8f9fa; padding:1px 6px; border-radius:4px; font-weight:900; color:${cardColor}; margin-right:5px; font-size:11.5px; border:1px solid ${cardColor}; white-space:nowrap;">${f.role}</span>
+                        </div>
+                        <div class="info-row" style="display: flex; overflow: visible; align-items: center;"><b style="color:${cardColor};">الرتبة:</b> <div style="flex: 1; position: relative; min-width: 0; height: 14px;"><span class="shrink-workplace" style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); white-space: nowrap; transform-origin: right center;">${b.grade || b.rank || '-'}</span></div></div>
+                        <div class="info-row"><b style="color:${cardColor};">الهاتف:</b> <span dir="ltr" style="font-family:monospace; font-weight:900;">${f.phone || '-'}</span></div>
+                        <div class="barcode-wrapper">
+                            <svg class="barcode" data-value="${empId}"></svg>
+                        </div>
+                    </div>
+                    <div class="photo-section">
+                        <div class="photo-box" style="border-color:${cardColor}; color:${cardColor};">
+                            ${photoContent}
+                        </div>
+                        <div class="signature">رئيس المركز</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8"><title>طباعة بطاقة - ${b.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { font-family: 'Cairo', sans-serif; background: #e0e6ed; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page { width: 210mm; height: 297mm; background: white; margin: 0 auto; padding: 10mm; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 6mm 5mm; box-sizing: border-box; page-break-after: always; }
+            @media print { body { background: white; } .page { margin: 0; box-shadow: none; } }
+            .card{ border:2px solid; border-radius:10px; padding:8px 10px 8px 10px; display:flex; flex-direction:column; background:#fff; position:relative; overflow:hidden; min-height:100%; box-sizing:border-box; }
+            .card-header { margin-bottom: 3px; }
+            .rep-title { text-align: center; font-size: 10.5px; font-weight: 900; line-height: 1.3; margin-bottom: 4px; }
+            .side-headers { display: flex; justify-content: space-between; font-size: 9px; font-weight: 800; color: #334e68; line-height: 1.3; }
+            .center-name { color: #d90429; font-weight: 900; }
+            .card-title { text-align: center; font-size: 13.5px; font-weight: 900; padding: 3px; border-radius: 5px; margin: 3px 0 5px 0; letter-spacing: 0.5px; }
+            .card-body { display: flex; justify-content: space-between; gap: 8px; flex: 1; }
+            .info-section{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
+            .info-row { font-size: 10.5px; margin-bottom: 1px; line-height: 1.35; color: #111; }
+            .info-row b { display: inline-block; min-width: 55px; font-weight: 900;}
+            .info-row span { font-weight: 700; }
+            .barcode-wrapper{ margin-top: auto; margin-bottom: 4px; text-align:center; display:flex; justify-content:center; align-items:center; }
+            .barcode-wrapper svg { width: 100%; max-width: 115px; height: auto !important; display: block; margin: 0 auto; }
+            .photo-section{ width:25%; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; }
+            .photo-box { overflow:hidden; padding:0; width: 85%; aspect-ratio: 3/4; border: 2px dashed; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; background: #f8fbff; text-align: center; line-height: 1.3; }
+            .signature{ font-size:8px; font-weight:900; text-align:center; color:#333; line-height:1.2; margin-top:0; padding-bottom:0; }
+        </style>
+    </head>
+    <body>
+        ${pageHtml}
+        <script>
+            function initBarcodes() {
+                if (typeof JsBarcode === 'undefined') { setTimeout(initBarcodes, 50); return; }
+                document.querySelectorAll('.barcode').forEach(function(svg) {
+                    var val = svg.getAttribute('data-value');
+                    if (val) { JsBarcode(svg, val, { format: "CODE128", lineColor: "#000", width: 1.5, height: 70, displayValue: false, margin: 0 }); }
+                });
+                document.querySelectorAll('.shrink-workplace').forEach(function(el) {
+                    var availableWidth = el.parentElement.clientWidth; var textWidth = el.scrollWidth;
+                    if (textWidth > availableWidth && availableWidth > 0) { el.style.transform = 'translateY(-50%) scale(' + (availableWidth / textWidth) + ')'; }
+                });
+                setTimeout(function() { window.print(); }, 800);
+            }
+            setTimeout(initBarcodes, 200);
+        <\/script>
+    </body>
+    </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ================= نظام الرابط السري الموحد للماسح =================
+window.generateScannerLink = async function() {
+    Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    try {
+        // البحث عن رابط (Token) فعال لهذا المركز
+        const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
+        let currentToken = '';
+        let oldDocId = null;
+
+        if (!snapshot.empty) {
+            currentToken = snapshot.docs[0].id; // الرمز هو نفسه اسم الوثيقة
+            oldDocId = currentToken;
+        } else {
+            // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
+            currentToken = generateRandomToken(15);
+            await db.collection('scanner_tokens').doc(currentToken).set({
+                center: INSPECTOR_CENTER,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            oldDocId = currentToken;
+        }
+
+        window.showLinkModal(currentToken, oldDocId);
+
+    } catch (e) {
+        console.error(e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+    }
+};
+
+function generateRandomToken(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let t = '';
+    for (let i = 0; i < length; i++) t += chars.charAt(Math.floor(Math.random() * chars.length));
+    return t;
+}
+
+window.showLinkModal = function(token, oldDocId) {
+    let currentPath = window.location.href;
+    let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
+
+    // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
+    let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
+
+    // === الجديد: دالة تكبير الـ QR Code (تعمل بملء الشاشة) ===
+    window.enlargeQR = function() {
+        let overlay = document.createElement('div');
+        overlay.id = 'qr-fullscreen-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(16, 42, 67, 0.9)'; // لون داكن يطابق ألوان لوحة المفتش
+        overlay.style.backdropFilter = 'blur(5px)'; // تشويش الخلفية
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.cursor = 'zoom-out';
+        
+        // إغلاق التكبير عند الضغط
+        overlay.onclick = function() { document.body.removeChild(overlay); };
+        
+        // تصميم الصورة المكبرة
+        let img = document.createElement('img');
+        img.src = qrCodeUrl;
+        img.style.width = '400px';
+        img.style.height = '400px';
+        img.style.maxWidth = '90vw';
+        img.style.maxHeight = '90vw';
+        img.style.backgroundColor = 'white';
+        img.style.padding = '20px';
+        img.style.borderRadius = '20px';
+        img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+        
+        // نص توجيهي للإغلاق
+        let text = document.createElement('div');
+        text.innerHTML = '<i class="fa-solid fa-xmark"></i> اضغط في أي مكان للإغلاق';
+        text.style.color = 'white';
+        text.style.marginTop = '25px';
+        text.style.fontFamily = 'Cairo';
+        text.style.fontSize = '18px';
+        text.style.fontWeight = 'bold';
+        
+        overlay.appendChild(img);
+        overlay.appendChild(text);
+        document.body.appendChild(overlay);
+    };
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-qrcode" style="color:#e67e22;"></i> رابط الحضور السري للمركز',
+        html: `
+            <!-- === واجهة الـ QR المصغرة في النافذة === -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <div onclick="enlargeQR()" style="background: white; padding: 10px; border-radius: 15px; border: 2px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.08); transition: 0.3s; cursor: zoom-in;" onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#0FBA50';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#e2e8f0';">
+                    <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; display: block; border-radius: 8px;">
+                </div>
+                <span style="font-size: 13px; color: #1E68E8; margin-top: 12px; font-weight: 800; background: #eff6ff; padding: 6px 15px; border-radius: 20px; cursor: pointer;" onclick="enlargeQR()">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i> اضغط لتكبير الباركود
+                </span>
+            </div>
+
+            <div style="font-size:14px; color:#555; margin-bottom:10px; line-height: 1.6; text-align: right;">
+                هذا هو الرابط <b>الموحد</b> لمركزك.<br>
+                <div style="background:#e8fbf0; border:1px solid #0FBA50; padding:8px; border-radius:6px; margin: 8px 0;">
+                    <span style="color:#0FBA50; font-size:13px;"><i class="fa-solid fa-shield-halved"></i> <b>حماية قفل الجهاز:</b> هذا الرابط سيقفل تلقائياً على <b>أول هاتف</b> يفتحه.</span>
+                </div>
+            </div>
+            
+            <input type="text" id="scannerLinkInput" value="${fullLink}" readonly style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; text-align:left; direction:ltr; font-weight:bold; font-family:monospace; margin-bottom:15px; background:#f8fafc; color:#102a43; outline:none;">
+            
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="copyScannerLink()" style="background:#0FBA50; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-copy"></i> نسخ الرابط
+                </button>
+                <button onclick="regenerateToken('${oldDocId}')" style="background:#d90429; color:white; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; font-family:'Cairo'; transition: 0.3s; flex:1;">
+                    <i class="fa-solid fa-arrows-rotate"></i> تغيير وإبطال
+                </button>
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43'
+    });
+};
+
+window.copyScannerLink = function() {
+    let copyText = document.getElementById("scannerLinkInput");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); 
+    navigator.clipboard.writeText(copyText.value).then(() => {
+        Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم نسخ الرابط بنجاح!', showConfirmButton: false, timer: 2000});
+    });
+};
+
+window.regenerateToken = function(oldDocId) {
+    Swal.fire({
+        title: 'تأكيد تغيير الرابط',
+        text: 'الرابط القديم سيتوقف عن العمل فوراً. هل أنت متأكد؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#102a43',
+        confirmButtonText: 'نعم، غيّر الرابط',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // إبطال الرابط القديم بحذفه
+                if (oldDocId) {
+                    await db.collection('scanner_tokens').doc(oldDocId).delete();
+                }
+                
+                // إنشاء رابط جديد
+                let currentToken = generateRandomToken(15);
+                await db.collection('scanner_tokens').doc(currentToken).set({
+                    center: INSPECTOR_CENTER,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                window.showLinkModal(currentToken, currentToken);
+                Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
+
+            } catch (e) {
+                console.error(e);
+                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
+            }
+        } else {
+            window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة في حالة الإلغاء
+        }
+    });
+};
+
+// ================= دالة زر استعادة الصورة المكسورة من ImgBB =================
+window.removeBrokenImage = async function(docId, cardType = 'info') {
+    Swal.fire({
+        title: 'استعادة الصورة من درايف',
+        text: 'هل تود حذف هذا الرابط التالف والاعتماد على الصورة الاحتياطية في قوقل درايف؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0FBA50',
+        confirmButtonText: 'نعم، استعادة',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'جاري التحديث...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                // 1. مسح الرابط التالف من القاعدتين في فايربيز
+                await db.collection("employeescomnew").doc(docId).update({ photoUrl_fb: null }).catch(()=>{});
+                await db.collection("employeescomplus").doc(docId).update({ photoUrl_fb: null }).catch(()=>{});
+                
+                // 2. تحديث المصفوفة المحلية للمتكونين وتحديث الجدول "في مكانه"
+                if (typeof centerData !== 'undefined') {
+                    let item = centerData.find(d => d.docId === docId);
+                    if (item) item.photoUrl_fb = null;
+                    if (typeof renderTable === 'function') renderTable(); // التحديث بدون تصفير الصفحة
+                }
+                
+                // 3. تحديث المصفوفة المحلية للمؤطرين
+                if (typeof framersData !== 'undefined') {
+                    let fItem = framersData.find(d => d.docId === docId);
+                    if (fItem && fItem.baseInfo) fItem.baseInfo.photoUrl_fb = null;
+                    if (typeof currentFilteredData !== 'undefined' && typeof renderFramersTable === 'function') {
+                        renderFramersTable(currentFilteredData); // التحديث بدون تصفير الصفحة
+                    }
+                }
+                
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
+                
+                // 4. إعادة فتح البطاقة الصحيحة تلقائياً ليرى المستخدم الصورة الجديدة
+                setTimeout(() => {
+                    if (cardType === 'framer' && typeof viewFramer === 'function') {
+                        viewFramer(docId);
+                    } else if (typeof viewInfo === 'function') {
+                        viewInfo(docId);
+                    }
+                }, 500);
+
+            } catch(e) {
+                Swal.fire('خطأ', 'حدث مشكل في الاتصال', 'error');
+            }
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+            // في حالة الإلغاء، نعيد فتح البطاقة حتى لا تختفي من الشاشة
+            if (cardType === 'framer' && typeof viewFramer === 'function') {
+                viewFramer(docId);
+            } else if (typeof viewInfo === 'function') {
+                viewInfo(docId);
+            }
+        }
+    });
+};
+
+// ============================================================================
+// نظام طباعة شهادات المشاركة (تم حل مشكلة الخلفية البيضاء نهائياً)
+// ============================================================================
+
+// 1. الدالة المحدثة لتحويل رابط درايف لتجاوز حظر جوجل وبجودة طباعة عالية
+function getDirectDriveUrl(url) {
+    if (!url) return '';
+    let match = url.match(/id=([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    // نستخدم sz=w3000 لجلب الصورة بدقة عالية جداً لتكون واضحة في الطباعة
+    if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w3000`;
+    return url; 
+}
+
+// نافذة الإعداد (بقيت كما هي، فقط تأكدت من استدعاء getDirectDriveUrl بشكل صحيح)
+async function askForParticipationCertData() {
+    let today = new Date();
+    let defaultPrintDate = `${today.getFullYear()}/${("0"+(today.getMonth()+1)).slice(-2)}/${("0"+today.getDate()).slice(-2)}`;
+    let savedBgUrl = localStorage.getItem('cert_bg_image') || '';
+
+    const { value: formValues } = await Swal.fire({
+        title: '<i class="fa-solid fa-image" style="color:#1E68E8;"></i> إعداد شهادة المشاركة',
+        html: `
+            <div style="font-family:'Cairo'; font-weight:bold; font-size:14px; text-align:right;">
+                
+                <div style="background:#f8fbff; border:1px solid #1E68E8; padding:10px; border-radius:8px; margin-bottom:15px;">
+                    <label style="color:#1E68E8; display:block; margin-bottom:5px;">رابط صورة الخلفية (من Google Drive):</label>
+                    <input type="text" id="pc-bg" class="grade-input" style="width:100%; text-align:left; direction:ltr; font-family:monospace;" value="${savedBgUrl}" placeholder="https://drive.google.com/file/d/...">
+                    <span style="font-size:11px; color:#555; display:block; margin-top:5px;">* ارفع التصميم فارغاً بدون نصوص، وتأكد أن الرابط (مفتوح للجميع).</span>
+                </div>
+
+                <label style="color:#102a43; display:block; margin-bottom:5px;">سنة الدورة التكوينية:</label>
+                <input type="text" id="pc-year" class="grade-input" style="width:100%; margin-bottom:15px; text-align:center;" value="2025">
+                
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="color:#102a43; display:block; margin-bottom:5px;">من تاريخ:</label>
+                        <input type="text" id="pc-start" class="grade-input" style="width:100%; text-align:center; direction:ltr;" value="2025/12/21">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="color:#102a43; display:block; margin-bottom:5px;">إلى تاريخ:</label>
+                        <input type="text" id="pc-end" class="grade-input" style="width:100%; text-align:center; direction:ltr;" value="2026/07/30">
+                    </div>
+                </div>
+
+                <label style="color:#102a43; display:block; margin-bottom:5px;">الحجم الساعي الموحد (بالساعات):</label>
+                <input type="number" id="pc-hours" class="grade-input" style="width:100%; margin-bottom:15px; text-align:center;" value="190">
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label style="color:#102a43; display:block; margin-bottom:5px;">مكان التحرير:</label>
+                        <input type="text" id="pc-place" class="grade-input" style="width:100%; text-align:center;" value="توقرت">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="color:#102a43; display:block; margin-bottom:5px;">تاريخ التحرير:</label>
+                        <input type="text" id="pc-date" class="grade-input" style="width:100%; text-align:center; direction:ltr;" value="${defaultPrintDate}">
+                    </div>
+                </div>
+
+                <label style="color:#102a43; display:block; margin-bottom:5px;">رقم أول شهادة (ترقيم تسلسلي آلي):</label>
+                <input type="number" id="pc-start-num" class="grade-input" style="width:100%; text-align:center;" value="1">
+            </div>
+        `,
+        showCancelButton: true, confirmButtonText: 'توليد وطباعة', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: () => {
+            let bgValue = document.getElementById('pc-bg').value.trim();
+            if (!bgValue) {
+                Swal.showValidationMessage('الرجاء إدخال رابط صورة الخلفية!');
+                return false;
+            }
+            
+            localStorage.setItem('cert_bg_image', bgValue);
+
+            return { 
+                bgUrl: getDirectDriveUrl(bgValue), // استدعاء دالة التحويل هنا
+                year: document.getElementById('pc-year').value,
+                start: document.getElementById('pc-start').value,
+                end: document.getElementById('pc-end').value,
+                hours: document.getElementById('pc-hours').value,
+                place: document.getElementById('pc-place').value,
+                date: document.getElementById('pc-date').value,
+                startNum: parseInt(document.getElementById('pc-start-num').value) || 1
+            };
+        }
+    });
+
+    return formValues;
+}
+
+// ============================================================================
+// نظام طباعة شهادات المشاركة (النسخة المحسنة نهائياً حسب طلبك)
+// ============================================================================
+
+// 2. دالة بناء هيكل الشهادة (النصوص فقط)
+function getParticipationCertHTML(framer, data, certNumber) {
+    let b = framer.baseInfo || {};
+    let name = b.name || '-';
+    let rank = b.grade || b.rank || '-';
+    let workplace = b.place || b.workplace || '-';
+    let formattedNum = ("0" + certNumber).slice(-2);
+
+    return `
+    <div class="cert-wrapper">
+        <img src="${data.bgUrl}" class="cert-bg-image" alt="Background">
+        
+        <div class="cert-content">
+            
+            <!-- الترويسة العلوية (تم إنزالها للأسفل برمجياً في الـ CSS) -->
+            <div class="cert-header">
+                الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية
+            </div>
+            
+            <!-- مديرية التربية (يمين) -->
+            <div class="dir-right">مديرية التربية لولاية توقرت</div>
+            
+            <div class="cert-title">شهادة مشاركة</div>
+            
+            <!-- إن مدير التربية (تم نقلها لليمين) -->
+            <div class="dir-right-sub">إن مدير التربية لولاية توقرت</div>
+
+            <!-- كلمة يشهد (تصميم جديد بخطوط جانبية أنيقة) -->
+            <div class="cert-subtitle-container">
+                <div class="cert-subtitle">يـشــــهــــد</div>
+            </div>
+
+            <!-- بيانات المؤطر (باللون الأخضر الملكي الجديد) -->
+            <div class="framer-info">
+                <div class="info-row">
+                    <div class="info-label">أن السيد (ة) :</div>
+                    <div class="info-value">${name}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">الرتبة :</div>
+                    <div class="info-value">${rank}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">المؤسسة :</div>
+                    <div class="info-value">${workplace}</div>
+                </div>
+            </div>
+
+            <!-- نص الشهادة -->
+            <div class="cert-text">
+                قد شارك (ت) في تأطير دورة التكوين البيداغوجي التحضيري للأساتذة المتعاقدين المدمجين أثناء التربص لسنة ${data.year} المنظمة خلال الفترة الممتدة من: <span dir="ltr">${data.start}</span> إلى <span dir="ltr">${data.end}</span> بحجم ساعي قدره: ${data.hours} ساعة. وبهذه المناسبة، يتقدم مدير التربية بعبارات التقدير والاحترام لما أبان عنه المعني (ة) من إلتزام ونقل فعّال للخبرات وجدية وتفاعل إيجابي طيلة مجريات التكوين، بما ساهم في إنجاح هذه الدورة وتحقيق أهدافها. سُلمت هذه الشهادة عرفاناً بالمشاركة الفعالة، وللإستظهار عند الإقتضاء.
+            </div>
+
+            <!-- التذييل -->
+            <div class="cert-footer">
+                حرر في: <span class="val-red">${data.place}</span> بتاريخ: <span class="val-red" dir="ltr" style="display:inline-block;">${data.date}</span> تحت رقم: <span class="val-red" dir="ltr">${formattedNum}</span>
+            </div>
+
+            <div class="signature-box">إمضاء مدير التربية</div>
+            
+        </div>
+    </div>
+    `;
+}
+
+// 3. الدالة الرئيسية للطباعة (مع إنزال الترويسة العلوية)
+window.promptPrintParticipationCerts = async function() {
+    let dataToPrint = [];
+    
+    if (selectedFramers.size > 0) {
+        dataToPrint = currentFilteredData.filter(f => selectedFramers.has(f.docId));
+    } else {
+        dataToPrint = currentFilteredData;
+    }
+
+    if (dataToPrint.length === 0) {
+        return Swal.fire('تنبيه', 'لا يوجد مؤطرين لطباعة شهاداتهم.', 'warning');
+    }
+
+    let certData = await askForParticipationCertData();
+    if (!certData) return;
+
+    Swal.fire({
+        toast: true, position: 'top-end', icon: 'info',
+        title: `جاري تجهيز ${dataToPrint.length} شهادة... يرجى الانتظار لتتحمل الصور!`,
+        showConfirmButton: false, timer: 3000
+    });
+
+    const printStyles = `
+        @page { size: A4 landscape; margin: 0; }
+        body { font-family: 'Cairo', sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; direction: rtl; background: #fff;}
+        
+        .cert-wrapper { 
+            width: 297mm; height: 210mm; 
+            box-sizing: border-box; 
+            page-break-after: always;
+            position: relative;
+            overflow: hidden; 
+        }
+        .cert-wrapper:last-child { page-break-after: auto; }
+
+        .cert-bg-image {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: fill; 
+            z-index: 1;
+        }
+
+        .cert-content {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 10;
+            padding: 10mm 20mm; 
+            display: flex; flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        /* 🌟 إنزال الترويسة للأسفل لتفادي المنحنى الأزرق والذهبي 🌟 */
+        .cert-header { 
+            text-align: center; font-weight: 800; font-size: 18px; 
+            color: #111; margin-bottom: 0px; line-height: 1.4; 
+            margin-top: 65px; /* 🌟 تمت زيادتها من 25 إلى 65 لإنزال النص بأمان 🌟 */
+        }
+        
+        .dir-right { text-align: right; font-weight: 800; font-size: 17px; color: #111; margin-right: 55px; margin-bottom: 5px; }
+        
+        .cert-title { text-align: center; font-size: 48px; font-weight: 900; color: #C2185B; margin: 0 0 5px 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.05); }
+        
+        .dir-right-sub { text-align: right; font-weight: 800; font-size: 17px; color: #111; margin-right: 65px; margin-bottom: 0px;}
+
+        .cert-subtitle-container { 
+            display: flex; align-items: center; justify-content: center; 
+            margin-bottom: 5px; 
+        }
+        .cert-subtitle-container::before, .cert-subtitle-container::after {
+            content: ''; flex: 1; border-bottom: 1.5px solid #d4af37; 
+            margin: 0 15px; max-width: 150px; 
+        }
+        .cert-subtitle { 
+            font-size: 30px; font-weight: 900; color: #0b6b33; 
+            letter-spacing: 12px; padding-left: 12px; 
+        }
+
+        .framer-info { display: table; margin: 0 auto 5px auto; font-size: 18px; font-weight: 800; }
+        .info-row { display: table-row; }
+        .info-label { display: table-cell; text-align: left; padding-left: 20px; padding-bottom: 4px; color: #111; }
+        .info-value { display: table-cell; text-align: right; color: #0b6b33; padding-bottom: 4px; font-weight: 900;}
+
+        .cert-text {
+            font-size: 15.5px; font-weight: 800; line-height: 1.8; text-align: justify; text-align-last: center;
+            color: #111; padding: 0 35px; margin-bottom: 10px;
+        }
+
+        .cert-footer { text-align: center; font-size: 17px; font-weight: 800; margin-bottom: 0px; color: #111;}
+        .val-red { color: #C2185B; font-weight: 900; }
+
+        /* 🌟 تقليل الهامش العلوي للتوقيع لتعويض النزول الذي حدث في الأعلى 🌟 */
+        .signature-box { text-align: left; padding-left: 100px; font-size: 18px; font-weight: 900; color: #111; margin-top: 0px; }
+    `;
+
+    let printWindow = window.open('', '_blank');
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>طباعة شهادات المشاركة</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
+        <style>${printStyles}</style>
+    </head>
+    <body>`;
+
+    let currentCertNum = certData.startNum;
+    
+    dataToPrint.forEach(framer => {
+        html += getParticipationCertHTML(framer, certData, currentCertNum);
+        currentCertNum++;
+    });
+
+    html += `
+        <script>
+            window.onload = function() { 
+                setTimeout(function(){ window.print(); }, 2000); 
+            };
+            window.onafterprint = function() { 
+                setTimeout(function(){ window.close(); }, 500); 
+            };
+        <\/script>
+    </body>
+    </html>`;
+    
+    document.body.classList.remove('swal2-shown', 'swal2-height-auto');
+    document.body.style.overflow = 'auto';
+    document.body.style.paddingRight = '';
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+};
+
+// ============================================================================
+// دالة استخراج وطباعة مقرر المؤطر الفردي (مع شرط منع الطباعة إذا لم يوجد رقم مقرر)
+// ============================================================================
+window.printSingleFramerDecision = async function(docId) {
+    const f = framersData.find(x => x.docId === docId);
+    if (!f) return Swal.fire('خطأ', 'لم يتم العثور على بيانات المؤطر.', 'error');
+
+    let framerName = (f.baseInfo && f.baseInfo.name) ? f.baseInfo.name : 'المؤطر';
+    let framerRole = f.role || 'مؤطر بالمركز';
+
+    // 1. تحديد الدورة المراد طباعتها
+    let session = currentTab;
+    if (session === 'all') {
+        let activeSessions = [];
+        if (f.s1) activeSessions.push({ id: 's1', name: 'الدورة الأولى' });
+        if (f.s2) activeSessions.push({ id: 's2', name: 'الدورة الثانية' });
+        if (f.s3) activeSessions.push({ id: 's3', name: 'الدورة الثالثة' });
+
+        if (activeSessions.length === 0) {
+            session = 's1';
+        } else if (activeSessions.length === 1) {
+            session = activeSessions[0].id;
+        } else {
+            // عرض بطاقات الدورات مع بيان حالة توفر رقم المقرر لكل دورة
+            let cardsHtml = activeSessions.map((s, idx) => {
+                let sNum = f['decisionNumber_' + s.id];
+                if ((sNum === undefined || sNum === null || sNum === "") && s.id === 's1' && f.decisionNumber) {
+                    sNum = f.decisionNumber;
+                }
+                let hasNum = (sNum !== undefined && sNum !== null && String(sNum).trim() !== "" && String(sNum).trim() !== "..........");
+                let statusBadge = hasNum 
+                    ? `<div style="font-size: 11px; color: #0FBA50; font-weight: 800; margin-top: 4px;"><i class="fa-solid fa-hashtag"></i> رقم المقرر: ${sNum}</div>`
+                    : `<div style="font-size: 11px; color: #dc2626; font-weight: 800; margin-top: 4px;"><i class="fa-solid fa-circle-xmark"></i> بدون رقم مقرر</div>`;
+
+                return `
+                    <label style="cursor: pointer; position: relative; margin: 0; display: block; flex: 1;">
+                        <input type="radio" name="swalSessionRadio" value="${s.id}" ${idx === 0 ? 'checked' : ''} style="position: absolute; opacity: 0;" onchange="
+                            document.querySelectorAll('.session-choice-box').forEach(el => {
+                                el.style.borderColor='#cbd5e1'; el.style.background='#fff'; el.style.boxShadow='none';
+                                el.querySelector('.choice-check').style.display='none';
+                            });
+                            this.closest('label').querySelector('.session-choice-box').style.borderColor='#e67e22';
+                            this.closest('label').querySelector('.session-choice-box').style.background='#fff8f3';
+                            this.closest('label').querySelector('.session-choice-box').style.boxShadow='0 4px 12px rgba(230,126,34,0.2)';
+                            this.closest('label').querySelector('.choice-check').style.display='block';
+                        ">
+                        <div class="session-choice-box" style="border: 2px solid ${idx === 0 ? '#e67e22' : '#cbd5e1'}; background: ${idx === 0 ? '#fff8f3' : '#fff'}; border-radius: 12px; padding: 14px 10px; text-align: center; transition: all 0.25s ease; position: relative; box-shadow: ${idx === 0 ? '0 4px 12px rgba(230,126,34,0.2)' : 'none'};">
+                            <div class="choice-check" style="display: ${idx === 0 ? 'block' : 'none'}; position: absolute; top: 8px; left: 8px; color: #e67e22; font-size: 14px;"><i class="fa-solid fa-circle-check"></i></div>
+                            <div style="font-size: 24px; color: #e67e22; margin-bottom: 6px;"><i class="fa-solid fa-calendar-check"></i></div>
+                            <div style="font-size: 15px; font-weight: 900; color: #102a43;">${s.name}</div>
+                            ${statusBadge}
+                        </div>
+                    </label>
+                `;
+            }).join('');
+
+            const { value: selectedSess } = await Swal.fire({
+                title: '<i class="fa-solid fa-calendar-days" style="color:#e67e22; margin-left:8px;"></i> اختيار الدورة التكوينية',
+                width: '500px',
+                padding: '20px',
+                customClass: { popup: 'swal-modal-custom' },
+                html: `
+                    <div style="font-family:'Cairo', sans-serif; text-align:right;">
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 15px; margin-bottom:18px; display:flex; align-items:center; gap:12px;">
+                            <div style="width:42px; height:42px; border-radius:50%; background:#fff3e0; color:#e67e22; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; border:1.5px solid #ffcc80;"><i class="fa-solid fa-user-tie"></i></div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:15px; font-weight:900; color:#102a43; line-height:1.3;">${framerName}</div>
+                                <div style="font-size:12px; color:#64748b; font-weight:bold; margin-top:2px;"><span style="color:#e67e22;">${framerRole}</span> • مسجل في عدة دورات</div>
+                            </div>
+                        </div>
+                        <label style="display:block; font-size:13px; font-weight:800; color:#475569; margin-bottom:10px;">اختر الدورة المراد طباعة مقررها:</label>
+                        <div style="display:flex; gap:12px; justify-content:center; margin-bottom:5px;">
+                            ${cardsHtml}
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-print"></i> متابعة للطباعة',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#e67e22',
+                cancelButtonColor: '#64748b',
+                preConfirm: () => {
+                    const checkedRadio = document.querySelector('input[name="swalSessionRadio"]:checked');
+                    return checkedRadio ? checkedRadio.value : 's1';
+                }
+            });
+
+            if (!selectedSess) return;
+            session = selectedSess;
+        }
+    }
+
+    // 🌟 2. التحقق الصارم من توفر رقم المقرر لهذه الدورة 🌟
+    let sessionName = session === 's1' ? 'الدورة الأولى' : (session === 's2' ? 'الدورة الثانية' : 'الدورة الثالثة');
+    let fieldName = 'decisionNumber_' + session;
+    let currentNum = f[fieldName];
+    if ((currentNum === undefined || currentNum === null || currentNum === "") && session === 's1' && f.decisionNumber) {
+        currentNum = f.decisionNumber;
+    }
+
+    let decNum = (currentNum !== undefined && currentNum !== null) ? String(currentNum).trim() : "";
+
+    // الشرط الأساسي: منع الطباعة إذا لم يوجد رقم مقرر
+    if (!decNum || decNum === "" || decNum === "..........") {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'تعذر طباعة المقرر',
+            html: `
+                <div style="font-family:'Cairo'; text-align:center; font-size:14px; line-height:1.6;">
+                    عذراً، لا يمكن طباعة مقرر <b>${sessionName}</b> للمؤطر:<br>
+                    <b style="color:#102a43; font-size:16px;">${framerName}</b><br><br>
+                    <div style="color:#dc2626; font-weight:bold; background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:8px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> لم يتم إدراج رقم المقرر الخاص بهذه الدورة من لوحة التحكم!
+                    </div>
+                </div>
+            `,
+            confirmButtonText: 'حسناً',
+            confirmButtonColor: '#102a43'
+        });
+    }
+
+    // 3. جلب إعدادات المقرر من المديرية للدورة المحددة
+    let allConfigs = window.globalDecisionConfig;
+    if (!allConfigs) {
+        try {
+            const setDoc = await db.collection("site_settings").doc("main").get();
+            if (setDoc.exists && setDoc.data().DECISION_CONFIG) {
+                allConfigs = setDoc.data().DECISION_CONFIG;
+                window.globalDecisionConfig = allConfigs;
+            }
+        } catch(e) {}
+    }
+    allConfigs = allConfigs || {};
+    
+    let dConfig = allConfigs[session] || (allConfigs.circNum ? allConfigs : {});
+
+    let circNum = dConfig.circNum || "..........";
+    let circYear = dConfig.circYear || "..........";
+    let type = dConfig.type || "التكوين البيداغوجي";
+    let year = dConfig.year || "2026/2025";
+    let startD = dConfig.start || "..........";
+    let date = dConfig.date || "..........";
+    const currentYear = new Date().getFullYear();
+
+    // 4. جلب إحداثيات موقع المركز للـ QR
+    let centerName = (f.center || INSPECTOR_CENTER || '').trim();
+    let mapUrl = "";
+    if (window.inspectorCenterLocation && window.inspectorCenterLocation.latitude && window.inspectorCenterLocation.longitude) {
+        mapUrl = `https://maps.google.com/?q=${window.inspectorCenterLocation.latitude},${window.inspectorCenterLocation.longitude}`;
+    } else {
+        mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(centerName + " توقرت")}`;
+    }
+    let centerQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mapUrl)}`;
+    const sealUrl = "https://lh3.googleusercontent.com/d/19RIAk1hOJzRoOmQq46CE3amYzdHkNUJt";
+
+    let b = f.baseInfo || {};
+    let name = b.name || '.............................................';
+    let rank = b.grade || b.rank || '.............................................';
+    let role = f.role || '.............................................';
+
+    // 5. فتح نافذة الطباعة بعد استيفاء الشرط بنجاح
+    let printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        return Swal.fire('تنبيه', 'يرجى السماح بالنوافذ المنبثقة للمتصفح للطباعة.', 'warning');
+    }
+
+    let html = `
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>مقرر تأطير - ${name}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+        
+        <style>
+            @page { size: A4 portrait; margin: 5mm 8mm; }
+            * { box-sizing: border-box; font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; }
+            body { background: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #0f172a; }
+            .page-container { width: 100%; height: 280mm; max-height: 280mm; box-sizing: border-box; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; background: #fff; }
+            .decision-card { border: 2px solid #0f172a; border-radius: 4px; padding: 5mm 8mm 3mm 8mm; display: flex; flex-direction: column; justify-content: space-between; background: #fff; }
+            .header-top { text-align: center; font-weight: 800; font-size: 14px; line-height: 1.35; margin-bottom: 5px; color: #0f172a; }
+            .header-cols { display: flex; justify-content: space-between; align-items: flex-start; font-size: 13px; line-height: 1.4; margin-bottom: 4px; }
+            .header-right { text-align: right; font-weight: 700; }
+            .header-left { text-align: left; font-weight: 800; white-space: nowrap; position: relative; }
+            .copy-watermark { position: absolute; top: 36px; left: 4px; font-size: 20px; font-weight: 900; color: #c0392b; border: 2px dashed #c0392b; background: rgba(254, 242, 242, 0.75); opacity: 0.85; border-radius: 4px; padding: 1px 15px; transform: rotate(-10deg); letter-spacing: 5px; line-height: 1.3; pointer-events: none; user-select: none; box-shadow: 0 1px 3px rgba(192, 57, 43, 0.15); }
+            .main-title-wrap { text-align: center; margin: 2px 0 6px 0; }
+            .main-title { display: inline-block; font-size: 26px; font-weight: 900; letter-spacing: 5px; padding: 1px 40px; border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; background: #f8fafc; border-radius: 4px; line-height: 1.2; color: #0f172a; }
+            .legal-text { font-size: 12.5px; font-weight: 600; line-height: 1.5; text-align: justify; text-justify: inter-word; margin-bottom: 4px; padding: 0 4px; color: #1e293b; }
+            .legal-item { margin-bottom: 2px; text-indent: -13px; padding-right: 13px; }
+            .proposal { text-align: center; font-weight: 800; font-size: 13px; margin: 5px 0 3px 0; letter-spacing: 0.5px; color: #0f172a; }
+            .decides-wrap { text-align: center; margin: 3px 0 5px 0; }
+            .decides { display: inline-block; font-size: 20px; font-weight: 900; letter-spacing: 4px; padding: 0 25px; border-bottom: 2px solid #0f172a; color: #0f172a; }
+            .articles-container { margin: 4px 0 6px 0; padding: 6px 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; }
+            .article-row { display: flex; align-items: center; font-size: 14px; margin-bottom: 3px; line-height: 1.5; }
+            .article-row:last-child { margin-bottom: 0; }
+            .art-title { width: 85px; min-width: 85px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; color: #0f172a; }
+            .art-title-spacer { width: 85px; min-width: 85px; }
+            .art-label { width: 175px; min-width: 175px; font-weight: 600; color: #334155; }
+            .art-val { font-weight: 700; font-size: 14.5px; color: #0f172a; }
+            .art-center-val { font-weight: 700; font-size: 15px; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin: 6px 0; text-align: center; }
+            th, td { border: 1.5px solid #0f172a; padding: 6px 8px; font-size: 13.5px; font-weight: 700; vertical-align: middle; }
+            th { background-color: #f1f5f9; font-weight: 800; font-size: 14px; color: #0f172a; }
+            .signature-container { display: flex; justify-content: space-between; align-items: flex-start; padding: 0 4%; margin-top: 6px; min-height: 105px; }
+            .qr-box { text-align: center; display: flex; flex-direction: column; align-items: center; width: 130px; }
+            .qr-title { font-size: 11.5px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+            .qr-slot { width: 76px; height: 76px; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            .qr-img { width: 100%; height: 100%; object-fit: contain; }
+            .qr-desc { font-size: 9px; font-weight: 700; color: #64748b; margin-top: 2px; }
+            .signature-box { text-align: center; position: relative; width: 290px; min-height: 105px; }
+            .signature-title { font-weight: 800; font-size: 16px; color: #0f172a; margin-bottom: 2px; }
+            .seal-img { width: 280px; max-width: 100%; height: auto; object-fit: contain; mix-blend-mode: multiply; margin-top: -10px; }
+            .card-bottom-bar { margin-top: 6px; padding-top: 4px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: flex-start; align-items: center; padding-right: 6px; }
+            .card-bottom-text { font-size: 11.5px; font-weight: 800; color: #1e293b; letter-spacing: 0.5px; }
+            .cut-divider { position: relative; text-align: center; margin: 6px 0; display: flex; align-items: center; justify-content: center; }
+            .cut-divider-line { position: absolute; width: 100%; top: 50%; left: 0; border-top: 1.5px dashed #475569; z-index: 1; }
+            .cut-badge { position: relative; z-index: 2; background: #fff; padding: 1px 12px; font-size: 11px; font-weight: 700; color: #475569; border: 1px dashed #94a3b8; border-radius: 12px; }
+            .receipt-card { border: 2px solid #0f172a; border-radius: 4px; background: #fafafa; padding: 4px 12px 6px 12px; font-size: 13px; line-height: 1.45; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+            .receipt-title { border: 1.5px solid #0f172a; display: inline-block; padding: 1px 22px; font-size: 13.5px; font-weight: 800; background: #e2e8f0; color: #0f172a; margin-bottom: 3px; border-radius: 4px; }
+            .receipt-text { text-align: center; margin-bottom: 2px; color: #1e293b; font-weight: 600; font-size: 12.5px; }
+            .receipt-footer-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 10px 0 10px; margin-top: 3px; font-size: 12.5px; }
+            .receipt-date-box, .receipt-sign-box { display: flex; align-items: center; gap: 6px; color: #1e293b; }
+            .receipt-dots { letter-spacing: 1px; color: #475569; }
+        </style>
+    </head>
+    <body>
+        <div class="page-container">
+            <div class="decision-card">
+                <div>
+                    <div class="header-top">
+                        الجمهورية الجزائرية الديمقراطية الشعبية<br>
+                        وزارة التربية الوطنية
+                    </div>
+                    <div class="header-cols">
+                        <div class="header-right">
+                            مديرية التربية لولاية توقرت<br>
+                            مصلحة المستخدمين و التفتيش<br>
+                            مكتب التكوين و التفتيش<br>
+                            الرقم : &nbsp; <b>${decNum}</b> &nbsp; / &nbsp; ${currentYear}
+                        </div>
+                        <div class="header-left">
+                            توقرت في : <span dir="ltr"><b>${date}</b></span>
+                            <div class="copy-watermark">« نـسـخـــــة »</div>
+                        </div>
+                    </div>
+                    <div class="main-title-wrap">
+                        <div class="main-title">مـــقـــــــــــــرر</div>
+                    </div>
+                    <div class="legal-text">
+                        <div class="legal-item">- بمقتضى الأمر رقم 06-03 المؤرخ في جمادى الثانية عام 1427 الموافق 15 يوليو سنة 2006 ، و المتضمن القانون الأساسي العام للوظيفة العمومية.</div>
+                        <div class="legal-item">- بمقتضى المرسوم التنفيذي رقم : 90/174 المؤرخ في 09 جوان 1990 المحدد لإجراءات تنظيم و تسيير مصالح التربية على مستوى الولاية.</div>
+                        <div class="legal-item">- بمقتضى المرسوم رقم: 25-54 المؤرخ في 21 جانفي 2025 المتضمن القانون الأساسي الخاص بالموظفين المنتمين للأسلاك الخاصة بالتربية الوطنية .</div>
+                        <div class="legal-item">- و بمقتضى القرار الوزاري المؤرخ في 04 أكتوبر 2011 المتضمن تفويض سلطة التعيين و التسيير الإداري لمديري التربية بالولايات.</div>
+                        <div class="legal-item">- بناء على القرار الوزاري رقم : 15/250 المؤرخ في 2015/08/24 الذي يحدد كيفيات تنظيم التكوين البيداغوجي التحضيري أثناء التربص التجريبي لموظفي التعليم و مدته كذا محتوى برامجه.</div>
+                        <div class="legal-item">- بناء على القرار الوزاري المشترك المؤرخ في 17 نوفمبر 2013 المحدد لكيفية تنظيم التكوين المسبق للتعيين في رتبة أستاذ التعليم الثانوي ومحتواه وبرنامجه.</div>
+                        <div class="legal-item">- بناء على المنشور الوزاري رقم: <b>${circNum}</b> المتعلق بتنظيم ${type} والتكوين المسبق للأساتذة المدمجين بعنوان سنة <b>${circYear}</b>.</div>
+                        <div class="proposal">وبـاقـتــراح مـن الـسـيـد رئـيـس مـصـلـحـة المـسـتـخـدمـيـن و الـتـفـتـيـش</div>
+                    </div>
+                    <div class="decides-wrap">
+                        <div class="decides">يــقــــرر</div>
+                    </div>
+                    <div class="articles-container">
+                        <div class="article-row">
+                            <span class="art-title">المــادة 01:</span>
+                            <span class="art-label">يُعيّن السيد(ة) :</span>
+                            <span class="art-val">${name}</span>
+                        </div>
+                        <div class="article-row">
+                            <span class="art-title-spacer"></span>
+                            <span class="art-label">الإطــــــــــــــار :</span>
+                            <span class="art-val">${rank}</span>
+                        </div>
+                        <div class="article-row">
+                            <span class="art-title">المــادة 02:</span>
+                            <span class="art-label">يُعيّن المعني بـمـركـــز :</span>
+                            <span class="art-val art-center-val">${centerName}</span>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:30%;">نوع التكوين</th>
+                                <th style="width:25%;">المهمة</th>
+                                <th style="width:30%;">التاريخ</th>
+                                <th style="width:15%;">ملاحظة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>${type} لسنة <br><b dir="ltr">${year}</b></td>
+                                <td><b>${role}</b></td>
+                                <td>ابتداء من: <b dir="ltr">${startD}</b></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="signature-container">
+                        <div class="qr-box">
+                            <div class="qr-title">موقع مركز التكوين</div>
+                            <div class="qr-slot">
+                                <img src="${centerQrUrl}" class="qr-img" alt="QR موقع المركز" crossorigin="anonymous">
+                            </div>
+                            <div class="qr-desc">امسح لتحديد الموقع</div>
+                        </div>
+                        <div class="signature-box">
+                            <div class="signature-title">مدير التربية</div>
+                            <img src="${sealUrl}" class="seal-img" crossorigin="anonymous">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-bottom-bar">
+                    <span class="card-bottom-text">مستخرج من الأرضية الرقمية لمركز التكوين : <b>${centerName}</b></span>
+                </div>
+            </div>
+            <div class="cut-divider">
+                <div class="cut-divider-line"></div>
+                <span class="cut-badge">✂ قـطـع مـن هـنـا</span>
+            </div>
+            <div class="receipt-card">
+                <div><div class="receipt-title">قسيمة الإشعار بالاستلام</div></div>
+                <div class="receipt-text">
+                    أنا الممضي أسفله السيد(ة) : <span class="receipt-dots">...................................................</span> 
+                    المؤسسة : <span class="receipt-dots">...................................................</span>
+                </div>
+                <div class="receipt-text">
+                    أعلن بأنني قد استلمت مقرر متعلق بـ <b>${type}</b> لسنة <b dir="ltr">${year}</b>
+                </div>
+                <div class="receipt-footer-row">
+                    <div class="receipt-date-box">
+                        <b>تاريخ الاستلام :</b> 
+                        <span dir="rtl" style="font-family: Arial, sans-serif; letter-spacing: 1px; font-weight: bold;">.... / .... / ${currentYear}</span>
+                    </div>
+                    <div class="receipt-sign-box">
+                        <b>الإمضـــــــــــاء :</b> 
+                        <span class="receipt-dots">...................................................</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    <script>
+        window.onload = function() {
+            setTimeout(function() { window.print(); }, 600);
+        }
+    <\/script>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+};

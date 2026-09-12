@@ -1,15 +1,111 @@
 {
+  "version": 2,
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://lh3.googleusercontent.com https://drive.google.com https://*.googleusercontent.com; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://firestore.googleapis.com https://script.google.com https://script.googleusercontent.com; frame-src 'self' https://drive.google.com https://docs.google.com; object-src 'none'; base-uri 'self';"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)\\.(html|htm)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/js/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ],
   "routes": [
-    { "src": "/login", "dest": "/index.html" },
-    { "src": "/portal", "dest": "/dashboard.html" },
-    { "src": "/inspector", "dest": "/inspector_dashboard.html" },
-    { "src": "/admin-panel", "dest": "/admin_dashboard.html" },
-    { "src": "/secure-login", "dest": "/admin095526.html" },
-    { "src": "/framers", "dest": "/framers_management.html" },
-    { "src": "/grades", "dest": "/grades_management.html" },
-    { "src": "/courses-manage", "dest": "/manage_courses.html" },
-    { "src": "/scanner-tool", "dest": "/scanner.html" },
-    { "src": "/statistics", "dest": "/tracking.html" },
-    { "src": "/files-upload", "dest": "/dashboard_finale_upload.html" }
+    {
+      "src": "/js/(.*)",
+      "dest": "/js/$1"
+    },
+    {
+      "src": "/login",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/portal",
+      "dest": "/dashboard.html"
+    },
+    {
+      "src": "/courses",
+      "dest": "/courses.html"
+    },
+    {
+      "src": "/inspector",
+      "dest": "/inspector_dashboard.html"
+    },
+    {
+      "src": "/admin-panel",
+      "dest": "/admin_dashboard.html"
+    },
+    {
+      "src": "/secure-login",
+      "dest": "/admin095526.html"
+    },
+    {
+      "src": "/framers",
+      "dest": "/framers_management.html"
+    },
+    {
+      "src": "/grades",
+      "dest": "/grades_management.html"
+    },
+    {
+      "src": "/courses-manage",
+      "dest": "/manage_courses.html"
+    },
+    {
+      "src": "/scanner-tool",
+      "dest": "/scanner.html"
+    },
+    {
+      "src": "/statistics",
+      "dest": "/tracking.html"
+    },
+    {
+      "src": "/files-upload",
+      "dest": "/dashboard_finale_upload.html"
+    }
   ]
 }
