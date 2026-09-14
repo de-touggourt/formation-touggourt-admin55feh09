@@ -553,11 +553,12 @@ window.submitNotification = async function() {
                     try {
                         const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
                         const listData = await listRes.json();
-                        if (Array.isArray(listData) && listData.length > 0) {
-                            const matched = listData.find(f => f.name === fileName) || listData[0];
+                        const filesList = Array.isArray(listData) ? listData : (Array.isArray(listData?.files) ? listData.files : []);
+                        if (filesList.length > 0) {
+                            const matched = filesList.find(f => f.name === fileName) || filesList[0];
                             if (matched && matched.id) {
                                 genuineImgId = matched.id;
-                                genuineImgUrl = `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
+                                genuineImgUrl = matched.url || `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
                             }
                         }
                     } catch(listErr) {

@@ -221,9 +221,6 @@ window.onload = async function() {
                     if (SITE_SETTINGS.dbLinks && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
                         currentLinks = SITE_SETTINGS.dbLinks[cId][lvl][spc];
                     }
-
-                    // 🌟 تفعيل فحص وإظهار إشعارات أعداد الملفات على أيقونات المقاييس 🌟
-                    updateModuleFileBadges();
                 }
             }
 
@@ -310,91 +307,9 @@ async function fetchPhotosFromDrive(coreId, avatarBox) {
     }
 }
 
-// ================= إعدادات وتحديث إشعارات أعداد الملفات لكل مقياس =================
+// ================= إعدادات وسيرفر ملفات Google Drive =================
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
-const MODULE_KEYS = ['didactique', 'tasyire', 'takwime', 'informatique', 'nidame', 'akhlakiyate', 'handasa', 'wasata', 'tachri', 'psycho', 'fasad'];
 
-async function updateModuleFileBadges() {
-    if (!currentLinks) return;
-
-    for (const mod of MODULE_KEYS) {
-        const badgeEl = document.getElementById(`badge_${mod}`);
-        if (!badgeEl) continue;
-
-        const modCycles = currentLinks[mod] || {};
-        let folderIdsToCheck = [];
-
-        // جمع مجلدات الدورات المفتوحة فقط
-        for (let cycle = 1; cycle <= 3; cycle++) {
-            if (isCycleOpen(mod, cycle) && modCycles[cycle]) {
-                const fId = getFolderId(modCycles[cycle]);
-                if (fId) folderIdsToCheck.push({ cycle, folderId: fId });
-            }
-        }
-
-        if (folderIdsToCheck.length === 0) {
-            badgeEl.className = "module-files-badge";
-            badgeEl.innerHTML = `<i class="fa-solid fa-lock"></i> <span class="count-txt">مغلق</span>`;
-            continue;
-        }
-
-        // فحص الكاش السريع في الجلسة أولاً
-        let totalFiles = 0;
-        let hasCache = true;
-        for (const item of folderIdsToCheck) {
-            const cached = sessionStorage.getItem(`files_count_${item.folderId}`);
-            if (cached !== null) {
-                totalFiles += parseInt(cached, 10);
-            } else {
-                hasCache = false;
-                break;
-            }
-        }
-
-        if (hasCache) {
-            renderBadgeState(badgeEl, totalFiles);
-        } else {
-            // جلب أعداد الملفات في الخلفية بدون تأخير الواجهة
-            fetchModuleFilesCount(mod, folderIdsToCheck, badgeEl);
-        }
-    }
-}
-
-async function fetchModuleFilesCount(mod, folderList, badgeEl) {
-    let count = 0;
-    try {
-        const promises = folderList.map(item => 
-            fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${item.folderId}`)
-                .then(r => r.json())
-                .then(d => {
-                    const c = (d && d.files && Array.isArray(d.files)) ? d.files.length : 0;
-                    sessionStorage.setItem(`files_count_${item.folderId}`, c);
-                    if (d && d.files) {
-                        sessionStorage.setItem(`files_data_${item.folderId}`, JSON.stringify(d.files));
-                    }
-                    return c;
-                })
-                .catch(() => 0)
-        );
-
-        const results = await Promise.all(promises);
-        count = results.reduce((acc, curr) => acc + curr, 0);
-        renderBadgeState(badgeEl, count);
-    } catch(e) {
-        badgeEl.className = "module-files-badge";
-        badgeEl.innerHTML = `<i class="fa-solid fa-folder-open"></i> <span class="count-txt">متوفر</span>`;
-    }
-}
-
-function renderBadgeState(badgeEl, count) {
-    if (count > 0) {
-        badgeEl.className = "module-files-badge has-files is-new";
-        badgeEl.innerHTML = `<i class="fa-solid fa-file-circle-check"></i> <span class="count-txt">${count} ملف</span>`;
-    } else {
-        badgeEl.className = "module-files-badge";
-        badgeEl.innerHTML = `<i class="fa-solid fa-folder-open"></i> <span class="count-txt">0 ملف</span>`;
-    }
-}
 
 /* =======================================================
    دوال فتح الدورات والمستعرض المتطور للملفات

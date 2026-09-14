@@ -332,6 +332,142 @@ function openCourses(module){
   Swal.fire({ title: 'اختر الدورة للإدارة', html: html, showConfirmButton: true, confirmButtonText: 'إغلاق', width: window.innerWidth < 768 ? '95%' : '850px' });
 }
 
+function formatFileSize(bytes) {
+    if (!bytes || isNaN(bytes) || bytes === 0) return 'حجم غير معروف';
+    const k = 1024;
+    const sizes = ['بايت', 'ك.ب', 'م.ب', 'ج.ب'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + (sizes[i] || 'م.ب');
+}
+
+function getFileTypeMeta(file) {
+    const name = (file.name || '').toLowerCase();
+    const mime = (file.type || '').toLowerCase();
+    
+    if (name.endsWith('.pdf') || mime.includes('pdf')) {
+        return { icon: 'fa-file-pdf', color: '#ef4444', bg: '#fee2e2', label: 'PDF' };
+    }
+    if (name.endsWith('.doc') || name.endsWith('.docx') || mime.includes('word') || mime.includes('officedocument.wordprocessing')) {
+        return { icon: 'fa-file-word', color: '#2563eb', bg: '#dbeafe', label: 'Word' };
+    }
+    if (name.endsWith('.xls') || name.endsWith('.xlsx') || mime.includes('excel') || mime.includes('spreadsheet')) {
+        return { icon: 'fa-file-excel', color: '#16a34a', bg: '#dcfce7', label: 'Excel' };
+    }
+    if (name.endsWith('.ppt') || name.endsWith('.pptx') || mime.includes('powerpoint') || mime.includes('presentation')) {
+        return { icon: 'fa-file-powerpoint', color: '#ea580c', bg: '#ffedd5', label: 'PowerPoint' };
+    }
+    if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.gif') || mime.includes('image')) {
+        return { icon: 'fa-file-image', color: '#8b5cf6', bg: '#ede9fe', label: 'صورة' };
+    }
+    if (name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z') || mime.includes('zip') || mime.includes('rar')) {
+        return { icon: 'fa-file-zipper', color: '#d97706', bg: '#fef3c7', label: 'أرشيف' };
+    }
+    if (name.endsWith('.mp4') || name.endsWith('.mkv') || mime.includes('video')) {
+        return { icon: 'fa-file-video', color: '#ec4899', bg: '#fce7f3', label: 'فيديو' };
+    }
+    return { icon: 'fa-file-lines', color: '#64748b', bg: '#f1f5f9', label: 'ملف' };
+}
+
+window.handleFileManagerFileSelect = function(input) {
+    const display = document.getElementById('fileNameDisplay');
+    const uploadBtn = document.getElementById('startUploadBtn');
+    if (input.files && input.files[0]) {
+        const f = input.files[0];
+        const sizeStr = formatFileSize(f.size);
+        if (display) {
+            display.innerHTML = `<i class="fa-solid fa-file-circle-check" style="color:#16a34a; margin-left:6px;"></i> <span style="color:#0f172a; font-weight:700;">${f.name}</span> <span style="color:#64748b; font-size:11px;">(${sizeStr})</span>`;
+            display.style.background = '#f0fdf4';
+            display.style.borderColor = '#86efac';
+        }
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
+            uploadBtn.style.opacity = '1';
+            uploadBtn.style.cursor = 'pointer';
+        }
+    } else {
+        if (display) {
+            display.innerHTML = `<i class="fa-solid fa-circle-info" style="margin-left:5px;"></i> لم يتم اختيار أي ملف`;
+            display.style.background = '#f8fafc';
+            display.style.borderColor = '#cbd5e1';
+        }
+        if (uploadBtn) {
+            uploadBtn.disabled = true;
+            uploadBtn.style.opacity = '0.6';
+            uploadBtn.style.cursor = 'not-allowed';
+        }
+    }
+};
+
+window.filterManagerFiles = function(query) {
+    const q = (query || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('.fm-file-card');
+    let visibleCount = 0;
+    cards.forEach(card => {
+        const name = card.getAttribute('data-filename') || '';
+        const type = card.getAttribute('data-filetype') || '';
+        if (!q || name.includes(q) || type.includes(q)) {
+            card.style.display = 'flex';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    const countBadge = document.getElementById('fmFilesCountBadge');
+    if (countBadge) {
+        if (q) {
+            countBadge.innerHTML = `<i class="fa-solid fa-filter" style="margin-left:5px;"></i>${visibleCount} من ${cards.length} ملف`;
+        } else {
+            countBadge.innerHTML = `<i class="fa-solid fa-layer-group" style="margin-left:5px;"></i>${cards.length} ملف`;
+        }
+    }
+};
+
+function generateFilesGridHtml(files, folderId, module, cycle) {
+    if (!files || files.length === 0) {
+        return `
+        <div style="grid-column: 1 / -1; text-align:center; padding:50px 20px; color:#94a3b8; border:2px dashed #cbd5e1; border-radius:16px; background:#fff;">
+            <i class="fa-solid fa-folder-open" style="font-size:48px; color:#cbd5e1; margin-bottom:12px; display:block;"></i>
+            <div style="font-size:16px; font-weight:700; color:#475569; margin-bottom:6px;">المجلد فارغ حالياً</div>
+            <div style="font-size:13px; color:#94a3b8;">يمكنك البدء برفع مذكرات وملفات هذا المقياس مباشرة من لوحة الرفع أعلاه</div>
+        </div>`;
+    }
+
+    return files.map(file => {
+        const meta = getFileTypeMeta(file);
+        const sizeStr = file.size ? formatFileSize(file.size) : '';
+        const previewUrl = `https://drive.google.com/file/d/${file.id}/preview`;
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${file.id}`;
+
+        return `
+        <div class="fm-file-card" data-filename="${(file.name || '').toLowerCase()}" data-filetype="${meta.label.toLowerCase()}">
+            <div class="fm-file-top">
+                <div class="fm-file-icon-box" style="background:${meta.bg}; color:${meta.color};">
+                    <i class="fa-solid ${meta.icon}"></i>
+                </div>
+                <div class="fm-file-info">
+                    <div class="fm-file-title" title="${file.name || ''}">${file.name || 'ملف بدون اسم'}</div>
+                    <div class="fm-file-meta">
+                        <span style="background:${meta.bg}; color:${meta.color}; padding:1px 6px; border-radius:6px; font-weight:700; font-size:10px;">${meta.label}</span>
+                        ${sizeStr ? `<span><i class="fa-regular fa-hard-drive" style="margin-left:3px;"></i>${sizeStr}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="fm-file-actions">
+                <a href="${previewUrl}" target="_blank" class="btn-fm-act btn-fm-preview" title="معاينة الملف">
+                    <i class="fa-regular fa-eye"></i> معاينة
+                </a>
+                <a href="${downloadUrl}" target="_blank" download class="btn-fm-act btn-fm-download" title="تحميل الملف">
+                    <i class="fa-solid fa-download"></i> تحميل
+                </a>
+                <button type="button" class="btn-fm-act btn-fm-delete" onclick="deleteFile('${file.id}', '${folderId}', '${module}', ${cycle})" title="حذف الملف نهائياً">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
 function openFileManager(module, cycle) {
   const url = (currentLinks[module] && currentLinks[module][cycle]) ? currentLinks[module][cycle] : "";
   const folderId = getFolderId(url);
@@ -353,95 +489,150 @@ function openFileManager(module, cycle) {
       fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
         .then(r => r.json())
         .then(d => {
-          if (!d.error && d.files) {
-            sessionStorage.setItem(cacheKey, JSON.stringify(d.files));
-            sessionStorage.setItem(`files_count_${folderId}`, d.files.length);
+          if (!d.error) {
+            const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
+            sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
+            sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
           }
         }).catch(() => {});
       return;
     } catch(e) {}
   }
 
-  Swal.fire({ title: 'جاري جلب الملفات...', html: '<div class="spinner"></div>', showConfirmButton: false, width: window.innerWidth < 768 ? '95%' : '850px', allowOutsideClick: false });
+  Swal.fire({ title: 'جاري جلب الملفات...', html: '<div class="spinner"></div>', showConfirmButton: false, width: '400px', allowOutsideClick: false });
 
   fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
   .then(res => res.json())
   .then(data => {
     if(data.error) Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد', 'error');
     else {
-      sessionStorage.setItem(cacheKey, JSON.stringify(data.files || []));
-      sessionStorage.setItem(`files_count_${folderId}`, (data.files || []).length);
-      renderFileManager(folderId, data.files, module, cycle);
+      const filesList = Array.isArray(data) ? data : (Array.isArray(data?.files) ? data.files : []);
+      sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
+      sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
+      renderFileManager(folderId, filesList, module, cycle);
     }
-  }).catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ في قراءة الملفات.', 'error'));
+  }).catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ في قراءة الملفات من السحابة.', 'error'));
 }
 
 function renderFileManager(folderId, files, module, cycle) {
-    let filesHtml = '';
-    if(!files || files.length === 0) {
-        filesHtml = '<div style="text-align:center; padding:30px; color:#777; font-size:16px;">المجلد فارغ حالياً</div>';
-    } else {
-        files.forEach(file => {
-            let iconClass = 'fa-file'; 
-            if(file.type.includes('pdf')) iconClass = 'fa-file-pdf';
-            else if(file.type.includes('image')) iconClass = 'fa-file-image';
-            else if(file.type.includes('word') || file.type.includes('doc')) iconClass = 'fa-file-word';
-
-            filesHtml += `
-            <div class="file-row">
-                <a href="${file.url}" target="_blank" class="file-name-group"><i class="fa-solid ${iconClass} file-icon"></i> ${file.name}</a>
-                <button class="delete-btn" onclick="deleteFile('${file.id}', '${folderId}', '${module}', ${cycle})"><i class="fa-solid fa-trash"></i> حذف</button>
-            </div>`;
-        });
-    }
+    const filesList = Array.isArray(files) ? files : [];
+    const cycleTitles = { 1: "الدورة الأولى", 2: "الدورة الثانية", 3: "الدورة الثالثة" };
+    const cycleTitle = cycleTitles[cycle] || `الدورة ${cycle}`;
+    const moduleName = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.modules && SITE_SETTINGS.UI_NAMES.modules[module]) ? SITE_SETTINGS.UI_NAMES.modules[module] : module;
 
     const htmlContent = `
     <div class="file-manager-container">
-        <div class="upload-section">
-            <input type="file" id="fileInput" style="display:none" onchange="document.getElementById('fileNameDisplay').innerText = this.files[0].name">
-            <button class="upload-btn-real" onclick="document.getElementById('fileInput').click()" title="اختر ملفاً"><i class="fa-solid fa-folder-open"></i> <span>اختر ملف</span></button>
-            <span id="fileNameDisplay">لم يتم اختيار أي ملف</span>
-            <button class="upload-btn-real" style="background:#1E68E8" onclick="uploadFile('${folderId}', '${module}', ${cycle})" title="رفع الملف"><i class="fa-solid fa-cloud-arrow-up"></i> <span>بدء الرفع</span></button>
+        <!-- شريط الرأس والبحث -->
+        <div class="fm-header-bar">
+            <div class="fm-search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="fmSearchInput" placeholder="بحث سريع في ملفات الدورة بالاسم أو النوع..." oninput="window.filterManagerFiles(this.value)">
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span id="fmFilesCountBadge" style="background:#e0f2fe; color:#0369a1; padding:6px 14px; border-radius:20px; font-weight:700; font-size:13px;">
+                    <i class="fa-solid fa-layer-group" style="margin-left:5px;"></i>${filesList.length} ملف
+                </span>
+                <a href="https://drive.google.com/drive/folders/${folderId}" target="_blank" style="background:#f1f5f9; color:#475569; padding:6px 14px; border-radius:20px; font-weight:700; font-size:13px; text-decoration:none; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
+                    <i class="fa-brands fa-google-drive" style="color:#22c55e;"></i> فتح المجلد في Drive
+                </a>
+            </div>
         </div>
-        <div class="file-list">${filesHtml}</div>
+
+        <!-- لوحة الرفع السريعة -->
+        <div class="fm-upload-panel">
+            <input type="file" id="fileInput" style="display:none" onchange="window.handleFileManagerFileSelect(this)">
+            <div class="fm-upload-controls">
+                <button type="button" class="upload-btn-real" onclick="document.getElementById('fileInput').click()" style="background:#2563eb;">
+                    <i class="fa-solid fa-folder-open"></i> <span>اختر ملفاً</span>
+                </button>
+                <div id="fileNameDisplay" style="font-size:13px; font-weight:600; color:#64748b; background:#f8fafc; padding:8px 14px; border-radius:10px; border:1px dashed #cbd5e1; max-width:380px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    <i class="fa-solid fa-circle-info" style="margin-left:5px;"></i> لم يتم اختيار أي ملف
+                </div>
+            </div>
+            <button type="button" id="startUploadBtn" class="upload-btn-real" style="background:#16a34a; opacity:0.6; cursor:not-allowed;" disabled onclick="uploadFile('${folderId}', '${module}', ${cycle})">
+                <i class="fa-solid fa-cloud-arrow-up"></i> <span>بدء رفع الملف</span>
+            </button>
+        </div>
+
+        <!-- شبكة عرض الملفات -->
+        <div class="fm-files-grid" id="fmFilesGrid">
+            ${generateFilesGridHtml(filesList, folderId, module, cycle)}
+        </div>
     </div>`;
 
     Swal.fire({
-        title: `إدارة ملفات الدورة ${cycle}`, html: htmlContent, width: window.innerWidth < 768 ? '95%' : '950px', 
-        showConfirmButton: true, confirmButtonText: 'إغلاق', showDenyButton: true, denyButtonText: 'العودة للمقاييس', scrollbarPadding: false
-    }).then((res) => { if(res.isDenied) openCourses(module); });
+        title: `<div style="display:flex; align-items:center; gap:10px; font-size:1.35rem; color:#0f172a;"><i class="fa-solid fa-folder-tree" style="color:#1E68E8;"></i> إدارة ملفات: ${moduleName} - <span style="color:#1E68E8;">${cycleTitle}</span></div>`,
+        html: htmlContent,
+        width: '96vw',
+        customClass: { popup: 'swal2-popup swal-fullscreen-filemanager' },
+        showConfirmButton: true,
+        confirmButtonText: '<i class="fa-solid fa-xmark"></i> إغلاق النافذة',
+        showDenyButton: true,
+        denyButtonText: '<i class="fa-solid fa-arrow-right"></i> العودة لقائمة الدورات',
+        scrollbarPadding: false
+    }).then((res) => {
+        if (res.isDenied) openCourses(module);
+    });
 }
 
 function deleteFile(fileId, folderId, module, cycle) {
     Swal.fire({
-        title: 'هل أنت متأكد؟', text: "لا يمكن التراجع عن هذا الإجراء وسيتم حذف الملف نهائياً!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'نعم، احذفه!', cancelButtonText: 'إلغاء', width: window.innerWidth < 768 ? '95%' : '600px'
+        title: 'تأكيد الحذف',
+        text: 'هل أنت متأكد من حذف هذا الملف نهائياً من السحابة؟',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'نعم، احذف الملف',
+        cancelButtonText: 'إلغاء'
     }).then((result) => {
         if (result.isConfirmed) {
-            Swal.fire({title: 'جاري الحذف...', showConfirmButton: false, allowOutsideClick: false});
+            Swal.fire({
+                title: 'جاري الحذف...',
+                html: 'يرجى الانتظار لحذف الملف من سحابة Google Drive <div class="spinner"></div>',
+                showConfirmButton: false,
+                allowOutsideClick: false
+            });
             fetch(`${APPS_SCRIPT_URL}?action=delete&fileId=${fileId}&folderId=${folderId}`, {method: 'POST'})
             .then(res => res.json())
             .then(data => {
                 if(data.status === 'success') { 
                     sessionStorage.removeItem(`files_data_${folderId}`);
                     sessionStorage.removeItem(`files_count_${folderId}`);
-                    Swal.fire('تم!', 'تم حذف الملف بنجاح.', 'success').then(() => openFileManager(module, cycle)); 
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم الحذف بنجاح',
+                        text: 'تمت إزالة الملف من المجلد السحابي.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => openFileManager(module, cycle)); 
                 }
-                else { Swal.fire('خطأ', 'فشل الحذف', 'error'); }
-            });
+                else { Swal.fire('خطأ', 'فشل حذف الملف من السحابة', 'error'); }
+            })
+            .catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ أثناء محاولة الحذف.', 'error'));
         }
     });
 }
 
 function uploadFile(folderId, module, cycle) {
     const fileInput = document.getElementById('fileInput');
-    if(fileInput.files.length === 0) return Swal.showValidationMessage('الرجاء اختيار ملف أولاً قبل محاولة الرفع');
+    if(!fileInput || fileInput.files.length === 0) {
+        Swal.fire('تنبيه', 'الرجاء اختيار ملف أولاً قبل محاولة الرفع', 'warning');
+        return;
+    }
 
     const file = fileInput.files[0];
     const reader = new FileReader();
 
     reader.onload = function(e) {
         const rawData = e.target.result.split(',')[1];
-        Swal.fire({ title: 'جاري الرفع...', html: 'يرجى الانتظار، لا تقم بإغلاق النافذة <div class="spinner"></div>', showConfirmButton: false, allowOutsideClick: false, width: window.innerWidth < 768 ? '95%' : '600px' });
+        Swal.fire({
+            title: 'جاري الرفع إلى السحابة...',
+            html: `يرجى الانتظار أثناء رفع <b>${file.name}</b> إلى Google Drive <div class="spinner"></div>`,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            width: '450px'
+        });
 
         const formData = new FormData();
         formData.append('action', 'upload');
@@ -456,11 +647,17 @@ function uploadFile(folderId, module, cycle) {
             if(data.status === 'success') { 
                 sessionStorage.removeItem(`files_data_${folderId}`);
                 sessionStorage.removeItem(`files_count_${folderId}`);
-                Swal.fire('نجاح', 'تم رفع الملف بنجاح', 'success').then(() => openFileManager(module, cycle)); 
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم الرفع بنجاح',
+                    text: `تم رفع الملف ${file.name} وإضافته إلى الدورة بنجاح.`,
+                    timer: 1800,
+                    showConfirmButton: false
+                }).then(() => openFileManager(module, cycle)); 
             }
-            else { Swal.fire('خطأ', 'فشل الرفع، الرجاء المحاولة مرة أخرى', 'error'); }
+            else { Swal.fire('خطأ', data.message || 'فشل الرفع، الرجاء المحاولة مرة أخرى', 'error'); }
         })
-        .catch(err => Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بالخادم', 'error'));
+        .catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ أثناء الاتصال بالخادم السحابي', 'error'));
     };
     reader.readAsDataURL(file);
 }

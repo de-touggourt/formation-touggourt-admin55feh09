@@ -143,7 +143,8 @@
 
     /* اللوحة الجانبية: قائمة المراسلات */
     .threads-sidebar {
-      width: 480px;
+      width: 540px;
+      max-width: 48vw;
       background: #ffffff;
       border-left: 1px solid #e2e8f0;
       display: flex;
@@ -185,18 +186,20 @@
 
     .nav-tabs-row {
       display: flex;
-      gap: 5px;
-      overflow-x: auto;
-      scrollbar-width: thin;
+      gap: 4px;
+      overflow-x: hidden;
+      justify-content: space-between;
       padding-bottom: 2px;
     }
     .tab-pill {
+      flex: 1;
+      min-width: 0;
       background: #e2e8f0;
       color: #475569;
       border: none;
-      padding: 6px 10px;
+      padding: 7px 3px;
       border-radius: 20px;
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 700;
       cursor: pointer;
       transition: 0.2s;
@@ -204,8 +207,8 @@
       font-family: 'Cairo';
       display: flex;
       align-items: center;
-      gap: 5px;
-      flex-shrink: 0;
+      justify-content: center;
+      gap: 3px;
     }
     .tab-pill.active {
       background: #102a43;
@@ -213,9 +216,9 @@
     }
     .tab-pill .pill-counter {
       background: rgba(255,255,255,0.25);
-      padding: 1px 6px;
+      padding: 1px 5px;
       border-radius: 10px;
-      font-size: 10px;
+      font-size: 9.5px;
     }
 
     .threads-list {

@@ -541,7 +541,8 @@ function renderMessageDetails(msg) {
                             <a href="${previewUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="معاينة الملف"><i class="fa-solid fa-eye"></i></a>
                             <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="تحميل أو فتح في Drive"><i class="fa-solid fa-download"></i></a>
                         ` : `
-                            <button type="button" class="btn-att-action" onclick="Swal.fire('تنبيه', 'الملف قيد المزامنة في السحابة، يرجى المحاولة لاحقاً', 'info')" title="الملف قيد المزامنة"><i class="fa-solid fa-clock"></i></button>
+                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'preview')" title="معاينة من Drive"><i class="fa-solid fa-eye"></i></button>
+                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'download')" title="تحميل من Drive"><i class="fa-solid fa-download"></i></button>
                         `}
                     </div>
                 </div>
@@ -551,6 +552,34 @@ function renderMessageDetails(msg) {
         attSection.style.display = "none";
     }
 }
+
+// فتح أو البحث المباشر عن ملف المراسلة في Google Drive
+window.openOrSyncDriveFile = async function(fileName, mode) {
+    Swal.fire({
+        title: 'جاري فتح الملف...',
+        html: '<div class="spinner" style="margin:0 auto 15px auto;"></div><p style="font-size:13px; color:#64748b;">جاري جلب رابط الملف السحابي من Google Drive...</p>',
+        allowOutsideClick: false,
+        showConfirmButton: false
+    });
+    try {
+        const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) 
+            ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId 
+            : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
+        const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
+        const listData = await listRes.json();
+        const filesList = Array.isArray(listData) ? listData : (Array.isArray(listData?.files) ? listData.files : []);
+        const matched = filesList.find(f => f.name === fileName) || filesList.find(f => f.name.includes(fileName));
+        if (matched && matched.id) {
+            Swal.close();
+            const url = mode === 'preview' ? `https://drive.google.com/file/d/${matched.id}/preview` : `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
+            window.open(url, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        Swal.fire('غير متوفر', 'تعذر العثور على هذا الملف في مجلد Google Drive حالياً.', 'warning');
+    } catch(e) {
+        Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بـ Google Drive.', 'error');
+    }
+};
 
 // 10. الإجراءات المتقدمة (مفضلة، أرشفة، إعادة توجيه، رد، حذف)
 window.toggleStarredCurrentMessage = async function() {
@@ -818,45 +847,35 @@ window.submitNewMessage = async function() {
     });
 
     try {
-        const uploadedFilesMetadata = [];
+        // رفع ومعالجة الملفات المرفقة بالتوازي لتسريع العملية فورياً
+        const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) 
+            ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId 
+            : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
 
-        // معالجة الملفات المرفوعة
-        for (let i = 0; i < selectedFilesToUpload.length; i++) {
-            const item = selectedFilesToUpload[i];
-
+        const uploadPromises = selectedFilesToUpload.map(async (item, idx) => {
             if (item.isPreUploaded) {
-                uploadedFilesMetadata.push({
+                return {
                     name: item.name,
                     size: item.size,
                     mime: item.mime,
                     fileId: item.fileId || '',
-                    url: item.url || ''
-                });
-                continue;
+                    url: item.url || (item.fileId ? `https://drive.google.com/file/d/${item.fileId}/view?usp=drivesdk` : '')
+                };
             }
-
-            const statusEl = document.getElementById("uploadStatusText");
-            if (statusEl) statusEl.innerText = `جاري رفع المرفق (${i + 1}/${selectedFilesToUpload.length}): ${item.name}`;
 
             try {
                 const base64Data = await readFileAsBase64(item.file);
+                const uniqueFileName = `${Date.now()}_${idx}_${item.name}`;
+
                 const formData = new FormData();
                 formData.append('action', 'upload');
-                formData.append('name', item.name);
-                formData.append('mime', item.mime);
+                formData.append('name', uniqueFileName);
+                formData.append('mime', item.mime || 'application/octet-stream');
                 formData.append('data', base64Data);
-                
-                // تحديد مجلد الرفع في Google Drive
-                const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) 
-                    ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId 
-                    : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
                 formData.append('folderId', targetFolderId);
 
-                const scriptUrl = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) 
-                    ? SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl 
-                    : APPS_SCRIPT_URL;
-
-                const res = await fetch(scriptUrl, { method: 'POST', body: formData });
+                // استخدام سكريبت Drive الفعال والموثوق
+                const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
                 const data = await res.json();
 
                 let fileId = data.id || data.fileId || '';
@@ -865,11 +884,12 @@ window.submitNewMessage = async function() {
                 // إذا نجح الرفع ولم يرجع السكريبت المعرف مباشرة، نستعلم لحظياً عن المجلد
                 if (!fileId && data.status === 'success') {
                     try {
-                        const listRes = await fetch(`${scriptUrl}?action=list&folderId=${targetFolderId}`);
+                        const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
                         const listData = await listRes.json();
-                        if (listData && Array.isArray(listData.files)) {
-                            const matched = listData.files.find(f => f.name === item.name) || listData.files[0];
-                            if (matched) {
+                        const filesList = Array.isArray(listData) ? listData : (Array.isArray(listData?.files) ? listData.files : []);
+                        if (filesList.length > 0) {
+                            const matched = filesList.find(f => f.name === uniqueFileName) || filesList.find(f => f.name === item.name) || filesList[0];
+                            if (matched && matched.id) {
                                 fileId = matched.id;
                                 fileUrl = matched.url || `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
                             }
@@ -883,17 +903,26 @@ window.submitNewMessage = async function() {
                     fileUrl = `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
                 }
 
-                uploadedFilesMetadata.push({
+                return {
                     name: item.name,
                     size: item.size,
                     mime: item.mime,
                     fileId: fileId,
                     url: fileUrl
-                });
+                };
             } catch(uploadErr) {
-                console.warn("تعذر رفع الملف إلى درايف، سيتم الحفظ بدون رابط مباشر:", uploadErr);
+                console.warn("تعذر رفع الملف إلى درايف:", uploadErr);
+                return {
+                    name: item.name,
+                    size: item.size,
+                    mime: item.mime,
+                    fileId: '',
+                    url: ''
+                };
             }
-        }
+        });
+
+        const uploadedFilesMetadata = await Promise.all(uploadPromises);
 
         // تجهيز وثيقة الرسالة في Firestore
         const messageDoc = {
