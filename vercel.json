@@ -47,6 +47,14 @@
     {
       "source": "/files-upload",
       "destination": "/dashboard_finale_upload.html"
+    },
+    {
+      "source": "/communications",
+      "destination": "/communications.html"
+    },
+    {
+      "source": "/notifications",
+      "destination": "/notifications_hub.html"
     }
   ],
   "headers": [

@@ -268,6 +268,19 @@
       <button class="logout-btn" style="background: #1E68E8;" onclick="window.location.href='/files-upload'">
         <i class="fa-solid fa-folder-open"></i> إدارة الملفات
       </button>
+
+      <!-- زر المراسلات وتبادل الملفات -->
+      <button class="logout-btn" style="background: #0284c7; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="window.location.href='/communications'">
+        <i class="fa-solid fa-envelope"></i> المراسلات والملفات
+        <span id="adminMsgBadge" style="display:none; background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:800;">0</span>
+      </button>
+
+      <!-- زر منظومة الإشعارات والتنبيهات -->
+      <button class="logout-btn" style="background: #ea580c; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="window.location.href='/notifications'">
+        <i class="fa-solid fa-bullhorn"></i> منظومة الإشعارات
+        <span id="adminNotifBadge" style="display:none; background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:800;">0</span>
+      </button>
+
       <button class="logout-btn" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
     </div>
   </div>
@@ -752,6 +765,7 @@
         <button class="btn-print" style="background: #d90429;" onclick="setStatStatus('غائب')"><i class="fa-solid fa-user-xmark"></i> المعنيون بالغياب</button>
         <button class="btn-print" id="btnLateFramersControl" style="background: #ff9800;" onclick="setStatStatus('متأخر')"><i class="fa-solid fa-user-clock"></i> المتأخرون</button>
         <span style="flex: 1;"></span>
+        <button class="btn-print" style="background: #c0392b; color: white;" onclick="openAdminClearAttendanceModal()"><i class="fa-solid fa-trash-can"></i> مسح السجلات</button>
         <button class="btn-print" style="background: #1E68E8;" onclick="printAdminAttStats()"><i class="fa-solid fa-print"></i> طباعة التقرير الشامل</button>
         <button class="btn-print" style="background: #107c41;" onclick="exportAdminAttStatsExcel()"><i class="fa-solid fa-file-excel"></i> تصدير Excel</button>
     </div>
@@ -946,7 +960,7 @@
 
 
   <script src="js/sys-shield-v2.js" defer></script>
-  <script src="js/mgmt-core-9a1f.js" defer></script>
+  <script src="js/admin_dashboard.js" defer></script>
 
 </body>
 </html>

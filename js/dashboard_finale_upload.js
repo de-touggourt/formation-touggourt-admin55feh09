@@ -9,8 +9,8 @@ let inspectorCenter = sessionStorage.getItem("inspectorCenter");
 // تم حذف سطر الطرد المباشر لأنه يعمل قبل التحقق من فايربيز
 
 function goBack() {
-    if (userEmpId === "ADMIN_ACCESS") window.location.href = "admin_dashboard.html";
-    else window.location.href = "inspector_dashboard.html";
+    if (userEmpId === "ADMIN_ACCESS") window.location.href = "/admin-panel";
+    else window.location.href = "/inspector";
 }
 
 // ==================== فحص صلاحيات المسؤول الإداري ====================
@@ -30,7 +30,7 @@ async function checkUserPermissions() {
                         confirmButtonText: 'العودة للوحة التحكم',
                         confirmButtonColor: '#102a43'
                     }).then(() => {
-                        window.location.href = "inspector_dashboard.html";
+                        window.location.href = "/inspector";
                     });
                     return false;
                 }
@@ -93,7 +93,7 @@ function initSiteSettings() {
                             confirmButtonColor: '#1E68E8',
                             allowOutsideClick: false
                         }).then(() => {
-                            window.location.href = "inspector_dashboard.html"; 
+                            window.location.href = "/inspector"; 
                         });
                         return; 
                     }
@@ -269,7 +269,7 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
 }
 
 function openLink(centerId, levelId, specId) {
-    window.location.href = `manage_courses.html?c=${centerId}&l=${levelId}&s=${specId}`;
+    window.location.href = `/courses-manage?c=${centerId}&l=${levelId}&s=${specId}`;
 }
 
 // ==================== 4. تأثير الكتابة السلسة ====================
@@ -311,7 +311,7 @@ window.onload = async function() {
 
             // الآن، إذا كان لا يزال مجهولاً، نقوم بطرده
             if (!userEmpId) { 
-                window.location.href = "admin095526.html"; 
+                window.location.href = "/secure-login"; 
                 return; 
             }
 
@@ -320,7 +320,7 @@ window.onload = async function() {
                 initSiteSettings();
             }
         } else {
-            window.location.href = "admin095526.html";
+            window.location.href = "/secure-login";
         }
     });
 };

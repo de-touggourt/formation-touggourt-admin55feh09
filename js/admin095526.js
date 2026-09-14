@@ -13,7 +13,7 @@
         sessionStorage.removeItem("admin_entry_time");
         sessionStorage.removeItem("admin_page_active");
         // طرد فوري إلى الصفحة الرئيسية
-        window.location.replace("index.html");
+        window.location.replace("/login");
       } else {
         // استهلاك توكن الانتقال وتفعيل الجلسة الحالية
         sessionStorage.removeItem("admin_entry_token");
@@ -21,10 +21,16 @@
         sessionStorage.setItem("admin_page_active", "true");
 
         // إظهار الصفحة بعد نجاح التحقق
-        document.addEventListener("DOMContentLoaded", function() {
+        const unlockGate = function() {
           const gateStyle = document.getElementById("pageGateStyle");
           if (gateStyle) gateStyle.remove();
-        });
+          if (document.body) document.body.style.display = "";
+        };
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", unlockGate);
+        } else {
+          unlockGate();
+        }
       }
     })();
 
@@ -97,7 +103,7 @@ async function checkAccessCode() {
               sessionStorage.setItem("isLoggedIn", "true");
               
               Swal.fire({ icon: 'success', title: 'مرحباً بك', text: 'جاري التوجيه إلى لوحة تحكم المديرية...', timer: 1500, showConfirmButton: false })
-              .then(() => window.location.href = "admin_dashboard.html");
+              .then(() => window.location.href = "/admin-panel");
               
               return; 
           }
@@ -140,7 +146,7 @@ async function checkAccessCode() {
             timer: 2000,
             showConfirmButton: false
           }).then(() => {
-            window.location.href = "inspector_dashboard.html";
+            window.location.href = "/inspector";
           });
 
       } else {

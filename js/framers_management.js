@@ -157,7 +157,7 @@ window.onload = function() {
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
         if (loader) loader.style.display = "none";
-        window.location.href = "index.html"; // أو admin095526.html حسب صفحة الدخول الخاصة بالمفتش
+        window.location.href = "/login"; // أو admin095526.html حسب صفحة الدخول الخاصة بالمفتش
         return;
     }
 
@@ -171,7 +171,7 @@ window.onload = function() {
             if (loader) loader.style.display = "none";
         } else {
             if (loader) loader.style.display = "none";
-            window.location.href = "index.html";
+            window.location.href = "/login";
         }
     });
 };
@@ -179,7 +179,7 @@ window.onload = function() {
 function logout() {
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "index.html";
+        window.location.href = "/login";
     }).catch((error) => {
         console.error("خطأ أثناء تسجيل الخروج:", error);
     });
@@ -3108,7 +3108,7 @@ function generateRandomToken(length) {
 window.showLinkModal = function(token, oldDocId) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
+    let fullLink = `${baseUrl}/scanner-tool?token=${token}`; 
 
     // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;

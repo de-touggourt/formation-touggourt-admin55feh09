@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>نظام المراسلات والملفات الرسمية - فضاء التكوين</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* شريط التمرير */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* الشريط العلوي */
+    .top-header {
+      background: linear-gradient(135deg, #102a43 0%, #1e3a5f 100%);
+      color: #fff;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      z-index: 50;
+      flex-shrink: 0;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #38bdf8;
+    }
+    .brand-text h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+    .brand-text p {
+      margin: 0;
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .user-tag {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-compose {
+      background: linear-gradient(135deg, #0FBA50, #059669);
+      color: #fff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(15, 186, 80, 0.3);
+      font-family: 'Cairo';
+    }
+    .btn-compose:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(15, 186, 80, 0.4);
+    }
+    .btn-back-dash {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.3s;
+      font-family: 'Cairo';
+    }
+    .btn-back-dash:hover {
+      background: #fff;
+      color: #102a43;
+    }
+
+    /* منطقة العمل الرئيسية (Dual-Pane) */
+    .app-workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* اللوحة الجانبية: قائمة المراسلات */
+    .threads-sidebar {
+      width: 380px;
+      background: #ffffff;
+      border-left: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100%;
+    }
+
+    .sidebar-controls {
+      padding: 15px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .search-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .search-wrapper i {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+    }
+    .search-wrapper input {
+      width: 100%;
+      padding: 9px 36px 9px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-family: 'Cairo';
+      font-size: 13px;
+      outline: none;
+      transition: 0.2s;
+    }
+    .search-wrapper input:focus {
+      border-color: #0FBA50;
+      box-shadow: 0 0 0 3px rgba(15, 186, 80, 0.15);
+    }
+
+    .nav-tabs-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .tab-pill {
+      background: #e2e8f0;
+      color: #475569;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.2s;
+      white-space: nowrap;
+      font-family: 'Cairo';
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab-pill.active {
+      background: #102a43;
+      color: #fff;
+    }
+    .tab-pill .pill-counter {
+      background: rgba(255,255,255,0.25);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+    }
+
+    .threads-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .thread-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+    .thread-item:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      transform: translateX(-3px);
+    }
+    .thread-item.active {
+      background: #f0fdf4;
+      border-color: #0FBA50;
+      box-shadow: 0 4px 12px rgba(15, 186, 80, 0.12);
+    }
+    .thread-item.unread {
+      border-right: 4px solid #0FBA50;
+      background: #fafafa;
+    }
+    .thread-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .thread-sender {
+      font-size: 13px;
+      font-weight: 800;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .thread-date {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .thread-subject {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .thread-preview {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 8px;
+    }
+    .thread-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+    .priority-badge {
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .priority-normal { background: #e2e8f0; color: #475569; }
+    .priority-urgent { background: #fee2e2; color: #ef4444; }
+    .priority-official { background: #e0f2fe; color: #0284c7; }
+    .priority-secret { background: #fef3c7; color: #d97706; }
+
+    .files-badge-indicator {
+      color: #1E68E8;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* اللوحة الرئيسية: تفاصيل الرسالة ومحتواها */
+    .message-viewer {
+      flex: 1;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+    }
+
+    .empty-state-pane {
+      margin: auto;
+      text-align: center;
+      padding: 40px 20px;
+      max-width: 450px;
+    }
+    .empty-state-icon {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin: 0 auto 20px auto;
+    }
+    .empty-state-pane h2 {
+      margin: 0 0 10px 0;
+      font-size: 20px;
+      font-weight: 800;
+      color: #1e293b;
+    }
+    .empty-state-pane p {
+      margin: 0 0 20px 0;
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    /* محتوى الرسالة المفصل */
+    .message-details-card {
+      background: #fff;
+      margin: 20px;
+      border-radius: 20px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .msg-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px dashed #e2e8f0;
+      padding-bottom: 18px;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .msg-title-box h2 {
+      margin: 0 0 8px 0;
+      font-size: 22px;
+      font-weight: 900;
+      color: #0f172a;
+      line-height: 1.4;
+    }
+    .msg-meta-box {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: #64748b;
+    }
+    .msg-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .msg-meta-item b {
+      color: #1e293b;
+    }
+
+    .msg-body-text {
+      font-size: 15px;
+      line-height: 2;
+      color: #334155;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #fcfdfe;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #f1f5f9;
+    }
+
+    /* قسم المرفقات */
+    .msg-attachments-section {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 18px;
+    }
+    .msg-attachments-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #1e293b;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .attachments-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .attachment-card {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: 0.2s;
+    }
+    .attachment-card:hover {
+      border-color: #0FBA50;
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .att-left-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .att-icon {
+      font-size: 26px;
+      color: #1E68E8;
+    }
+    .att-names {
+      overflow: hidden;
+    }
+    .att-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 170px;
+    }
+    .att-size {
+      font-size: 11px;
+      color: #64748b;
+    }
+    .att-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-att-action {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: 0.2s;
+      font-size: 13px;
+    }
+    .btn-att-action:hover {
+      background: #0FBA50;
+      color: #fff;
+      border-color: #0FBA50;
+    }
+
+    /* نافذة إنشاء مراسلة جديدة (Modal) */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 15px;
+    }
+    .modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 720px;
+      max-height: 92vh;
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+      animation: zoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes zoomIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-header {
+      background: linear-gradient(135deg, #102a43, #1e3a5f);
+      color: #fff;
+      padding: 16px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-close-modal {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: 0.2s;
+    }
+    .btn-close-modal:hover {
+      background: #dc2626;
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+    }
+    .form-control {
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-family: 'Cairo';
+      font-size: 14px;
+      outline: none;
+      transition: 0.2s;
+    }
+    .form-control:focus {
+      border-color: #0FBA50;
+      box-shadow: 0 0 0 3px rgba(15, 186, 80, 0.15);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    /* منطقة رفع الملفات في المودال */
+    .upload-dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+      background: #f8fafc;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .upload-dropzone:hover {
+      border-color: #0FBA50;
+      background: #f0fdf4;
+    }
+    .upload-dropzone i {
+      font-size: 32px;
+      color: #0FBA50;
+      margin-bottom: 8px;
+    }
+    .upload-dropzone p {
+      margin: 0;
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .selected-files-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .file-chip {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    .file-chip-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .btn-remove-file {
+      color: #ef4444;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* شاشة التحميل */
+    #loader {
+      display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.95); z-index: 99999;
+      justify-content: center; align-items: center; flex-direction: column;
+    }
+    .spinner {
+      border: 4px solid #e2e8f0; border-top: 4px solid #0FBA50;
+      border-radius: 50%; width: 45px; height: 45px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+      .threads-sidebar { width: 100%; }
+      .message-viewer { display: none; }
+      .message-viewer.active-mobile { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; }
+      .form-row { grid-template-columns: 1fr; }
+      .top-header { flex-direction: column; gap: 10px; align-items: stretch; text-align: center; }
+      .header-brand { justify-content: center; }
+      .header-actions { justify-content: center; flex-wrap: wrap; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- لودر التحميل -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h4 style="color:#0FBA50; margin-top:15px; font-weight:800;">جاري فتح مركز المراسلات والملفات...</h4>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <header class="top-header">
+    <div class="header-brand">
+      <div class="brand-icon"><i class="fa-solid fa-envelopes-bulk"></i></div>
+      <div class="brand-text">
+        <h1>منظومة المراسلات وتبادل الملفات</h1>
+        <p id="systemSubtitle">مديرية التربية لولاية توقرت | فضاء التكوين البيداغوجي</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <div class="user-tag" id="userEntityBadge">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span id="userEntityName">جاري التعرف...</span>
+      </div>
+
+      <button class="btn-compose" onclick="openComposeModal()">
+        <i class="fa-solid fa-pen-to-square"></i> إنشاء مراسلة جديدة
+      </button>
+
+      <button class="btn-back-dash" onclick="returnToDashboard()">
+        <i class="fa-solid fa-arrow-left"></i> رجوع للوحة
+      </button>
+    </div>
+  </header>
+
+  <!-- مساحة العمل المزدوجة -->
+  <main class="app-workspace">
+    <!-- قائمة المراسلات (اللوحة الجانبية) -->
+    <aside class="threads-sidebar">
+      <div class="sidebar-controls">
+        <div class="search-wrapper">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="searchInput" placeholder="بحث بالموضوع، المرسل، النص..." oninput="filterMessages()">
+        </div>
+
+        <div class="nav-tabs-row">
+          <button class="tab-pill active" onclick="switchFilterTab('all', this)">الكل <span class="pill-counter" id="cntAll">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('inbox', this)">الوارد <span class="pill-counter" id="cntInbox">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('sent', this)">الصادر <span class="pill-counter" id="cntSent">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('urgent', this)">عاجل <span class="pill-counter" id="cntUrgent">0</span></button>
+        </div>
+      </div>
+
+      <div class="threads-list" id="threadsContainer">
+        <!-- عناصر المراسلات تظهر هنا -->
+      </div>
+    </aside>
+
+    <!-- منطقة استعراض تفاصيل الرسالة -->
+    <section class="message-viewer" id="messageViewer">
+      <div class="empty-state-pane" id="emptyStatePane">
+        <div class="empty-state-icon"><i class="fa-regular fa-envelope-open"></i></div>
+        <h2>حدد مراسلة من القائمة</h2>
+        <p>اختر إحدى المراسلات الرسمية للاطلاع على كامل نصها ومرفقاتها المحفوظة سحابياً، أو ابدأ مراسلة رسمية جديدة الآن.</p>
+        <button class="btn-compose" style="margin: 0 auto;" onclick="openComposeModal()">
+          <i class="fa-solid fa-paper-plane"></i> إرسال مراسلة رسمية
+        </button>
+      </div>
+
+      <div class="message-details-card" id="messageDetailsCard" style="display:none;">
+        <div class="msg-header-row">
+          <div class="msg-title-box">
+            <h2 id="viewMsgSubject">الموضوع</h2>
+            <div class="msg-meta-box">
+              <div class="msg-meta-item">
+                <i class="fa-solid fa-building-flag" style="color:#0FBA50;"></i>
+                <span>من: <b id="viewMsgSender">-</b></span>
+              </div>
+              <div class="msg-meta-item">
+                <i class="fa-solid fa-location-arrow" style="color:#1E68E8;"></i>
+                <span>إلى: <b id="viewMsgRecipient">-</b></span>
+              </div>
+              <div class="msg-meta-item">
+                <i class="fa-regular fa-clock"></i>
+                <span id="viewMsgDate">-</span>
+              </div>
+            </div>
+          </div>
+          <div id="viewMsgPriorityBadge"></div>
+        </div>
+
+        <div class="msg-body-text" id="viewMsgContent">
+          <!-- نص الرسالة -->
+        </div>
+
+        <div class="msg-attachments-section" id="viewAttachmentsSection" style="display:none;">
+          <div class="msg-attachments-title">
+            <i class="fa-solid fa-paperclip" style="color:#0FBA50;"></i> الملفات والمستندات المرفقة:
+          </div>
+          <div class="attachments-grid" id="viewAttachmentsGrid">
+            <!-- كروت الملفات -->
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+          <button class="btn-compose" style="background:#102a43;" onclick="replyToCurrentMessage()">
+            <i class="fa-solid fa-reply"></i> الرد على المراسلة
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- مودال كتابة مراسلة جديدة -->
+  <div class="modal-overlay" id="composeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-paper-plane"></i> تحرير مراسلة رسمية جديدة</h3>
+        <button class="btn-close-modal" onclick="closeComposeModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>الجهة المستلمة: <span style="color:red">*</span></label>
+            <select id="composeRecipient" class="form-control">
+              <!-- خيارات المراكز أو المديرية تضاف ديناميكياً -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>درجة الأهمية والتصنيف:</label>
+            <select id="composePriority" class="form-control">
+              <option value="normal">عادي (مراسلة بيداغوجية/إدارية عادية)</option>
+              <option value="urgent">عاجل جداً (أولوية قصوى)</option>
+              <option value="official">تعميم رسمي / منشور ولائي</option>
+              <option value="secret">سري وخاص</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>موضوع المراسلة: <span style="color:red">*</span></label>
+          <input type="text" id="composeSubject" class="form-control" placeholder="أدخل موضوع المراسلة بوضوح...">
+        </div>
+
+        <div class="form-group">
+          <label>نص المراسلة بالتفصيل: <span style="color:red">*</span></label>
+          <textarea id="composeContent" class="form-control" rows="6" placeholder="اكتب نص المراسلة الرسمية هنا..."></textarea>
+        </div>
+
+        <!-- منطقة رفع المرفقات مع Google Drive -->
+        <div class="form-group">
+          <label><i class="fa-brands fa-google-drive" style="color:#0FBA50;"></i> إرفاق ملفات (حفظ سحابي مباشر على Google Drive):</label>
+          <input type="file" id="composeFileInput" multiple style="display:none;" onchange="handleFileSelect(this.files)">
+          
+          <div class="upload-dropzone" onclick="document.getElementById('composeFileInput').click()">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <p>انقر لاختيار ملفات من جهازك (PDF، وورد، إكسل، صور، ملفات مضغوطة)</p>
+            <span style="font-size:11px; color:#94a3b8;">سيتم رفعها وتخزينها بأمان في Google Drive</span>
+          </div>
+
+          <div class="selected-files-list" id="selectedFilesList"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-back-dash" style="color:#475569; border-color:#cbd5e1;" onclick="closeComposeModal()">إلغاء</button>
+        <button class="btn-compose" id="btnSubmitMessage" onclick="submitNewMessage()">
+          <i class="fa-solid fa-paper-plane"></i> إرسال المراسلة الآن
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/sys-shield-v2.js"></script>
+  <script src="js/communications.js"></script>
+</body>
+</html>

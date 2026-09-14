@@ -188,6 +188,76 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
     .icon-btn { width: 100%; height: 80px; flex-direction: row; gap: 15px; justify-content: flex-start; padding: 0 20px;}
     .icon-btn i { margin-bottom: 0; }
 }
+/* تنسيقات زر وجرس الإشعارات للمتكون */
+.btn-notif-header {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    position: relative;
+    font-size: 17px;
+}
+.btn-notif-header:hover {
+    background: #fff;
+    color: #0FBA50;
+    transform: translateY(-2px);
+}
+.badge-notif-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.btn-notif-header.has-unread {
+    animation: ringBell 3s infinite ease-in-out;
+}
+@keyframes ringBell {
+    0%, 80%, 100% { transform: rotate(0); }
+    85%, 95% { transform: rotate(14deg); }
+    90% { transform: rotate(-14deg); }
+}
+.btn-logout-header {
+    background: rgba(239, 68, 68, 0.2);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 8px 18px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 700;
+    font-family: 'Cairo';
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    font-size: 13px;
+    height: 42px;
+}
+.btn-logout-header:hover {
+    background: #dc2626;
+    transform: translateY(-2px);
+}
 </style>
 </head>
 
@@ -205,9 +275,15 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 
 <!-- الهيدر الحديث (البطاقة المدمجة) -->
 <header class="hero-section">
-<button onclick="logout()" style="position: absolute; top: 20px; left: 20px; background: rgba(239, 68, 68, 0.2); backdrop-filter: blur(10px); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 18px; border-radius: 25px; cursor: pointer; font-weight: 700; font-family: 'Cairo'; z-index: 30; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease; font-size: 13px;" onmouseover="this.style.background='#dc2626'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='rgba(239, 68, 68, 0.2)'; this.style.transform='translateY(0)';">
+<div style="position: absolute; top: 20px; left: 20px; display: flex; gap: 12px; z-index: 30; align-items: center;">
+    <button onclick="openTraineeNotifications()" class="btn-notif-header" id="btnTraineeNotif" title="الإشعارات والتنبيهات">
+        <i class="fa-solid fa-bell"></i>
+        <span class="badge-notif-count" id="traineeNotifCount" style="display:none;">0</span>
+    </button>
+    <button onclick="logout()" class="btn-logout-header">
         <i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج
     </button>
+</div>
     <div class="identity-card">
         <!-- معلومات المستخدم -->
         <div class="user-profile">
@@ -245,7 +321,7 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 
 
   <script src="js/sys-shield-v2.js" defer></script>
-  <script src="js/portal-view-6d9b.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
 
 
 </body>

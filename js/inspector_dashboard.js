@@ -54,7 +54,7 @@ window.onload = function() {
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
-        window.location.href = "index.html";
+        window.location.href = "/login";
         return;
     }
 
@@ -63,11 +63,148 @@ window.onload = function() {
             document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
             loadCenterAdmins();
             fetchData();
+            initInspectorCommAndNotifs();
         } else {
-            window.location.href = "index.html";
+            window.location.href = "/login";
         }
     });
 };
+
+// =========================================================================
+// منظومة متابعة إشعارات المراسلات والتنبيهات لرئيس المركز
+// =========================================================================
+function initInspectorCommAndNotifs() {
+    if (!INSPECTOR_CENTER) return;
+
+    const msgBadge = document.getElementById("inspectorMsgBadge");
+    const notifBadge = document.getElementById("inspectorNotifBadge");
+
+    // 1. الاستماع للمراسلات الموجهة للمركز أو العامة
+    db.collection("messages").onSnapshot((snapshot) => {
+        let unreadCount = 0;
+        let latestUrgentMsg = null;
+
+        snapshot.forEach((doc) => {
+            const m = doc.data();
+            const isForThisCenter = (m.recipientCenter === INSPECTOR_CENTER || m.recipientCenter === "ALL");
+            const isFromOther = (m.senderCenter !== INSPECTOR_CENTER);
+
+            if (isForThisCenter && isFromOther) {
+                const readBy = Array.isArray(m.readBy) ? m.readBy : [];
+                if (!readBy.includes(INSPECTOR_CENTER)) {
+                    unreadCount++;
+                    if ((m.priority === 'urgent' || m.priority === 'official') && !latestUrgentMsg) {
+                        latestUrgentMsg = { id: doc.id, ...m };
+                    }
+                }
+            }
+        });
+
+        if (msgBadge) {
+            if (unreadCount > 0) {
+                msgBadge.style.display = "inline-block";
+                msgBadge.innerText = unreadCount > 99 ? "+99" : unreadCount;
+                msgBadge.title = `${unreadCount} مراسلة جديدة واردة`;
+            } else {
+                msgBadge.style.display = "none";
+            }
+        }
+
+        // تنبيه لمراسلة عاجلة جديدة إذا لم يتم تنبيه المستخدم بها مسبقاً في الجلسة
+        if (latestUrgentMsg) {
+            const alertedKey = `alerted_msg_${latestUrgentMsg.id}`;
+            if (!sessionStorage.getItem(alertedKey)) {
+                sessionStorage.setItem(alertedKey, "true");
+                Swal.fire({
+                    icon: 'warning',
+                    title: '<h4 style="color:#d9534f; margin:0; font-family:\'Cairo\';"><i class="fa-solid fa-triangle-exclamation"></i> مراسلة إدارية عاجلة</h4>',
+                    html: `
+                        <div style="text-align:right; font-family:\'Cairo\'; font-size:14px; line-height:1.7;">
+                            <b>المصدر:</b> ${latestUrgentMsg.senderCenter || 'الإدارة المركزية'}<br>
+                            <b>الموضوع:</b> ${latestUrgentMsg.subject || 'بدون موضوع'}<br>
+                            <span style="color:#64748b;">وردتك مراسلة ذات أولوية تستوجب الاطلاع والمتابعة.</span>
+                        </div>
+                    `,
+                    confirmButtonColor: '#0284c7',
+                    confirmButtonText: '<i class="fa-solid fa-envelope-open-text"></i> فتح المراسلات',
+                    showCancelButton: true,
+                    cancelButtonText: 'لاحقاً'
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        window.location.href = '/communications';
+                    }
+                });
+            }
+        }
+    }, (err) => {
+        console.warn("تعذر مزامنة شارة مراسلات المركز:", err);
+    });
+
+    // 2. الاستماع للإشعارات الموجهة للمركز
+    db.collection("notifications").onSnapshot((snapshot) => {
+        let unreadNotifs = 0;
+        let latestUrgentNotif = null;
+
+        snapshot.forEach((doc) => {
+            const n = doc.data();
+            const aud = n.targetAudience;
+
+            const isForCenter = (aud === 'all_centers' || 
+                                (aud === 'single_center' && n.targetCenter === INSPECTOR_CENTER) ||
+                                (aud === 'center_trainees' && n.targetCenter === INSPECTOR_CENTER));
+
+            const isFromOther = (n.senderCenter !== INSPECTOR_CENTER);
+
+            if (isForCenter && isFromOther) {
+                const readBy = Array.isArray(n.readBy) ? n.readBy : [];
+                if (!readBy.includes(INSPECTOR_CENTER)) {
+                    unreadNotifs++;
+                    if (n.priority === 'urgent' && !latestUrgentNotif) {
+                        latestUrgentNotif = { id: doc.id, ...n };
+                    }
+                }
+            }
+        });
+
+        if (notifBadge) {
+            if (unreadNotifs > 0) {
+                notifBadge.style.display = "inline-block";
+                notifBadge.innerText = unreadNotifs > 99 ? "+99" : unreadNotifs;
+                notifBadge.title = `${unreadNotifs} إشعار جديد`;
+            } else {
+                notifBadge.style.display = "none";
+            }
+        }
+
+        // تنبيه لإشعار عاجل
+        if (latestUrgentNotif) {
+            const alertedNotifKey = `alerted_notif_${latestUrgentNotif.id}`;
+            if (!sessionStorage.getItem(alertedNotifKey)) {
+                sessionStorage.setItem(alertedNotifKey, "true");
+                Swal.fire({
+                    icon: 'info',
+                    title: '<h4 style="color:#ea580c; margin:0; font-family:\'Cairo\';"><i class="fa-solid fa-bullhorn"></i> إشعار هام من المديرية</h4>',
+                    html: `
+                        <div style="text-align:right; font-family:\'Cairo\'; font-size:14px; line-height:1.7;">
+                            <b>العنوان:</b> ${latestUrgentNotif.title || ''}<br>
+                            <p style="margin-top:8px; color:#334e68;">${latestUrgentNotif.content ? latestUrgentNotif.content.substring(0, 120) + '...' : ''}</p>
+                        </div>
+                    `,
+                    confirmButtonColor: '#ea580c',
+                    confirmButtonText: '<i class="fa-solid fa-bullhorn"></i> عرض الإشعار',
+                    showCancelButton: true,
+                    cancelButtonText: 'إغلاق'
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        window.location.href = '/notifications';
+                    }
+                });
+            }
+        }
+    }, (err) => {
+        console.warn("تعذر مزامنة شارة إشعارات المركز:", err);
+    });
+}
 
 // ================= دالة الإنقاذ الذكية للصور (Smart Image Fallback) =================
 window.handleImageFallback = function(imgElement, driveUrl, fallbackType) {
@@ -367,7 +504,7 @@ async function getFramerNameFromBase(empId) {
 function logout() {
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "index.html";
+        window.location.href = "/login";
     }).catch((error) => {
         console.error("خطأ أثناء تسجيل الخروج:", error);
     });
@@ -384,12 +521,12 @@ function checkAndOpenFileManager() {
         });
         return;
     }
-    window.location.href = "dashboard_finale_upload.html";
+    window.location.href = "/files-upload";
 }
 
 function checkAndOpenFramers() {
     
-    window.location.href = "framers_management.html";
+    window.location.href = "/framers";
 }
 
 // ================= دوال الفلاتر المتعددة =================
@@ -1391,6 +1528,7 @@ function openAttendanceModal() {
     const dateInput = document.getElementById('attDate');
     if (!dateInput.value) { dateInput.value = getTodayDate(); }
     
+    fetchAndPopulateRecordedDays();
     loadAttendanceData();
 }
 
@@ -1426,6 +1564,11 @@ async function loadAttendanceData() {
     currentAttDate = document.getElementById('attDate').value;
     const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
     
+    const recordedSelect = document.getElementById('attRecordedDaysSelect');
+    if (recordedSelect && recordedSelect.querySelector(`option[value="${currentAttDate}"]`)) {
+        recordedSelect.value = currentAttDate;
+    }
+
     document.getElementById('attTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السجل...</td></tr>';
 
     // إيقاف أي استماع سابق إذا قمنا بتغيير التاريخ
@@ -3422,7 +3565,7 @@ function generateRandomToken(length) {
 window.showLinkModal = function(token, oldDocId) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner.html?token=${token}`; 
+    let fullLink = `${baseUrl}/scanner-tool?token=${token}`; 
 
     // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
@@ -3628,22 +3771,21 @@ function toggleSingleSelect(checkbox, docId) {
     }
 }
 
-// ================= نظام تفريغ سجلات الحضور والغياب (المتقدم) =================
-async function openClearAttendanceModal() {
-    Swal.fire({
-        title: 'جاري جلب الأيام المسجلة...',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
-    });
+// ================= نظام عرض الأيام المسجلة في المركز =================
+async function fetchAndPopulateRecordedDays() {
+    const recordedSelect = document.getElementById('attRecordedDaysSelect');
+    if (!recordedSelect) return;
 
-    const centerClean = INSPECTOR_CENTER.trim();
+    const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : '';
+    if (!centerClean) return;
+
     let recordedDays = new Set();
-    if (currentAttDate) recordedDays.add(currentAttDate);
+    const curDate = document.getElementById('attDate') ? document.getElementById('attDate').value : '';
+    if (curDate) recordedDays.add(curDate);
 
     try {
-        // جلب الأيام بالمعرف
-        const startId = `${centerClean}_`;
-        const endId = `${centerClean}_\uf8ff`;
+        const startId = centerClean + '_';
+        const endId = centerClean + '_\uf8ff';
         const snapById = await db.collection('attendance_daily')
             .where(firebase.firestore.FieldPath.documentId(), '>=', startId)
             .where(firebase.firestore.FieldPath.documentId(), '<=', endId)
@@ -3654,263 +3796,40 @@ async function openClearAttendanceModal() {
             let dateStr = parts[parts.length - 1];
             if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
                 recordedDays.add(dateStr);
-            } else if (doc.data().date) {
-                recordedDays.add(doc.data().date);
             }
         });
 
-        // جلب الأيام بحقل center
         const snapByCenter = await db.collection('attendance_daily').where('center', '==', centerClean).get();
         snapByCenter.forEach(doc => {
             let parts = doc.id.split('_');
             let dateStr = parts[parts.length - 1];
             if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
                 recordedDays.add(dateStr);
-            } else if (doc.data().date) {
+            } else if (doc.data() && doc.data().date) {
                 recordedDays.add(doc.data().date);
             }
         });
-    } catch(e) {
-        console.warn("Error fetching recorded days:", e);
+    } catch (e) {
+        console.warn('Error fetching recorded days in inspector:', e);
     }
 
-    const daysList = Array.from(recordedDays).sort().reverse();
+    const daysList = Array.from(recordedDays).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+    recordedSelect.innerHTML = '<option value="">-- اختر من الأيام المسجلة (' + daysList.length + ' يوم) --</option>';
 
-    let daysOptionsHtml = `<option value="current">اليوم المعروض حالياً (${currentAttDate})</option>`;
-    daysOptionsHtml += `<option value="all" style="font-weight:bold; color:#d90429;">⚠️ جميع الأيام المسجلة (تفريغ كلي وشامل)</option>`;
-    
-    if (daysList.length > 0) {
-        daysOptionsHtml += `<optgroup label="-- اختر يوماً محدداً من الأيام المسجلة --">`;
-        daysList.forEach(day => {
-            daysOptionsHtml += `<option value="${day}">يوم: ${day}</option>`;
-        });
-        daysOptionsHtml += `</optgroup>`;
-    }
-
-    Swal.fire({
-        title: '<i class="fa-solid fa-trash-can" style="color:#d90429;"></i> تفريغ سجلات الحضور والغياب',
-        html: `
-            <div style="text-align:right; font-family:'Cairo'; font-size:14px; padding: 5px;">
-                <p style="color:#555; margin-bottom:15px; font-size:13px; line-height:1.6;">
-                    اختر اليوم المستهدف ثم حدد الحالة التي تريد تفريغها (إلغاء تسجيلها وإعادتها لوضعية "غير محدد").
-                </p>
-
-                <div style="margin-bottom:15px;">
-                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">
-                        <i class="fa-regular fa-calendar-days"></i> نطاق الأيام:
-                    </label>
-                    <select id="swalClearDay" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
-                        ${daysOptionsHtml}
-                    </select>
-                </div>
-
-                <div style="margin-bottom:15px;">
-                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:5px;">
-                        <i class="fa-solid fa-filter"></i> الحالة المراد تفريغها:
-                    </label>
-                    <select id="swalClearStatus" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
-                        <option value="all">الكل (تفريغ جميع الحالات: حضور + غياب + تأخر)</option>
-                        <option value="غائب">الغياب فقط (إعادة الغائبين إلى غير محدد)</option>
-                        <option value="حاضر">الحضور فقط (إعادة الحاضرين إلى غير محدد)</option>
-                        <option value="متأخر">التأخر فقط (إعادة المتأخرين إلى غير محدد)</option>
-                    </select>
-                </div>
-
-                <div style="background:#fff3cd; border:1px solid #ffeeba; color:#856404; padding:10px; border-radius:8px; font-size:12.5px; line-height:1.5;">
-                    <i class="fa-solid fa-triangle-exclamation"></i> <b>تنبيه:</b> الأشخاص الذين تنطبق عليهم الشروط سيتم إلغاء حالتهم وإعادتهم إلى <b>(غير محدد)</b> مع مسح توقيت المسح.
-                </div>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: '<i class="fa-solid fa-check"></i> متابعة التفريغ',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#d90429',
-        cancelButtonColor: '#34495e',
-        focusConfirm: false,
-        preConfirm: () => {
-            return {
-                dayScope: document.getElementById('swalClearDay').value,
-                statusType: document.getElementById('swalClearStatus').value
-            };
-        }
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            const { dayScope, statusType } = result.value;
-            await executeAttendanceClear(dayScope, statusType);
-        }
+    daysList.forEach(day => {
+        recordedSelect.innerHTML += '<option value="' + day + '">📅 يوم: ' + day + '</option>';
     });
+
+    if (curDate && recordedDays.has(curDate)) {
+        recordedSelect.value = curDate;
+    }
 }
 
-async function executeAttendanceClear(dayScope, statusType) {
-    const centerClean = INSPECTOR_CENTER.trim();
-    
-    const isFullDelete = (statusType === "all"); // هل المطلوب حذف الأيام بالكامل
-
-    let dayText = "";
-    if (dayScope === "all") dayText = "كافة الأيام المسجلة بالمركز (حذف كلي وشامل للأيام وسجلاتها)";
-    else if (dayScope === "current") dayText = `اليوم المعروض حالياً (${typeof currentAttDate !== 'undefined' ? currentAttDate : ''})`;
-    else dayText = `يوم (${dayScope})`;
-
-    let statusText = "";
-    if (statusType === "all") statusText = "حذف شامل لكل الحالات وإزالة وثائق الأيام نهائياً من قاعدة البيانات";
-    else if (statusType === "غائب") statusText = "تفريغ حالات الغياب فقط";
-    else if (statusType === "حاضر") statusText = "تفريغ حالات الحضور فقط";
-    else if (statusType === "متأخر") statusText = "تفريغ حالات التأخر فقط";
-
-    const confirmRes = await Swal.fire({
-        title: 'تأكيد الحذف النهائي',
-        html: `
-            <div style="text-align:right; font-family:'Cairo'; font-size:14px; line-height:1.8;">
-                هل أنت متأكد من: <b style="color:#d90429;">${statusText}</b> ؟<br>
-                النطاق: <b style="color:#1E68E8;">${dayText}</b><br>
-                ${isFullDelete ? '<div style="margin-top:10px; padding:8px; background:#ffeaea; border:1px solid #ffc6c6; border-radius:6px; color:#d90429; font-weight:bold;"><i class="fa-solid fa-triangle-exclamation"></i> تنبيه: سيتم حذف الأيام بالكامل من قاعدة البيانات ولن تظهر في قائمة الأيام المسجلة نهائياً.</div>' : '<span style="color:#777;">سيتم تحديث قاعدة البيانات فوراً.</span>'}
-            </div>
-        `,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d90429',
-        cancelButtonColor: '#102a43',
-        confirmButtonText: 'نعم، احذف نهائياً',
-        cancelButtonText: 'تراجع'
-    });
-
-    if (!confirmRes.isConfirmed) return;
-
-    Swal.fire({
-        title: 'جاري الحذف النهائي من قاعدة البيانات...',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
-    });
-
-    try {
-        let targetDocs = [];
-
-        // 1. جلب الوثائق المستهدفة بالحذف
-        if (dayScope === "all") {
-            const startId = `${centerClean}_`;
-            const endId = `${centerClean}_\uf8ff`;
-            const snapById = await db.collection('attendance_daily')
-                .where(firebase.firestore.FieldPath.documentId(), '>=', startId)
-                .where(firebase.firestore.FieldPath.documentId(), '<=', endId)
-                .get();
-            snapById.forEach(d => targetDocs.push(d));
-
-            const snapByCenter = await db.collection('attendance_daily').where('center', '==', centerClean).get();
-            snapByCenter.forEach(d => {
-                if (!targetDocs.some(x => x.id === d.id)) targetDocs.push(d);
-            });
-
-            // إجراء احتياطي إضافي لضمان الوصول لكافة وثائق المركز
-            if (targetDocs.length === 0) {
-                const allSnap = await db.collection('attendance_daily').get();
-                allSnap.forEach(d => {
-                    let dCenter = d.data().center ? String(d.data().center).trim() : "";
-                    if (d.id.startsWith(centerClean + "_") || dCenter === centerClean) {
-                        if (!targetDocs.some(x => x.id === d.id)) targetDocs.push(d);
-                    }
-                });
-            }
-        } else {
-            const targetDate = (dayScope === "current" && typeof currentAttDate !== 'undefined') ? currentAttDate : dayScope;
-            const docId = `${centerClean}_${targetDate}`;
-            const docSnap = await db.collection('attendance_daily').doc(docId).get();
-            if (docSnap.exists) {
-                targetDocs.push(docSnap);
-            }
-        }
-
-        if (targetDocs.length === 0) {
-            Swal.fire('تنبيه', 'لا توجد أيام مسجلة مطابقة للنطاق المحدد.', 'info');
-            return;
-        }
-
-        // 2. تنفيذ الحذف الفعلي من Firestore
-        let batches = [];
-        let batch = db.batch();
-        let opCount = 0;
-        let deletedDaysCount = 0;
-        let clearedRecordsCount = 0;
-
-        targetDocs.forEach(docSnap => {
-            if (statusType === "all") {
-                // 🔥 حذف وثيقة اليوم بأكملها نهائياً من قاعدة البيانات 🔥
-                batch.delete(docSnap.ref);
-                deletedDaysCount++;
-                opCount++;
-            } else {
-                // تفريغ حالة معينة فقط
-                let records = docSnap.data().records || {};
-                let modified = false;
-
-                for (let empKey in records) {
-                    if (records[empKey] && records[empKey].status === statusType) {
-                        delete records[empKey];
-                        clearedRecordsCount++;
-                        modified = true;
-                    }
-                }
-
-                if (modified) {
-                    // إذا أصبحت الوثيقة فارغة تماماً بعد التفريغ، نحذف اليوم كلياً أيضاً
-                    if (Object.keys(records).length === 0) {
-                        batch.delete(docSnap.ref);
-                        deletedDaysCount++;
-                    } else {
-                        batch.update(docSnap.ref, { records: records });
-                    }
-                    opCount++;
-                }
-            }
-
-            if (opCount >= 400) {
-                batches.push(batch);
-                batch = db.batch();
-                opCount = 0;
-            }
-        });
-
-        if (opCount > 0) batches.push(batch);
-        for (let b of batches) {
-            await b.commit();
-        }
-
-        // 3. تحديث واجهة لوحة المفتش اللحظية (إن وُجدت)
-        if (typeof attendanceRecords !== 'undefined') {
-            if (dayScope === "all" || (typeof currentAttDate !== 'undefined' && (dayScope === "current" || dayScope === currentAttDate))) {
-                if (statusType === "all") {
-                    attendanceRecords = {};
-                } else {
-                    for (let k in attendanceRecords) {
-                        if (attendanceRecords[k] && attendanceRecords[k].status === statusType) {
-                            delete attendanceRecords[k];
-                        }
-                    }
-                }
-                if (typeof renderAttendanceTable === 'function') renderAttendanceTable();
-            }
-        }
-
-        // 4. تحديث صفحة الإحصاء الشامل tracking.html فوراً (إن وُجدت)
-        if (typeof processTrackingData === 'function') {
-            await processTrackingData();
-        }
-
-        let successMsg = "";
-        if (statusType === "all") {
-            successMsg = `تم حذف ${deletedDaysCount} يوم/أيام بالكامل نهائياً من قاعدة البيانات.`;
-        } else {
-            successMsg = `تم تفريغ ${clearedRecordsCount} سجل بنجاح.`;
-        }
-
-        Swal.fire({
-            icon: 'success',
-            title: 'تم الحذف بنجاح',
-            text: successMsg,
-            confirmButtonColor: '#102a43'
-        });
-
-    } catch (error) {
-        console.error("Error deleting attendance days:", error);
-        Swal.fire('خطأ', 'حدث مشكل أثناء الحذف: ' + (error.message || ''), 'error');
+function onSelectRecordedDay(selectedDay) {
+    if (!selectedDay) return;
+    const dateInput = document.getElementById('attDate');
+    if (dateInput) {
+        dateInput.value = selectedDay;
+        loadAttendanceData();
     }
 }

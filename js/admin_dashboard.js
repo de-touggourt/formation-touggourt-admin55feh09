@@ -155,7 +155,76 @@ async function initSiteSettings() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", initSiteSettings);
+// =========================================================================
+// منظومة متابعة إشعارات المراسلات والتنبيهات للمديرية
+// =========================================================================
+function initAdminCommAndNotifBadges() {
+    const msgBadge = document.getElementById("adminMsgBadge");
+    const notifBadge = document.getElementById("adminNotifBadge");
+
+    // 1. الاستماع للمراسلات الواردة غير المقروءة للمديرية
+    db.collection("messages").onSnapshot((snapshot) => {
+        let unreadCount = 0;
+        snapshot.forEach((doc) => {
+            const m = doc.data();
+            // رسائل واردة من المراكز إلى المديرية أو موجهة للمديرية أو عامة
+            if (m.senderType !== 'DIRECTORATE') {
+                const readBy = Array.isArray(m.readBy) ? m.readBy : [];
+                const isRead = readBy.includes('المديرية') || 
+                               readBy.includes('مديرية التربية لولاية توقرت') || 
+                               readBy.includes('ADMIN_ACCESS');
+                if (!isRead) {
+                    unreadCount++;
+                }
+            }
+        });
+
+        if (msgBadge) {
+            if (unreadCount > 0) {
+                msgBadge.style.display = "inline-block";
+                msgBadge.innerText = unreadCount > 99 ? "+99" : unreadCount;
+                msgBadge.title = `${unreadCount} مراسلة واردة جديدة غير مقروءة`;
+            } else {
+                msgBadge.style.display = "none";
+            }
+        }
+    }, (err) => {
+        console.warn("تعذر مزامنة شارة المراسلات للمديرية:", err);
+    });
+
+    // 2. الاستماع للإشعارات الصادرة من المراكز أو النشطة
+    db.collection("notifications").onSnapshot((snapshot) => {
+        let inspectorNotifCount = 0;
+        snapshot.forEach((doc) => {
+            const n = doc.data();
+            if (n.senderRole === 'INSPECTOR') {
+                const readBy = Array.isArray(n.readBy) ? n.readBy : [];
+                const isRead = readBy.includes('المديرية') || 
+                               readBy.includes('ADMIN_ACCESS');
+                if (!isRead) {
+                    inspectorNotifCount++;
+                }
+            }
+        });
+
+        if (notifBadge) {
+            if (inspectorNotifCount > 0) {
+                notifBadge.style.display = "inline-block";
+                notifBadge.innerText = inspectorNotifCount > 99 ? "+99" : inspectorNotifCount;
+                notifBadge.title = `${inspectorNotifCount} إشعار صادر من المراكز بحاجة للمتابعة`;
+            } else {
+                notifBadge.style.display = "none";
+            }
+        }
+    }, (err) => {
+        console.warn("تعذر مزامنة شارة إشعارات المديرية:", err);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    initSiteSettings();
+    initAdminCommAndNotifBadges();
+});
 
 function openSettingsManager() {
     if (!SITE_SETTINGS) return Swal.fire('انتظار', 'جاري جلب الإعدادات...', 'info');
@@ -1107,11 +1176,11 @@ window.onload = function() {
                 // طرد أي مستخدم آخر (مثل المفتشين)
                 firebase.auth().signOut();
                 Swal.fire({ icon: 'error', title: 'صلاحيات مقيدة', text: 'لا تملك صلاحية دخول لوحة المديرية.'})
-                .then(() => window.location.href = "index.html");
+                .then(() => window.location.href = "/login");
             }
         } else {
             // لا يوجد جلسة نشطة
-            window.location.href = "index.html";
+            window.location.href = "/login";
         }
     });
 };
@@ -1120,7 +1189,7 @@ function logout() {
     // تسجيل الخروج الفعلي من سيرفرات فايربيز
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "index.html";
+        window.location.href = "/login";
     }).catch((error) => {
         console.error("خطأ في تسجيل الخروج:", error);
     });
@@ -5851,6 +5920,246 @@ window.exportAdminAttStatsExcel = async function() {
 };
 // =====================================================================
 
+
+
+// =====================================================================
+// إدارة مسح وتفريغ سجلات الحضور من لوحة المديرية
+// =====================================================================
+window.openAdminClearAttendanceModal = async function() {
+    // 1. جمع قائمة المراكز المتوفرة
+    let centersOptions = '<option value="all">🏢 كل المراكز (كامل الولاية)</option>';
+    if (typeof SITE_SETTINGS !== 'undefined' && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
+        for (let k in SITE_SETTINGS.UI_NAMES.centers) {
+            let cName = SITE_SETTINGS.UI_NAMES.centers[k];
+            centersOptions += '<option value="' + cName + '">' + cName + '</option>';
+        }
+    }
+
+    // 2. جمع الأيام المسجلة من بيانات الحضور المجلوبة
+    let recordedDays = new Set();
+    if (Array.isArray(adminAttDataTrainees)) {
+        adminAttDataTrainees.forEach(d => {
+            if (d.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) recordedDays.add(d.date);
+        });
+    }
+    if (Array.isArray(adminAttDataFramers)) {
+        adminAttDataFramers.forEach(d => {
+            if (d.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) recordedDays.add(d.date);
+        });
+    }
+
+    const daysList = Array.from(recordedDays).sort().reverse();
+    let daysOptions = '<option value="all" style="font-weight:bold; color:#d90429;">⚠️ جميع الأيام المسجلة (مسح كلي لكافة الأيام)</option>';
+    if (daysList.length > 0) {
+        daysOptions += '<optgroup label="-- اختر يوماً محدداً من الأيام المسجلة --">';
+        daysList.forEach(d => {
+            daysOptions += '<option value="' + d + '">📅 يوم: ' + d + '</option>';
+        });
+        daysOptions += '</optgroup>';
+    }
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-trash-can" style="color:#d90429;"></i> إدارة مسح سجلات الحضور (المديرية)',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; font-size:14px; padding: 5px;">
+                <p style="color:#555; margin-bottom:15px; font-size:13px; line-height:1.6;">
+                    حدد الفئة المستهدفة، المركز، اليوم، ونوع الوضعية المراد مسحها أو تفريغها من قاعدة البيانات.
+                </p>
+
+                <!-- 1. فئة السجلات -->
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:4px;">
+                        <i class="fa-solid fa-users"></i> الفئة المستهدفة:
+                    </label>
+                    <select id="swalAdminCategory" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
+                        <option value="both">المتكونون والمؤطرون معاً</option>
+                        <option value="trainees">المتكونون فقط</option>
+                        <option value="framers">المؤطرون فقط</option>
+                    </select>
+                </div>
+
+                <!-- 2. حقل المركز -->
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:4px;">
+                        <i class="fa-solid fa-school"></i> المركز المستهدف:
+                    </label>
+                    <select id="swalAdminCenter" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
+                        ${centersOptions}
+                    </select>
+                </div>
+
+                <!-- 3. حقل الأيام -->
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:4px;">
+                        <i class="fa-regular fa-calendar-days"></i> نطاق الأيام:
+                    </label>
+                    <select id="swalAdminDay" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
+                        ${daysOptions}
+                    </select>
+                </div>
+
+                <!-- 4. حقل الوضعيات -->
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold; color:#102a43; display:block; margin-bottom:4px;">
+                        <i class="fa-solid fa-filter"></i> نوع المسح / الوضعية المستهدفة:
+                    </label>
+                    <select id="swalAdminStatus" class="swal2-select" style="width:100%; margin:0; font-family:'Cairo'; font-size:14px; padding:8px;">
+                        <option value="all">🔥 مسح كلي نهائي (حذف وثائق الأيام بالكامل من قاعدة البيانات)</option>
+                        <option value="clear_all">تفريغ كل الحالات (إلغاء الحضور والتأخر والغياب وإعادة الجميع لوضعية غير محدد)</option>
+                        <option value="حاضر">الحضور فقط (إلغاء وضعية الحاضرين فقط)</option>
+                        <option value="متأخر">التأخر فقط (إلغاء وضعية المتأخرين فقط)</option>
+                        <option value="غائب">الغياب فقط (إلغاء وضعية الغائبين فقط)</option>
+                    </select>
+                </div>
+
+                <div style="background:#fff3cd; border:1px solid #ffeeba; color:#856404; padding:10px; border-radius:8px; font-size:12px; line-height:1.5;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <b>تنبيه أمني:</b> لا يمكن التراجع عن هذه العملية بمجرد تأكيدها.
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> متابعة المسح',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#d90429',
+        cancelButtonColor: '#34495e',
+        focusConfirm: false,
+        preConfirm: () => {
+            return {
+                category: document.getElementById('swalAdminCategory').value,
+                center: document.getElementById('swalAdminCenter').value,
+                day: document.getElementById('swalAdminDay').value,
+                statusType: document.getElementById('swalAdminStatus').value
+            };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const { category, center, day, statusType } = result.value;
+            await executeAdminClearAttendance(category, center, day, statusType);
+        }
+    });
+};
+
+window.executeAdminClearAttendance = async function(category, center, day, statusType) {
+    let centerText = center === 'all' ? 'كافة مراكز الولاية' : ('مركز: ' + center);
+    let dayText = day === 'all' ? 'جميع الأيام المسجلة' : ('يوم: ' + day);
+    let catText = category === 'both' ? 'المتكونين والمؤطرين' : (category === 'trainees' ? 'المتكونين فقط' : 'المؤطرين فقط');
+    let statusText = statusType === 'all' ? 'حذف نهائي لوثائق الأيام' : ('تفريغ وضعية: ' + statusType);
+
+    const confirmRes = await Swal.fire({
+        title: 'تأكيد المسح النهائي من المديرية',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; font-size:13.5px; line-height:1.7;">
+                <p>هل أنت متأكد من تنفيذ أمر المسح التالي؟</p>
+                <ul style="list-style: none; padding: 0; margin: 10px 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+                    <li><b>الفئة:</b> ${catText}</li>
+                    <li><b>المركز:</b> ${centerText}</li>
+                    <li><b>الأيام:</b> ${dayText}</li>
+                    <li><b>الإجراء:</b> ${statusText}</li>
+                </ul>
+                <div style="color:#d90429; font-weight:bold;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> سيتم تطبيق التعديلات فوراً على قاعدة بيانات السيرفر.
+                </div>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، نفذ المسح الآن',
+        cancelButtonText: 'إلغاء تراجع',
+        confirmButtonColor: '#d90429'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري تنفيذ المسح من قاعدة البيانات...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        let collectionsToTarget = [];
+        if (category === 'both' || category === 'trainees') collectionsToTarget.push('attendance_daily');
+        if (category === 'both' || category === 'framers') collectionsToTarget.push('framers_attendance_daily');
+
+        let totalDocsDeleted = 0;
+        let totalRecordsCleared = 0;
+
+        for (let colName of collectionsToTarget) {
+            let snap = await db.collection(colName).get();
+            let batches = [];
+            let currentBatch = db.batch();
+            let opCount = 0;
+
+            snap.docs.forEach(doc => {
+                let dId = doc.id;
+                let data = doc.data();
+                let docCenter = data.center || (dId.includes('_') ? dId.slice(0, dId.lastIndexOf('_')) : '');
+                let docDate = data.date || (dId.includes('_') ? dId.slice(dId.lastIndexOf('_') + 1) : '');
+
+                // فلترة المركز
+                if (center !== 'all' && docCenter.trim() !== center.trim()) return;
+
+                // فلترة اليوم
+                if (day !== 'all' && docDate.trim() !== day.trim()) return;
+
+                if (statusType === 'all') {
+                    // حذف الوثيقة بالكامل
+                    currentBatch.delete(doc.ref);
+                    opCount++;
+                    totalDocsDeleted++;
+                } else {
+                    // تفريغ وضعية محددة أو تفريغ كل الحالات
+                    let records = data.records || {};
+                    let modified = false;
+
+                    for (let empId in records) {
+                        let rec = records[empId];
+                        if (statusType === 'clear_all') {
+                            records[empId] = { status: 'غير محدد', time: '' };
+                            modified = true;
+                            totalRecordsCleared++;
+                        } else if (rec && rec.status === statusType) {
+                            records[empId] = { status: 'غير محدد', time: '' };
+                            modified = true;
+                            totalRecordsCleared++;
+                        }
+                    }
+
+                    if (modified) {
+                        currentBatch.update(doc.ref, { records: records });
+                        opCount++;
+                    }
+                }
+
+                if (opCount >= 400) {
+                    batches.push(currentBatch);
+                    currentBatch = db.batch();
+                    opCount = 0;
+                }
+            });
+
+            if (opCount > 0) batches.push(currentBatch);
+            for (let b of batches) {
+                await b.commit();
+            }
+        }
+
+        let summaryMsg = statusType === 'all' 
+            ? ('تم حذف (' + totalDocsDeleted + ') وثيقة يوم بالكامل نهائياً من قاعدة البيانات.')
+            : ('تم تفريغ (' + totalRecordsCleared + ') سجل بنجاح وإعادتهم لوضعية غير محدد.');
+
+        Swal.fire({
+            icon: 'success',
+            title: 'تم المسح بنجاح',
+            text: summaryMsg,
+            confirmButtonColor: '#102a43'
+        });
+
+    } catch (error) {
+        console.error("Admin attendance clear error:", error);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تنفيذ عملية المسح: ' + (error.message || ''), 'error');
+    }
+};
 // =========================================================================
 // GOOGLE DRIVE STRUCTURE MANAGER - نظام إدارة مجلدات جوجل درايف
 // =========================================================================

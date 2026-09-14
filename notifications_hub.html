@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>مركز إدارة ونشر الإشعارات - فضاء التكوين</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* الهيدر العلوي */
+    .top-header {
+      background: linear-gradient(135deg, #064e3b 0%, #0FBA50 100%);
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      z-index: 50;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #fff;
+    }
+    .brand-text h1 {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 800;
+    }
+    .brand-text p {
+      margin: 0;
+      font-size: 12px;
+      color: #d1fae5;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .user-tag {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 7px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-header {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.3s;
+      font-family: 'Cairo';
+    }
+    .btn-header:hover {
+      background: #fff;
+      color: #064e3b;
+    }
+
+    /* المحتوى الرئيسي */
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      margin: 25px auto;
+      padding: 0 15px;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      gap: 25px;
+      align-items: start;
+    }
+
+    /* كارت إنشاء الإشعار */
+    .composer-card {
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: sticky;
+      top: 20px;
+    }
+    .card-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 2px dashed #e2e8f0;
+      padding-bottom: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+    }
+    .form-control {
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      font-family: 'Cairo';
+      font-size: 13px;
+      outline: none;
+      transition: 0.2s;
+    }
+    .form-control:focus {
+      border-color: #0FBA50;
+      box-shadow: 0 0 0 3px rgba(15, 186, 80, 0.15);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* منطقة رفع الصورة */
+    .image-dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+      background: #f8fafc;
+      cursor: pointer;
+      transition: 0.2s;
+      position: relative;
+    }
+    .image-dropzone:hover {
+      border-color: #0FBA50;
+      background: #f0fdf4;
+    }
+    .image-dropzone i {
+      font-size: 28px;
+      color: #0FBA50;
+      margin-bottom: 6px;
+    }
+    .image-dropzone p {
+      margin: 0;
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .image-preview-container {
+      display: none;
+      position: relative;
+      margin-top: 8px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #cbd5e1;
+      max-height: 180px;
+    }
+    .image-preview-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .btn-remove-img {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      background: rgba(220, 38, 38, 0.9);
+      color: #fff;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .btn-dispatch {
+      background: linear-gradient(135deg, #0FBA50, #059669);
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: 0.3s;
+      box-shadow: 0 4px 15px rgba(15, 186, 80, 0.3);
+      font-family: 'Cairo';
+      margin-top: 5px;
+    }
+    .btn-dispatch:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(15, 186, 80, 0.4);
+    }
+
+    /* قائمة الإشعارات المنشورة */
+    .history-card {
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px dashed #e2e8f0;
+      padding-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .history-header h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .history-count {
+      background: #e8fbf0;
+      color: #0FBA50;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .notifications-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .feed-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      gap: 15px;
+      transition: 0.2s;
+    }
+    .feed-item:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    }
+    .feed-img-thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-in;
+    }
+    .feed-img-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .feed-img-thumb i {
+      font-size: 26px;
+      color: #cbd5e1;
+    }
+
+    .feed-body {
+      flex: 1;
+      overflow: hidden;
+    }
+    .feed-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .feed-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #1e293b;
+    }
+    .feed-badges {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .badge-aud {
+      background: #eff6ff;
+      color: #2563eb;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-prio {
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .prio-normal { background: #f1f5f9; color: #475569; }
+    .prio-urgent { background: #fee2e2; color: #dc2626; }
+    .prio-summon { background: #fef3c7; color: #d97706; }
+
+    .feed-text {
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.6;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .feed-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #94a3b8;
+      border-top: 1px dashed #e2e8f0;
+      padding-top: 8px;
+    }
+    .feed-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-feed-action {
+      background: none;
+      border: 1px solid #cbd5e1;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'Cairo';
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: 0.2s;
+    }
+    .btn-feed-action:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+    .btn-feed-delete {
+      color: #dc2626;
+      border-color: #fecaca;
+    }
+    .btn-feed-delete:hover {
+      background: #fee2e2;
+      border-color: #dc2626;
+    }
+
+    /* شاشة التحميل */
+    #loader {
+      display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.95); z-index: 99999;
+      justify-content: center; align-items: center; flex-direction: column;
+    }
+    .spinner {
+      border: 4px solid #e2e8f0; border-top: 4px solid #0FBA50;
+      border-radius: 50%; width: 45px; height: 45px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @media (max-width: 992px) {
+      .container { grid-template-columns: 1fr; }
+      .composer-card { position: static; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- لودر التحميل -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h4 style="color:#0FBA50; margin-top:15px; font-weight:800;">جاري فتح مركز الإشعارات والتنبيهات...</h4>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <header class="top-header">
+    <div class="header-brand">
+      <div class="brand-icon"><i class="fa-solid fa-bullhorn"></i></div>
+      <div class="brand-text">
+        <h1>منظومة الإشعارات والتنبيهات الذكية</h1>
+        <p id="systemSubtitle">مديرية التربية لولاية توقرت | إدارة التواصل والتنبيه المباشر</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <div class="user-tag" id="userEntityBadge">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span id="userEntityName">جاري التعرف...</span>
+      </div>
+
+      <button class="btn-header" onclick="returnToDashboard()">
+        <i class="fa-solid fa-arrow-left"></i> رجوع للوحة
+      </button>
+    </div>
+  </header>
+
+  <!-- جسم الصفحة -->
+  <div class="container">
+    <!-- كارت إنشاء وإرسال إشعار -->
+    <section class="composer-card">
+      <h3 class="card-title">
+        <i class="fa-solid fa-pen-to-square" style="color:#0FBA50;"></i>
+        إنشاء ونشر إشعار جديد
+      </h3>
+
+      <div class="form-group">
+        <label>الفئة المستهدفة بالإشعار: <span style="color:red">*</span></label>
+        <select id="targetAudience" class="form-control" onchange="handleAudienceChange()">
+          <!-- الخيارات تتغير بناءً على ما إذا كانت المديرية أو المركز -->
+        </select>
+      </div>
+
+      <!-- حقول الاستهداف الديناميكية -->
+      <div id="extraAudienceGroup" style="display:none;" class="form-group">
+        <!-- يظهر هنا المركز المحدد، أو الطور المحدد، أو البحث عن أستاذ -->
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>نوع وتصنيف الإشعار:</label>
+          <select id="notifPriority" class="form-control">
+            <option value="normal">إعلان عام / تنبيه عادي</option>
+            <option value="urgent">تنبيه عاجل (يظهر تلقائياً)</option>
+            <option value="summon">استدعاء رسمي للمتكون</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>الجهة المعلنة:</label>
+          <input type="text" id="notifSenderDisplay" class="form-control" readonly style="background:#f1f5f9;">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>عنوان الإشعار: <span style="color:red">*</span></label>
+        <input type="text" id="notifTitle" class="form-control" placeholder="مثال: استدعاء لحضور ورشة تكوينية...">
+      </div>
+
+      <div class="form-group">
+        <label>نص وتفاصيل الإشعار: <span style="color:red">*</span></label>
+        <textarea id="notifContent" class="form-control" rows="5" placeholder="أدخل تفاصيل التنبيه أو الاستدعاء بدقة..."></textarea>
+      </div>
+
+      <!-- إرفاق الصورة وتخزينها في Google Drive -->
+      <div class="form-group">
+        <label><i class="fa-solid fa-image" style="color:#0FBA50;"></i> إرفاق صورة مع الإشعار (Google Drive):</label>
+        <input type="file" id="notifImageInput" accept="image/*" style="display:none;" onchange="handleImageSelect(this.files)">
+
+        <div class="image-dropzone" onclick="document.getElementById('notifImageInput').click()">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <p>انقر لاختيار صورة الإشعار أو الاستدعاء من جهازك</p>
+          <span style="font-size:11px; color:#94a3b8;">سيتم حفظها سحابياً وعرضها للمتلقين بدقة عالية</span>
+        </div>
+
+        <div class="image-preview-container" id="imagePreviewContainer">
+          <img id="imagePreview" src="" alt="معاينة الصورة">
+          <button class="btn-remove-img" onclick="removeSelectedImage()" title="حذف الصورة"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+
+      <button class="btn-dispatch" id="btnDispatchNotif" onclick="submitNotification()">
+        <i class="fa-solid fa-paper-plane"></i> نشر وتعميم الإشعار الآن
+      </button>
+    </section>
+
+    <!-- كارت سجل الإشعارات المنشورة -->
+    <section class="history-card">
+      <div class="history-header">
+        <h2>
+          <i class="fa-solid fa-clock-rotate-left" style="color:#0FBA50;"></i>
+          سجل الإشعارات المنشورة
+        </h2>
+        <span class="history-count" id="historyCountBadge">0 إشعار</span>
+      </div>
+
+      <div class="notifications-feed" id="notificationsFeed">
+        <!-- الإشعارات المنشورة تظهر هنا -->
+      </div>
+    </section>
+  </div>
+
+  <script src="js/sys-shield-v2.js"></script>
+  <script src="js/notifications_hub.js"></script>
+</body>
+</html>

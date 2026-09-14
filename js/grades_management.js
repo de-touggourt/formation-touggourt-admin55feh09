@@ -89,7 +89,7 @@ window.onload = function() {
 
     if (!isLoggedIn || !INSPECTOR_CENTER) {
         if (loader) loader.style.display = "none";
-        window.location.href = "admin095526.html";
+        window.location.href = "/secure-login";
         return;
     }
 
@@ -112,7 +112,7 @@ window.onload = function() {
             if (loader) loader.style.display = "none";
         } else {
             if (loader) loader.style.display = "none";
-            window.location.href = "admin095526.html";
+            window.location.href = "/secure-login";
         }
     });
 };
@@ -120,7 +120,7 @@ window.onload = function() {
 function logout() {
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "admin095526.html";
+        window.location.href = "/secure-login";
     }).catch((error) => {
         console.error("خطأ أثناء تسجيل الخروج:", error);
     });

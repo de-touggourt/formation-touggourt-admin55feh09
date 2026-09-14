@@ -12,7 +12,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-const DASHBOARD_PAGE = "dashboard.html"; 
+const DASHBOARD_PAGE = "/portal"; 
 
 const REGEX_PATTERNS = {
   nonDigit: /\D/g
@@ -297,7 +297,7 @@ async function promptSecretAdminPassword() {
                         timer: 1500,
                         showConfirmButton: false,
                         willClose: () => {
-                            window.location.href = "admin095526.html";
+                            window.location.href = "/secure-login";
                         }
                     });
                 } else {

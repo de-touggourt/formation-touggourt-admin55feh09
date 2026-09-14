@@ -39,7 +39,7 @@ async function checkUserPermissions() {
                         confirmButtonText: 'العودة للوحة التحكم',
                         confirmButtonColor: '#1E68E8'
                     }).then(() => {
-                        window.location.href = "inspector_dashboard.html"; 
+                        window.location.href = "/inspector"; 
                     });
                     return false; 
                 }
@@ -57,7 +57,7 @@ const cId = params.get('c');
 const lvl = params.get('l');
 const spc = params.get('s');
 
-function goBack() { window.location.href = "dashboard_finale_upload.html"; }
+function goBack() { window.location.href = "/files-upload"; }
 
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
@@ -85,7 +85,7 @@ function initSiteSettings() {
                     Swal.fire({
                         icon: 'error', title: 'تنبيه أمني صارم', text: 'ليس لديك صلاحية لإدارة ملفات هذا المركز!',
                         allowOutsideClick: false, confirmButtonText: 'العودة للوحة التحكم', confirmButtonColor: '#d33'
-                    }).then(() => { window.location.href = "inspector_dashboard.html"; });
+                    }).then(() => { window.location.href = "/inspector"; });
                     return;
                 }
             }
@@ -120,7 +120,7 @@ window.onload = async function() {
     // التحقق من وجود الجلسة وسيرفرات فايربيز
     const userEmpId = sessionStorage.getItem("userEmpId");
     if (!userEmpId) { 
-        window.location.href = "admin095526.html"; 
+        window.location.href = "/secure-login"; 
         return; 
     }
 
@@ -131,7 +131,7 @@ window.onload = async function() {
                 initSiteSettings();
             }
         } else {
-            window.location.href = "admin095526.html";
+            window.location.href = "/secure-login";
         }
     });
 };

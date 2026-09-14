@@ -251,6 +251,18 @@
         <i class="fa-solid fa-graduation-cap"></i> تسيير النقاط
       </button>
 
+      <!-- زر المراسلات وتبادل الملفات -->
+      <button class="logout-btn" style="background: #0284c7; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="window.location.href='/communications'">
+        <i class="fa-solid fa-envelope"></i> المراسلات والملفات
+        <span id="inspectorMsgBadge" style="display:none; background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:800;">0</span>
+      </button>
+
+      <!-- زر منظومة الإشعارات والتنبيهات -->
+      <button class="logout-btn" style="background: #ea580c; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="window.location.href='/notifications'">
+        <i class="fa-solid fa-bullhorn"></i> منظومة الإشعارات
+        <span id="inspectorNotifBadge" style="display:none; background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:800;">0</span>
+      </button>
+
       <button class="logout-btn" onclick="logout()">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج
       </button>
@@ -416,6 +428,13 @@
           <input type="date" id="attDate" onchange="loadAttendanceData()">
         </div>
 
+        <div class="att-date-picker" style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-weight: 700; color: #102a43; font-size: 13.5px; white-space: nowrap;"><i class="fa-regular fa-calendar-check" style="color: #0FBA50;"></i> الأيام المسجلة:</label>
+          <select id="attRecordedDaysSelect" onchange="onSelectRecordedDay(this.value)" style="padding: 7px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; background: #fff; font-family: 'Cairo'; font-weight: 700; font-size: 13px; color: #102a43; cursor: pointer; outline: none; transition: 0.3s;">
+            <option value="">-- فحص الأيام المسجلة --</option>
+          </select>
+        </div>
+
         <div class="system-toggle" id="sysToggle" onclick="toggleAttendanceSystem()">
           <!-- أزرار التحكم في حالة النظام (حاضر / متأخر / غلق نهائي) -->
         <div style="display: flex; gap: 8px; align-items: center; background: #fff; padding: 5px 10px; border-radius: 10px; border: 1px solid #ccc;">
@@ -439,18 +458,12 @@
       </div>
 
   <!-- 1. شريط الأزرار (في الأعلى) -->
-          <!-- 1. شريط الأزرار (في الأعلى) -->
       <div style="background: #fff; padding: 15px 15px 5px 15px; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px dashed #eee;">
         <button class="btn-print" style="background: #1E68E8;" onclick="markAllPresent()">
           <i class="fa-solid fa-user-check"></i> إدراج الحضور الشامل
         </button>
         <button class="btn-print" style="background: #d90429;" onclick="markAllAbsent()">
           <i class="fa-solid fa-user-xmark"></i> إدراج الغياب الشامل
-        </button>
-
-        <!-- 🌟 الزر الجديد: تفريغ السجلات 🌟 -->
-        <button class="btn-print" style="background: #c0392b;" onclick="openClearAttendanceModal()">
-          <i class="fa-solid fa-trash-can"></i> تفريغ السجلات
         </button>
 
         <button class="btn-print" style="background: #17a2b8;" onclick="printAttendanceList()">
@@ -667,7 +680,7 @@
 
 
   <script src="js/sys-shield-v2.js" defer></script>
-  <script src="js/field-ops-5b8c.js" defer></script>
+  <script src="js/inspector_dashboard.js" defer></script>
 
 </body>
 </html>

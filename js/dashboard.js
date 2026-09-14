@@ -131,7 +131,7 @@ window.onload = async function() {
     const empId = sessionStorage.getItem("userEmpId");
     if(!empId) {
         document.getElementById("loader").style.display = "none";
-        window.location.href = "index.html"; 
+        window.location.href = "/login"; 
         return;
     }
 
@@ -169,7 +169,7 @@ window.onload = async function() {
         if(!loggedInUser) {
             document.getElementById("loader").style.display = "none";
             Swal.fire('خطأ', 'لم يتم العثور على بياناتك، يرجى مراجعة الإدارة.', 'error')
-            .then(() => { sessionStorage.clear(); window.location.href="index.html"; });
+            .then(() => { sessionStorage.clear(); window.location.href="/login"; });
             return;
         }
 
@@ -211,6 +211,7 @@ window.onload = async function() {
 
         checkAndFillMissingInfo();
         initSiteSettings(); 
+        initTraineeNotifications();
 
     } catch (error) {
         console.error("Error fetching data:", error);
@@ -423,7 +424,30 @@ function renderCenters() {
     }
 }
 
-// دالة الدخول للمركز مع الحماية
+// ================= دالة كشف الطور والتخصص بدقة =================
+function detectUserLevelAndSpec(user) {
+    if (!user) return { levelKey: null, specKey: null };
+    
+    // الطور
+    const rankStr = (user.grade || user.rank || "").toLowerCase();
+    let levelKey = null;
+    if (rankStr.includes("ابتدائي")) levelKey = "primary";
+    else if (rankStr.includes("متوسط")) levelKey = "middle";
+    else if (rankStr.includes("ثانوي")) levelKey = "secondary";
+    
+    // التخصص
+    const matyStr = (user.maty || user.specialty || "").trim().toLowerCase();
+    let specKey = "others";
+    if (matyStr.includes("عرب")) specKey = "arabic";
+    else if (matyStr.includes("فرنس")) specKey = "french";
+    else if (matyStr.includes("إنجليز") || matyStr.includes("انجليز")) specKey = "english";
+    else if (matyStr.includes("بدن") || matyStr.includes("رياض")) specKey = "sport";
+    else if (matyStr) specKey = "others";
+
+    return { levelKey, specKey, rawLevel: user.grade || user.rank, rawSpec: user.maty || user.specialty };
+}
+
+// دالة الدخول للمركز مع الحماية وحصر المتكون بتخصصه
 function openCenter(centerId) {
     const requiredCenterName = SITE_SETTINGS.UI_NAMES.centers[centerId];
     
@@ -452,6 +476,52 @@ function openCenter(centerId) {
 
     if (availableLevels.length === 0) {
         Swal.fire('تنبيه', 'لا توجد أطوار أو تخصصات مبرمجة في هذا المركز حالياً.', 'info');
+        return;
+    }
+
+    // 🌟 حصر المتكون لتخصصه وطوره مباشرة دون فتح تخصصات الآخرين 🌟
+    const userRole = sessionStorage.getItem("userRole");
+    if (userRole === "USER" || !sessionStorage.getItem("inspectorCenter")) {
+        const detected = detectUserLevelAndSpec(loggedInUser);
+        const myLvl = detected.levelKey || availableLevels[0];
+        const mySpec = detected.specKey || 'others';
+
+        const levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[myLvl]) || (ICONS.levels[myLvl] ? ICONS.levels[myLvl].name : myLvl);
+        const specName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[mySpec]) || (ICONS.specs[mySpec] ? ICONS.specs[mySpec].name : loggedInUser.maty || 'تخصصك المعتمد');
+
+        Swal.fire({
+            title: `<div style="font-family:'Cairo'; color:#0FBA50; font-size:20px; font-weight:800;"><i class="fa-solid fa-graduation-cap"></i> فضاء مقاييس التكوين</div>`,
+            html: `
+                <div style="text-align:center; padding:10px; font-family:'Cairo';">
+                    <p style="font-size:16px; color:#1e293b; margin:0 0 15px 0;">مرحباً بك أستاذ(ة): <b>${loggedInUser.name || ''}</b></p>
+                    <div style="background:#f0fdf4; border:2px dashed #0FBA50; border-radius:16px; padding:15px; margin-bottom:15px; text-align:right;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:14px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
+                            <span style="color:#64748b;">المركز:</span>
+                            <span style="font-weight:700; color:#102a43;">${requiredCenterName}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:14px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
+                            <span style="color:#64748b;">الطور التعليمي:</span>
+                            <span style="font-weight:700; color:#1E68E8;">${levelName}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:15px;">
+                            <span style="color:#64748b;">التخصص المعتمد:</span>
+                            <span style="font-weight:800; color:#0FBA50;"><i class="fa-solid fa-book-open"></i> ${specName}</span>
+                        </div>
+                    </div>
+                    <p style="font-size:13px; color:#64748b; margin:0;">وفقاً لتعليمات النظام، يتم توجيهك مباشرة لملفات ومقاييس تخصصك فقط.</p>
+                </div>
+            `,
+            showConfirmButton: true,
+            confirmButtonText: '<i class="fa-solid fa-arrow-left"></i> الدخول لمقاييس تخصصي الآن',
+            confirmButtonColor: '#0FBA50',
+            showCancelButton: true,
+            cancelButtonText: 'إلغاء',
+            cancelButtonColor: '#94a3b8'
+        }).then((res) => {
+            if (res.isConfirmed) {
+                openLink(centerId, mySpec, myLvl);
+            }
+        });
         return;
     }
 
@@ -542,8 +612,225 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
 
 // دالة التوجيه النهائي لصفحة الدروس
 function openLink(centerId, type, level) {
-    const targetUrl = `courses.html?c=${centerId}&l=${level}&s=${type}`;
+    const targetUrl = `/courses?c=${centerId}&l=${level}&s=${type}`;
     window.location.href = targetUrl;
+}
+
+// ==========================================================================
+// 🔔 نظام الإشعارات الذكي والموجه للمتكون (Trainee Notifications System)
+// ==========================================================================
+let traineeNotificationsList = [];
+
+function initTraineeNotifications() {
+    const empId = sessionStorage.getItem("userEmpId");
+    if (!empId) return;
+
+    try {
+        db.collection("notifications").onSnapshot((snapshot) => {
+            if (!snapshot) return;
+
+            const allNotifs = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                allNotifs.push({ id: doc.id, ...data });
+            });
+
+            // فرز تنازلي حسب تاريخ الإنشاء
+            allNotifs.sort((a, b) => {
+                const tA = a.createdAt && a.createdAt.seconds ? a.createdAt.seconds : (new Date(a.createdAt || 0).getTime() / 1000);
+                const tB = b.createdAt && b.createdAt.seconds ? b.createdAt.seconds : (new Date(b.createdAt || 0).getTime() / 1000);
+                return tB - tA;
+            });
+
+            // فلترة الإشعارات الموجهة لهذا المتكون حصراً
+            const detected = detectUserLevelAndSpec(loggedInUser);
+            const userCenter = loggedInUser.center || "";
+            const userLevel = detected.levelKey || "";
+
+            traineeNotificationsList = allNotifs.filter(n => {
+                const aud = n.targetAudience;
+                if (aud === "all_trainees") return true;
+                if (aud === "center_trainees" && n.targetCenter === userCenter) return true;
+                if (aud === "level_trainees" && (n.targetLevel === userLevel || n.targetLevel === "all")) {
+                    if (!n.targetCenter || n.targetCenter === userCenter || n.targetCenter === "ALL") return true;
+                }
+                if (aud === "single_trainee" && (n.targetTraineeId === empId || n.targetTraineeId === extractCoreId(empId))) return true;
+                return false;
+            });
+
+            updateTraineeNotifBadge();
+
+            // فحص وجود استدعاء أو إشعار عاجل غير مقروء لإظهاره تلقائياً لمرة واحدة
+            checkAndTriggerUrgentNotice();
+
+        }, (err) => {
+            console.warn("تعذر الاتصال بمركز الإشعارات:", err);
+        });
+    } catch (e) {
+        console.warn("خطأ في نظام الإشعارات:", e);
+    }
+}
+
+function getReadNotifsMap() {
+    try {
+        const stored = localStorage.getItem("read_trainee_notifs");
+        return stored ? JSON.parse(stored) : {};
+    } catch(e) {
+        return {};
+    }
+}
+
+function markNotifAsRead(notifId) {
+    try {
+        const readMap = getReadNotifsMap();
+        readMap[notifId] = Date.now();
+        localStorage.setItem("read_trainee_notifs", JSON.stringify(readMap));
+        updateTraineeNotifBadge();
+    } catch(e) {}
+}
+
+function updateTraineeNotifBadge() {
+    const badgeEl = document.getElementById("traineeNotifCount");
+    const bellBtn = document.getElementById("btnTraineeNotif");
+    if (!badgeEl) return;
+
+    const readMap = getReadNotifsMap();
+    const unreadCount = traineeNotificationsList.filter(n => !readMap[n.id]).length;
+
+    if (unreadCount > 0) {
+        badgeEl.innerText = unreadCount > 99 ? '99+' : unreadCount;
+        badgeEl.style.display = "flex";
+        if (bellBtn) bellBtn.classList.add("has-unread");
+    } else {
+        badgeEl.style.display = "none";
+        if (bellBtn) bellBtn.classList.remove("has-unread");
+    }
+}
+
+function checkAndTriggerUrgentNotice() {
+    const readMap = getReadNotifsMap();
+    const urgentNotif = traineeNotificationsList.find(n => 
+        (n.priority === 'urgent' || n.priority === 'summon') && 
+        !readMap[n.id] && 
+        !sessionStorage.getItem(`shown_urgent_${n.id}`)
+    );
+
+    if (urgentNotif) {
+        sessionStorage.setItem(`shown_urgent_${urgentNotif.id}`, "true");
+        showNotificationModal(urgentNotif);
+    }
+}
+
+window.openTraineeNotifications = function() {
+    const readMap = getReadNotifsMap();
+
+    if (!traineeNotificationsList || traineeNotificationsList.length === 0) {
+        return Swal.fire({
+            title: '<i class="fa-solid fa-bell" style="color:#0FBA50;"></i> الإشعارات والتنبيهات',
+            html: `
+                <div style="padding:30px 20px; text-align:center; color:#64748b;">
+                    <i class="fa-regular fa-bell-slash" style="font-size:45px; color:#cbd5e1; margin-bottom:12px;"></i>
+                    <p style="font-size:15px; font-weight:700; margin:0;">لا توجد أي إشعارات جديدة موجهة إليك حالياً.</p>
+                </div>
+            `,
+            confirmButtonText: 'حسناً',
+            confirmButtonColor: '#0FBA50'
+        });
+    }
+
+    let itemsHtml = '<div style="display:flex; flex-direction:column; gap:10px; max-height:60vh; overflow-y:auto; padding:5px; text-align:right; direction:rtl;">';
+
+    traineeNotificationsList.forEach((notif) => {
+        const isRead = !!readMap[notif.id];
+        const isUrgent = notif.priority === 'urgent' || notif.priority === 'summon';
+        const bgStyle = isRead ? 'background:#f8fafc; border:1px solid #e2e8f0;' : 'background:#ffffff; border:2px solid #0FBA50; box-shadow:0 4px 12px rgba(15,186,80,0.1);';
+        
+        let priorityBadge = '<span style="background:#e2e8f0; color:#475569; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">إعلان عام</span>';
+        if (notif.priority === 'urgent') priorityBadge = '<span style="background:#fee2e2; color:#dc2626; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> عاجل</span>';
+        else if (notif.priority === 'summon') priorityBadge = '<span style="background:#fef3c7; color:#d97706; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:800;"><i class="fa-solid fa-envelope-open-text"></i> استدعاء رسمي</span>';
+
+        const senderText = notif.senderCenter || notif.senderName || 'مديرية التربية';
+        const dateStr = notif.createdAtFormatted || (notif.createdAt && notif.createdAt.seconds ? new Date(notif.createdAt.seconds * 1000).toLocaleDateString('ar-DZ') : 'الآن');
+
+        itemsHtml += `
+            <div onclick="showNotificationModalById('${notif.id}')" style="${bgStyle} border-radius:14px; padding:12px 15px; cursor:pointer; transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        ${!isRead ? '<span style="width:10px; height:10px; background:#0FBA50; border-radius:50%; display:inline-block;"></span>' : ''}
+                        <strong style="font-size:15px; color:#1e293b;">${notif.title || 'إشعار جديد'}</strong>
+                    </div>
+                    ${priorityBadge}
+                </div>
+                <div style="font-size:13px; color:#64748b; line-height:1.5; margin-bottom:8px; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
+                    ${notif.content || ''}
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#94a3b8; border-top:1px dashed #e2e8f0; padding-top:6px;">
+                    <span><i class="fa-solid fa-building-user"></i> ${senderText}</span>
+                    <span><i class="fa-regular fa-clock"></i> ${dateStr}</span>
+                </div>
+            </div>
+        `;
+    });
+
+    itemsHtml += '</div>';
+
+    Swal.fire({
+        title: '<div style="display:flex; align-items:center; gap:8px; font-family:\'Cairo\';"><i class="fa-solid fa-bell" style="color:#0FBA50;"></i> الإشعارات والتنبيهات الموجهة إليك</div>',
+        html: itemsHtml,
+        width: '650px',
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43',
+        scrollbarPadding: false
+    });
+};
+
+window.showNotificationModalById = function(notifId) {
+    const notif = traineeNotificationsList.find(n => n.id === notifId);
+    if (notif) showNotificationModal(notif);
+};
+
+function showNotificationModal(notif) {
+    markNotifAsRead(notif.id);
+
+    const isUrgent = notif.priority === 'urgent' || notif.priority === 'summon';
+    const senderText = notif.senderCenter || notif.senderName || 'مديرية التربية لولاية توقرت';
+    const dateStr = notif.createdAtFormatted || (notif.createdAt && notif.createdAt.seconds ? new Date(notif.createdAt.seconds * 1000).toLocaleString('ar-DZ') : 'الآن');
+
+    let imageHtml = '';
+    if (notif.imageUrl && notif.imageUrl.trim() !== '') {
+        imageHtml = `
+            <div style="margin:15px 0; text-align:center;">
+                <a href="${notif.imageUrl}" target="_blank" title="انقر لتكبير الصورة">
+                    <img src="${notif.imageUrl}" alt="مرفق الإشعار" style="max-width:100%; max-height:350px; border-radius:12px; border:2px solid #e2e8f0; object-fit:contain; box-shadow:0 4px 15px rgba(0,0,0,0.1); cursor:zoom-in;">
+                </a>
+                <div style="font-size:11px; color:#64748b; margin-top:4px;"><i class="fa-solid fa-magnifying-glass-plus"></i> انقر على الصورة لفتحها بالحجم الكامل</div>
+            </div>
+        `;
+    }
+
+    Swal.fire({
+        title: `<div style="font-family:'Cairo'; font-size:20px; font-weight:800; color:${isUrgent ? '#dc2626' : '#102a43'};">${notif.title || 'تفاصيل الإشعار'}</div>`,
+        html: `
+            <div style="text-align:right; direction:rtl; font-family:'Cairo'; padding:5px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 14px; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:15px; font-size:12px; color:#475569;">
+                    <span><i class="fa-solid fa-shield-halved" style="color:#0FBA50;"></i> <b>الجهة المرسلة:</b> ${senderText}</span>
+                    <span><i class="fa-regular fa-calendar-check"></i> ${dateStr}</span>
+                </div>
+
+                <div style="font-size:15px; line-height:1.9; color:#1e293b; background:#ffffff; border-radius:12px; padding:15px; border:1px solid #cbd5e1; white-space:pre-wrap; word-break:break-word;">
+${notif.content || ''}
+                </div>
+
+                ${imageHtml}
+            </div>
+        `,
+        width: '750px',
+        showConfirmButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> تم الاطلاع والمصادقة',
+        confirmButtonColor: '#0FBA50',
+        scrollbarPadding: false
+    });
 }
 
 function logout() {
@@ -554,7 +841,7 @@ function logout() {
         showCancelButton: true,
         confirmButtonText: 'نعم، خروج',
         cancelButtonText: 'تراجع',
-        confirmButtonColor: '#dc2626', // لون أحمر للتأكيد
+        confirmButtonColor: '#dc2626',
         cancelButtonColor: '#64748b',
         buttonsStyling: true,
         customClass: {
@@ -563,7 +850,7 @@ function logout() {
         }
     }).then((result) => {
         if (result.isConfirmed) {
-            if (window.SecurityGuard) { SecurityGuard.logout(); } else { sessionStorage.clear(); window.location.href = "index.html"; }
+            if (window.SecurityGuard) { SecurityGuard.logout(); } else { sessionStorage.clear(); window.location.href = "/login"; }
         }
     });
 }

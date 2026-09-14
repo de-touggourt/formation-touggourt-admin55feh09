@@ -96,7 +96,7 @@ window.onload = async function() {
     typeWriter();
     
     const empId = sessionStorage.getItem("userEmpId");
-    if(!empId) { window.location.href = "index.html"; return; }
+    if(!empId) { window.location.href = "/login"; return; }
 
     try {
         // 1. جلب بيانات المستخدم
@@ -109,7 +109,7 @@ window.onload = async function() {
         }
 
         if(!loggedInUser) {
-            Swal.fire('خطأ', 'لم يتم العثور على بياناتك.', 'error').then(()=>window.location.href="index.html");
+            Swal.fire('خطأ', 'لم يتم العثور على بياناتك.', 'error').then(()=>window.location.href="/login");
             return;
         }
 
@@ -173,10 +173,42 @@ window.onload = async function() {
                 let specText = (SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[spc]) || spc;
                 document.getElementById('page-subtitle').innerText = levelText + " - " + specText;
 
+                // 🌟 حصر المتكون للدخول إلى ملفات تخصصه المعتمد فقط 🌟
+                const userRole = sessionStorage.getItem("userRole");
+                if (userRole === "USER" || !sessionStorage.getItem("inspectorCenter")) {
+                    const detected = detectUserLevelAndSpec(loggedInUser);
+                    if (detected.specKey && spc && detected.specKey !== spc) {
+                        document.getElementById("loader").style.display = "none";
+                        Swal.fire({
+                            icon: 'warning',
+                            title: '<h3 style="color:#e67e22; margin:0; font-family:\'Cairo\';"><i class="fa-solid fa-lock"></i> وصول مقيد بالتخصص</h3>',
+                            html: `
+                                <div style="font-size:15px; line-height:1.8; color:#334e68; padding:10px 0; font-family:\'Cairo\';">
+                                    أستاذ(ة) محترم(ة): <b>${loggedInUser.name || ''}</b><br>
+                                    النظام يحصر وصول المتكونين في ملفات مادة تخصصهم المعتمدة حصراً.<br>
+                                    <div style="background:#fff3cd; border:1px solid #ffeeba; border-radius:10px; padding:10px; margin:15px 0; color:#856404; font-weight:bold;">
+                                        تخصصك المعتمد هو: ${loggedInUser.maty || loggedInUser.specialty || 'تخصصك المعتمد'}
+                                    </div>
+                                    جاري توجيهك إلى مقاييس تخصصك...
+                                </div>
+                            `,
+                            confirmButtonColor: '#0FBA50',
+                            confirmButtonText: 'الدخول لمقاييس تخصصي',
+                            allowOutsideClick: false
+                        }).then(() => {
+                            window.location.replace(`/courses?c=${cId}&l=${detected.levelKey || lvl}&s=${detected.specKey}`);
+                        });
+                        return;
+                    }
+                }
+
                 // جلب الروابط الخاصة بهذا المقياس
                 if (SITE_SETTINGS.dbLinks && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
                     currentLinks = SITE_SETTINGS.dbLinks[cId][lvl][spc];
                 }
+
+                // 🌟 تفعيل فحص وإظهار إشعارات أعداد الملفات على أيقونات المقاييس 🌟
+                updateModuleFileBadges();
             }
         }
 
@@ -189,6 +221,29 @@ window.onload = async function() {
     }
 };
 
+// ================= دالة كشف الطور والتخصص بدقة =================
+function detectUserLevelAndSpec(user) {
+    if (!user) return { levelKey: null, specKey: null };
+    
+    // الطور
+    const rankStr = (user.grade || user.rank || "").toLowerCase();
+    let levelKey = null;
+    if (rankStr.includes("ابتدائي")) levelKey = "primary";
+    else if (rankStr.includes("متوسط")) levelKey = "middle";
+    else if (rankStr.includes("ثانوي")) levelKey = "secondary";
+    
+    // التخصص
+    const matyStr = (user.maty || user.specialty || "").trim().toLowerCase();
+    let specKey = "others";
+    if (matyStr.includes("عرب")) specKey = "arabic";
+    else if (matyStr.includes("فرنس")) specKey = "french";
+    else if (matyStr.includes("إنجليز") || matyStr.includes("انجليز")) specKey = "english";
+    else if (matyStr.includes("بدن") || matyStr.includes("رياض")) specKey = "sport";
+    else if (matyStr) specKey = "others";
+
+    return { levelKey, specKey, rawLevel: user.grade || user.rank, rawSpec: user.maty || user.specialty };
+}
+
 // ================= دالة الإنقاذ الذكية لصورة المتكون =================
 window.handleAvatarFallback = function(imgElement, fallbackUrl) {
     if (fallbackUrl && fallbackUrl !== 'undefined' && fallbackUrl !== 'null' && imgElement.src !== fallbackUrl && !imgElement.getAttribute('data-retried')) {
@@ -199,10 +254,9 @@ window.handleAvatarFallback = function(imgElement, fallbackUrl) {
     }
 };
 
-// ================= دالة جلب الصورة من درايف (فائقة السرعة ومحصنة ضد أخطاء الكاش) =================
+// ================= دالة جلب الصورة من درايف =================
 async function fetchPhotosFromDrive(coreId, avatarBox) {
     try {
-        // 🌟 1. كاسر الكاش (_t) لمنع خطأ CORS عند التحديث F5 🌟
         const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
         let res = await fetch(cacheBusterUrl, { cache: "no-store" });
         let text = await res.text();
@@ -218,13 +272,11 @@ async function fetchPhotosFromDrive(coreId, avatarBox) {
                 let lh3Url = directUrl;
                 let thumbUrl = directUrl;
 
-                // 🌟 2. استخدام سيرفر lh3 الفائق بدقة s800 مع توفير رابط بديل 🌟
                 if (match) {
                     lh3Url = `https://lh3.googleusercontent.com/d/${match[1]}=s800`;
                     thumbUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
                 }
 
-                // 🌟 3. حفظ الصورة في كاش المتصفح المحلي لتظهر فوراً في المرات القادمة 🌟
                 try {
                     localStorage.setItem("user_avatar_" + coreId, lh3Url);
                 } catch(e) {}
@@ -237,8 +289,94 @@ async function fetchPhotosFromDrive(coreId, avatarBox) {
     }
 }
 
+// ================= إعدادات وتحديث إشعارات أعداد الملفات لكل مقياس =================
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
+const MODULE_KEYS = ['didactique', 'tasyire', 'takwime', 'informatique', 'nidame', 'akhlakiyate', 'handasa', 'wasata', 'tachri', 'psycho', 'fasad'];
+
+async function updateModuleFileBadges() {
+    if (!currentLinks) return;
+
+    for (const mod of MODULE_KEYS) {
+        const badgeEl = document.getElementById(`badge_${mod}`);
+        if (!badgeEl) continue;
+
+        const modCycles = currentLinks[mod] || {};
+        let folderIdsToCheck = [];
+
+        // جمع مجلدات الدورات المفتوحة فقط
+        for (let cycle = 1; cycle <= 3; cycle++) {
+            if (isCycleOpen(mod, cycle) && modCycles[cycle]) {
+                const fId = getFolderId(modCycles[cycle]);
+                if (fId) folderIdsToCheck.push({ cycle, folderId: fId });
+            }
+        }
+
+        if (folderIdsToCheck.length === 0) {
+            badgeEl.className = "module-files-badge";
+            badgeEl.innerHTML = `<i class="fa-solid fa-lock"></i> <span class="count-txt">مغلق</span>`;
+            continue;
+        }
+
+        // فحص الكاش السريع في الجلسة أولاً
+        let totalFiles = 0;
+        let hasCache = true;
+        for (const item of folderIdsToCheck) {
+            const cached = sessionStorage.getItem(`files_count_${item.folderId}`);
+            if (cached !== null) {
+                totalFiles += parseInt(cached, 10);
+            } else {
+                hasCache = false;
+                break;
+            }
+        }
+
+        if (hasCache) {
+            renderBadgeState(badgeEl, totalFiles);
+        } else {
+            // جلب أعداد الملفات في الخلفية بدون تأخير الواجهة
+            fetchModuleFilesCount(mod, folderIdsToCheck, badgeEl);
+        }
+    }
+}
+
+async function fetchModuleFilesCount(mod, folderList, badgeEl) {
+    let count = 0;
+    try {
+        const promises = folderList.map(item => 
+            fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${item.folderId}`)
+                .then(r => r.json())
+                .then(d => {
+                    const c = (d && d.files && Array.isArray(d.files)) ? d.files.length : 0;
+                    sessionStorage.setItem(`files_count_${item.folderId}`, c);
+                    if (d && d.files) {
+                        sessionStorage.setItem(`files_data_${item.folderId}`, JSON.stringify(d.files));
+                    }
+                    return c;
+                })
+                .catch(() => 0)
+        );
+
+        const results = await Promise.all(promises);
+        count = results.reduce((acc, curr) => acc + curr, 0);
+        renderBadgeState(badgeEl, count);
+    } catch(e) {
+        badgeEl.className = "module-files-badge";
+        badgeEl.innerHTML = `<i class="fa-solid fa-folder-open"></i> <span class="count-txt">متوفر</span>`;
+    }
+}
+
+function renderBadgeState(badgeEl, count) {
+    if (count > 0) {
+        badgeEl.className = "module-files-badge has-files is-new";
+        badgeEl.innerHTML = `<i class="fa-solid fa-file-circle-check"></i> <span class="count-txt">${count} ملف</span>`;
+    } else {
+        badgeEl.className = "module-files-badge";
+        badgeEl.innerHTML = `<i class="fa-solid fa-folder-open"></i> <span class="count-txt">0 ملف</span>`;
+    }
+}
+
 /* =======================================================
-   دوال فتح الدرايف والفيديوهات
+   دوال فتح الدورات والمستعرض المتطور للملفات
    ======================================================= */
 window.openCourses = function(module) {
   let html = '<div class="cycles-container">';
@@ -262,7 +400,10 @@ window.openCourses = function(module) {
   });
 };
 
-window.showDriveEmbed = function(module, cycle) {
+// ================= مستعرض الملفات العصري والاحترافي (بديل الأي فريم القديم) =================
+let activeExplorerFiles = [];
+
+window.showDriveEmbed = async function(module, cycle) {
   const url = (currentLinks[module] && currentLinks[module][cycle]) ? currentLinks[module][cycle] : "";
   const folderId = getFolderId(url);
 
@@ -270,19 +411,176 @@ window.showDriveEmbed = function(module, cycle) {
     return Swal.fire({ icon: 'info', title: 'قريباً', text: 'ملفات هذه الدورة غير متوفرة حالياً.', confirmButtonColor: '#0FBA50' });
   }
 
-  const embedUrl = `https://drive.google.com/embeddedfolderview?id=${folderId}#list`;
-  const driveBtn = SHOW_DRIVE_BUTTON ? `<div style="text-align:center; margin-top:15px;"><a href="${url}" target="_blank" style="background:#0FBA50; color:#fff; padding:10px 20px; border-radius:12px; text-decoration:none; font-weight:bold;"><i class="fa-brands fa-google-drive"></i> فتح في درايف</a></div>` : '';
+  const cycleTitle = cycle === 1 ? 'الأولى' : cycle === 2 ? 'الثانية' : 'الثالثة';
+
+  // إظهار نافذة التحميل العصرية
+  Swal.fire({
+    title: `ملفات الدورة ${cycleTitle}`,
+    html: `
+      <div style="padding: 30px; text-align:center;">
+        <div class="spinner" style="margin: 0 auto 15px auto;"></div>
+        <p style="color:#0FBA50; font-weight:bold; font-size:15px; margin:0;">جاري جلب الملفات المرفوعة من Google Drive...</p>
+      </div>
+    `,
+    showConfirmButton: false,
+    allowOutsideClick: false,
+    width: '850px'
+  });
+
+  try {
+    // التحقق من كاش الملفات السريع
+    let files = [];
+    const cachedData = sessionStorage.getItem(`files_data_${folderId}`);
+    if (cachedData) {
+      files = JSON.parse(cachedData);
+    } else {
+      let res = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`);
+      let data = await res.json();
+      if (data && data.files && Array.isArray(data.files)) {
+        files = data.files;
+        sessionStorage.setItem(`files_data_${folderId}`, JSON.stringify(files));
+        sessionStorage.setItem(`files_count_${folderId}`, files.length);
+      }
+    }
+
+    renderModernFilesModal(module, cycle, folderId, url, files);
+
+  } catch (err) {
+    console.warn("تعذر قراءة الملفات عبر السكريبت:", err);
+    // في حال تعذر السكريبت، نوفر خيار المعاينة أو الفتح المباشر
+    Swal.fire({
+      icon: 'info',
+      title: `ملفات الدورة ${cycleTitle}`,
+      html: `
+        <div style="padding: 20px; text-align:center; direction:rtl;">
+          <p style="font-size:15px; color:#475569; margin-bottom:20px;">يمكنك الاطلاع على محتويات وتحميل ملفات هذه الدورة مباشرة عبر Google Drive:</p>
+          <a href="${url}" target="_blank" style="display:inline-flex; align-items:center; gap:8px; background:#0FBA50; color:#fff; padding:12px 24px; border-radius:12px; text-decoration:none; font-weight:bold; font-size:15px; box-shadow:0 4px 15px rgba(15,186,80,0.3);">
+            <i class="fa-brands fa-google-drive"></i> فتح مجلد الدورة في Google Drive
+          </a>
+        </div>
+      `,
+      showConfirmButton: true,
+      confirmButtonText: 'إغلاق',
+      showDenyButton: true,
+      denyButtonText: 'رجوع للدورات',
+      denyButtonColor: '#64748b'
+    }).then((res) => { if (res.isDenied) openCourses(module); });
+  }
+};
+
+function renderModernFilesModal(module, cycle, folderId, driveUrl, files) {
+  activeExplorerFiles = files || [];
+  const cycleTitle = cycle === 1 ? 'الأولى' : cycle === 2 ? 'الثانية' : 'الثالثة';
+
+  const modalHtml = `
+    <div class="files-explorer-modal">
+      <div class="files-explorer-header">
+        <input type="text" id="explorerSearchInput" class="explorer-search-input" placeholder="🔍 بحث في ملفات المقياس..." oninput="filterExplorerFiles(this.value)">
+        <span class="explorer-stats-badge" id="explorerStatsBadge">${activeExplorerFiles.length} ملف متوفر</span>
+      </div>
+
+      <div class="files-grid-container" id="filesCardsContainer">
+        ${buildFilesCardsHtml(activeExplorerFiles)}
+      </div>
+
+      <div style="text-align:left; border-top:1px dashed #cbd5e1; padding-top:12px; margin-top:5px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <span style="font-size:12px; color:#64748b;"><i class="fa-solid fa-cloud-check"></i> متصل بالسحابة عبر Google Drive</span>
+        <a href="${driveUrl}" target="_blank" style="color:#0FBA50; font-weight:700; font-size:13px; text-decoration:none; display:flex; align-items:center; gap:6px;">
+          <i class="fa-brands fa-google-drive"></i> فتح المجلد السحابي الكامل
+        </a>
+      </div>
+    </div>
+  `;
 
   Swal.fire({
-    title: `ملفات الدورة ${cycle === 1 ? 'الأولى' : cycle === 2 ? 'الثانية' : 'الثالثة'}`,
-    html: `
-      <div style="border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden; height: 55vh;">
-        <iframe src="${embedUrl}" style="width:100%; height:100%; border:none;"></iframe>
-      </div>
-      ${driveBtn}
-    `,
-    width: '900px', showConfirmButton: true, confirmButtonText: 'إغلاق', showDenyButton: true, denyButtonText: 'رجوع'
-  }).then((res) => { if (res.isDenied) openCourses(module); });
+    title: `<div style="display:flex; align-items:center; gap:10px; font-family:'Cairo';"><i class="fa-solid fa-folder-tree" style="color:#0FBA50;"></i> ملفات الدورة ${cycleTitle}</div>`,
+    html: modalHtml,
+    width: '920px',
+    showConfirmButton: true,
+    confirmButtonText: 'إغلاق',
+    showDenyButton: true,
+    denyButtonText: 'رجوع للدورات',
+    denyButtonColor: '#64748b',
+    scrollbarPadding: false
+  }).then((res) => {
+    if (res.isDenied) openCourses(module);
+  });
+}
+
+function getFileTypeInfo(name, type) {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const mime = (type || '').toLowerCase();
+
+    if (ext === 'pdf' || mime.includes('pdf')) {
+        return { icon: 'fa-file-pdf', css: 'file-icon-pdf', label: 'PDF' };
+    } else if (['doc', 'docx'].includes(ext) || mime.includes('word')) {
+        return { icon: 'fa-file-word', css: 'file-icon-word', label: 'WORD' };
+    } else if (['xls', 'xlsx', 'csv'].includes(ext) || mime.includes('sheet') || mime.includes('excel')) {
+        return { icon: 'fa-file-excel', css: 'file-icon-excel', label: 'EXCEL' };
+    } else if (['ppt', 'pptx'].includes(ext) || mime.includes('presentation') || mime.includes('powerpoint')) {
+        return { icon: 'fa-file-powerpoint', css: 'file-icon-ppt', label: 'PPT' };
+    } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) || mime.includes('image')) {
+        return { icon: 'fa-file-image', css: 'file-icon-image', label: 'IMG' };
+    } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mime.includes('zip') || mime.includes('compressed')) {
+        return { icon: 'fa-file-zipper', css: 'file-icon-archive', label: 'ZIP' };
+    } else {
+        return { icon: 'fa-file-lines', css: 'file-icon-default', label: ext.toUpperCase() || 'FILE' };
+    }
+}
+
+function buildFilesCardsHtml(filesList) {
+    if (!filesList || filesList.length === 0) {
+        return `
+            <div style="grid-column: 1/-1; text-align:center; padding: 40px 20px; color:#64748b;">
+                <i class="fa-regular fa-folder-open" style="font-size: 45px; color:#cbd5e1; margin-bottom:10px;"></i>
+                <p style="font-size:15px; font-weight:700; margin:0;">المجلد فارغ حالياً أو لم يتم العثور على ملفات مطابقة.</p>
+            </div>
+        `;
+    }
+
+    return filesList.map(file => {
+        const typeInfo = getFileTypeInfo(file.name, file.type);
+        const previewUrl = `https://drive.google.com/file/d/${file.id}/preview`;
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${file.id}`;
+
+        return `
+            <div class="file-card-modern">
+                <div class="file-top-info">
+                    <div class="file-icon-box ${typeInfo.css}">
+                        <i class="fa-solid ${typeInfo.icon}"></i>
+                    </div>
+                    <div class="file-text-content">
+                        <div class="file-title-text" title="${file.name}">${file.name}</div>
+                        <div class="file-meta-row">
+                            <span class="file-ext-tag">${typeInfo.label}</span>
+                            <span><i class="fa-solid fa-cloud-arrow-down"></i> جاهز للتحميل</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="file-actions-row">
+                    <a href="${previewUrl}" target="_blank" class="btn-file-action btn-preview-action">
+                        <i class="fa-solid fa-eye"></i> معاينة
+                    </a>
+                    <a href="${downloadUrl}" target="_blank" class="btn-file-action btn-download-action">
+                        <i class="fa-solid fa-download"></i> تحميل
+                    </a>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.filterExplorerFiles = function(query) {
+    const q = (query || '').trim().toLowerCase();
+    const container = document.getElementById('filesCardsContainer');
+    const badge = document.getElementById('explorerStatsBadge');
+    if (!container) return;
+
+    const filtered = activeExplorerFiles.filter(f => f.name.toLowerCase().includes(q));
+    container.innerHTML = buildFilesCardsHtml(filtered);
+    if (badge) {
+        badge.innerText = `${filtered.length} من أصل ${activeExplorerFiles.length} ملف`;
+    }
 };
 
 window.handleLessonsClick = function() {
