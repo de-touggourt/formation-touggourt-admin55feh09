@@ -526,29 +526,50 @@ window.submitNotification = async function() {
 
     try {
         let uploadedImageUrl = "";
+        let uploadedImageFileId = "";
 
         // رفع الصورة المرفقة إلى Google Drive
         if (selectedImageFile) {
             try {
                 const base64 = await readFileAsBase64(selectedImageFile);
+                const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
+                const fileName = `notif_${Date.now()}_${selectedImageFile.name}`;
+
                 const formData = new FormData();
                 formData.append('action', 'upload');
-                formData.append('name', `notif_${Date.now()}_${selectedImageFile.name}`);
+                formData.append('name', fileName);
                 formData.append('mime', selectedImageFile.type || 'image/jpeg');
                 formData.append('data', base64);
-
-                const rootFolder = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId : "";
-                if (rootFolder) formData.append('folderId', rootFolder);
+                formData.append('folderId', targetFolderId);
 
                 const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
                 const d = await res.json();
 
-                if (d.status === 'success' || d.id || d.url) {
-                    if (d.id) {
-                        uploadedImageUrl = `https://lh3.googleusercontent.com/d/${d.id}=s1200`;
-                    } else if (d.url) {
-                        uploadedImageUrl = d.url;
+                let genuineImgId = d.id || '';
+                let genuineImgUrl = d.url || '';
+
+                // إذا لم يرجع السكربت الـ id مباشرة، نقوم بالاستعلام عن الملفات في المجلد
+                if (!genuineImgId) {
+                    try {
+                        const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
+                        const listData = await listRes.json();
+                        if (Array.isArray(listData) && listData.length > 0) {
+                            const matched = listData.find(f => f.name === fileName) || listData[0];
+                            if (matched && matched.id) {
+                                genuineImgId = matched.id;
+                                genuineImgUrl = `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
+                            }
+                        }
+                    } catch(listErr) {
+                        console.warn("تعذر جلب معرّف الصورة من درايف:", listErr);
                     }
+                }
+
+                if (genuineImgId) {
+                    uploadedImageFileId = genuineImgId;
+                    uploadedImageUrl = `https://drive.google.com/thumbnail?id=${genuineImgId}&sz=w1200`;
+                } else if (genuineImgUrl) {
+                    uploadedImageUrl = genuineImgUrl;
                 }
             } catch(imgErr) {
                 console.warn("تعذر رفع الصورة لدرايف، سيتم النشر بدونها:", imgErr);
@@ -560,6 +581,7 @@ window.submitNotification = async function() {
             title: String(title),
             content: String(content),
             imageUrl: String(uploadedImageUrl || ""),
+            imageFileId: String(uploadedImageFileId || ""),
             priority: String(priority || "normal"),
             targetAudience: String(audience || "all_trainees"),
             targetCenter: String(targetCenter || ""),
@@ -612,22 +634,84 @@ function listenToNotifications() {
             allNotifications.push({ id: doc.id, ...doc.data() });
         });
 
-        // فلترة سجل الإشعارات حسب الجهة
-        let displayList = allNotifications;
-        if (currentEntity.role === "INSPECTOR") {
-            displayList = allNotifications.filter(n => 
-                n.senderCenter === currentEntity.center ||
-                n.targetCenter === currentEntity.center ||
-                n.targetAudience === "all_centers"
-            );
-        }
-
-        renderNotificationsFeed(displayList);
+        filterNotificationsFeed();
     }, (err) => {
         if (loader) loader.style.display = "none";
         console.error("خطأ قراءة الإشعارات:", err);
     });
 }
+
+// تصفية وبحث الإشعارات المنشورة في لوحة التحكم
+window.filterNotificationsFeed = function() {
+    const q = (document.getElementById("feedFilterSearch")?.value || "").trim().toLowerCase();
+    const aud = document.getElementById("feedFilterAudience")?.value || "ALL";
+    const dateVal = document.getElementById("feedFilterDate")?.value || "";
+    const btnClearDate = document.getElementById("btnClearFeedDate");
+    
+    if (btnClearDate) {
+        btnClearDate.style.display = dateVal ? "inline-flex" : "none";
+    }
+
+    let list = allNotifications;
+
+    // قيود مشرف المركز
+    if (currentEntity.role === "INSPECTOR") {
+        list = list.filter(n => 
+            n.senderCenter === currentEntity.center ||
+            n.targetCenter === currentEntity.center ||
+            n.targetAudience === "all_centers"
+        );
+    }
+
+    // فلترة البحث النصي
+    if (q) {
+        list = list.filter(n => {
+            const title = (n.title || "").toLowerCase();
+            const content = (n.content || "").toLowerCase();
+            const sender = (n.senderCenter || n.senderName || "").toLowerCase();
+            const center = (n.targetCenter || "").toLowerCase();
+            const trainee = (n.targetTraineeName || n.targetTraineeId || "").toLowerCase();
+            return title.includes(q) || content.includes(q) || sender.includes(q) || center.includes(q) || trainee.includes(q);
+        });
+    }
+
+    // فلترة الفئة المستهدفة
+    if (aud !== "ALL") {
+        if (aud === "centers") {
+            list = list.filter(n => n.targetAudience === "all_centers" || n.targetAudience === "single_center");
+        } else if (aud === "specific_trainees") {
+            list = list.filter(n => n.targetAudience === "specific_trainees" || n.targetAudience === "single_trainee");
+        } else if (aud === "urgent") {
+            list = list.filter(n => n.priority === "urgent" || n.priority === "summon");
+        } else {
+            list = list.filter(n => n.targetAudience === aud);
+        }
+    }
+
+    // فلترة بالتاريخ المحدد
+    if (dateVal) {
+        list = list.filter(n => {
+            if (n.createdAt && typeof n.createdAt.toDate === 'function') {
+                const d = n.createdAt.toDate();
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}` === dateVal;
+            } else if (n.createdAtFormatted) {
+                return n.createdAtFormatted.includes(dateVal);
+            }
+            return false;
+        });
+    }
+
+    renderNotificationsFeed(list);
+};
+
+window.clearFeedDateFilter = function() {
+    const dInput = document.getElementById("feedFilterDate");
+    if (dInput) dInput.value = "";
+    filterNotificationsFeed();
+};
 
 function renderNotificationsFeed(list) {
     const container = document.getElementById("notificationsFeed");
@@ -640,7 +724,7 @@ function renderNotificationsFeed(list) {
         container.innerHTML = `
             <div style="text-align:center; padding:40px 15px; color:#94a3b8;">
                 <i class="fa-regular fa-bell-slash" style="font-size:35px; margin-bottom:10px;"></i>
-                <p style="font-size:14px; font-weight:700; margin:0;">لم يتم نشر أي إشعارات بعد.</p>
+                <p style="font-size:14px; font-weight:700; margin:0;">لا توجد أي إشعارات مطابقة لمعايير البحث.</p>
             </div>
         `;
         return;
@@ -664,9 +748,18 @@ function renderNotificationsFeed(list) {
         else if (n.priority === 'summon') prioBadge = '<span class="badge-prio prio-summon"><i class="fa-solid fa-envelope-open-text"></i> استدعاء رسمي</span>';
 
         const hasImg = n.imageUrl && n.imageUrl.trim() !== '';
+        let fId = n.imageFileId || '';
+        if (!fId && hasImg) {
+            if (n.imageUrl.includes('id=')) fId = n.imageUrl.split('id=')[1].split('&')[0];
+            else if (n.imageUrl.includes('/d/')) fId = n.imageUrl.split('/d/')[1].split(/[=/]/)[0];
+        }
+
+        const thumbSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w300` : (n.imageUrl || '');
+        const fallbackSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s400` : '';
+
         const imgThumb = hasImg ? `
-            <div class="feed-img-thumb" onclick="previewImageZoom('${n.imageUrl}')">
-                <img src="${n.imageUrl}" alt="الصورة المرفقة" referrerpolicy="no-referrer">
+            <div class="feed-img-thumb" onclick="previewImageZoom('${n.imageUrl}', '${fId}')" title="تكبير الصورة">
+                <img src="${thumbSrc}" alt="الصورة المرفقة" referrerpolicy="no-referrer" onerror="if(!this.dataset.retried && '${fallbackSrc}'){this.dataset.retried=1; this.src='${fallbackSrc}';}">
             </div>
         ` : `
             <div class="feed-img-thumb" style="cursor:default;">
@@ -708,15 +801,27 @@ function renderNotificationsFeed(list) {
 }
 
 // 9. معاينة وتكبير الصورة
-window.previewImageZoom = function(url) {
-    if (!url) return;
+window.previewImageZoom = function(url, fileId) {
+    if (!url && !fileId) return;
+    let fId = fileId || '';
+    if (!fId && url) {
+        if (url.includes('id=')) fId = url.split('id=')[1].split('&')[0];
+        else if (url.includes('/d/')) fId = url.split('/d/')[1].split(/[=/]/)[0];
+    }
+    const zoomSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1600` : url;
+    const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1600` : '';
+
     Swal.fire({
-        imageUrl: url,
-        imageAlt: 'الصورة المرفقة بالحجم الكامل',
+        html: `
+            <div style="text-align:center; padding:5px;">
+                <img src="${zoomSrc}" alt="معاينة بالحجم الكامل" referrerpolicy="no-referrer" onerror="if(!this.dataset.retried && '${fbSrc}'){this.dataset.retried=1; this.src='${fbSrc}';}" style="max-width:100%; max-height:80vh; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.15); object-fit:contain;">
+            </div>
+        `,
         showConfirmButton: true,
         confirmButtonText: 'إغلاق',
         confirmButtonColor: '#102a43',
-        width: 'auto'
+        width: 'auto',
+        scrollbarPadding: false
     });
 };
 
@@ -734,9 +839,17 @@ window.previewNotificationItem = function(id) {
 
     let imageHtml = '';
     if (notif.imageUrl && notif.imageUrl.trim() !== '') {
+        let fId = notif.imageFileId || '';
+        if (!fId) {
+            if (notif.imageUrl.includes('id=')) fId = notif.imageUrl.split('id=')[1].split('&')[0];
+            else if (notif.imageUrl.includes('/d/')) fId = notif.imageUrl.split('/d/')[1].split(/[=/]/)[0];
+        }
+        const fullSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1200` : notif.imageUrl;
+        const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1200` : '';
         imageHtml = `
             <div style="margin:15px 0; text-align:center;">
-                <img src="${notif.imageUrl}" alt="الصورة المرفقة" style="max-width:100%; max-height:350px; border-radius:12px; border:1px solid #e2e8f0; cursor:pointer;" onclick="previewImageZoom('${notif.imageUrl}')">
+                <img src="${fullSrc}" alt="الصورة المرفقة" referrerpolicy="no-referrer" onerror="if(!this.dataset.retried && '${fbSrc}'){this.dataset.retried=1; this.src='${fbSrc}';}" style="max-width:100%; max-height:350px; border-radius:12px; border:1px solid #e2e8f0; cursor:pointer;" onclick="previewImageZoom('${fullSrc}', '${fId}')">
+                <div style="font-size:11px; color:#64748b; margin-top:4px;"><i class="fa-solid fa-magnifying-glass-plus"></i> انقر لتكبير الصورة</div>
             </div>
         `;
     }
@@ -758,7 +871,6 @@ ${notif.content || ''}
         showConfirmButton: true,
         confirmButtonText: 'إغلاق',
         confirmButtonColor: '#102a43',
-        width: '700px'
     });
 };
 

@@ -410,7 +410,6 @@ function renderThreadsList() {
                 </div>
 
                 <div class="thread-subject">${escapeHtml(m.subject || 'بدون موضوع')}</div>
-                <div class="thread-preview">${escapeHtml(m.content || '')}</div>
 
                 <div class="thread-footer">
                     <div style="display:flex; gap:6px; align-items:center;">
@@ -523,8 +522,10 @@ function renderMessageDetails(msg) {
         attSection.style.display = "block";
         attGrid.innerHTML = msg.files.map(f => {
             const typeInfo = getFileTypeInfo(f.name, f.mime);
-            const downloadUrl = f.url || `https://drive.google.com/uc?export=download&id=${f.fileId}`;
-            const previewUrl = f.fileId ? `https://drive.google.com/file/d/${f.fileId}/preview` : f.url;
+            const fileId = f.fileId || (f.url && (f.url.match(/id=([a-zA-Z0-9_-]+)/) || f.url.match(/\/d\/([a-zA-Z0-9_-]+)/))?.[1]) || '';
+            const previewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : (f.url || '');
+            const downloadUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk` : (f.url || '');
+            const hasValidLink = !!(previewUrl || downloadUrl);
 
             return `
                 <div class="attachment-card">
@@ -536,8 +537,12 @@ function renderMessageDetails(msg) {
                         </div>
                     </div>
                     <div class="att-actions">
-                        <a href="${previewUrl}" target="_blank" class="btn-att-action" title="معاينة"><i class="fa-solid fa-eye"></i></a>
-                        <a href="${downloadUrl}" target="_blank" class="btn-att-action" title="تحميل"><i class="fa-solid fa-download"></i></a>
+                        ${hasValidLink ? `
+                            <a href="${previewUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="معاينة الملف"><i class="fa-solid fa-eye"></i></a>
+                            <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="تحميل أو فتح في Drive"><i class="fa-solid fa-download"></i></a>
+                        ` : `
+                            <button type="button" class="btn-att-action" onclick="Swal.fire('تنبيه', 'الملف قيد المزامنة في السحابة، يرجى المحاولة لاحقاً', 'info')" title="الملف قيد المزامنة"><i class="fa-solid fa-clock"></i></button>
+                        `}
                     </div>
                 </div>
             `;
@@ -841,24 +846,50 @@ window.submitNewMessage = async function() {
                 formData.append('mime', item.mime);
                 formData.append('data', base64Data);
                 
-                // المجلد الرئيسي إن وجد
-                const rootFolder = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId : "";
-                if (rootFolder) formData.append('folderId', rootFolder);
+                // تحديد مجلد الرفع في Google Drive
+                const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) 
+                    ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId 
+                    : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
+                formData.append('folderId', targetFolderId);
 
-                const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
+                const scriptUrl = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) 
+                    ? SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl 
+                    : APPS_SCRIPT_URL;
+
+                const res = await fetch(scriptUrl, { method: 'POST', body: formData });
                 const data = await res.json();
 
-                if (data.status === 'success' || data.url || data.id) {
-                    uploadedFilesMetadata.push({
-                        name: item.name,
-                        size: item.size,
-                        mime: item.mime,
-                        fileId: data.id || data.fileId || '',
-                        url: data.url || (data.id ? `https://drive.google.com/file/d/${data.id}/view` : '')
-                    });
-                } else {
-                    console.warn("فشل رفع الملف الفردي:", item.name);
+                let fileId = data.id || data.fileId || '';
+                let fileUrl = data.url || '';
+
+                // إذا نجح الرفع ولم يرجع السكريبت المعرف مباشرة، نستعلم لحظياً عن المجلد
+                if (!fileId && data.status === 'success') {
+                    try {
+                        const listRes = await fetch(`${scriptUrl}?action=list&folderId=${targetFolderId}`);
+                        const listData = await listRes.json();
+                        if (listData && Array.isArray(listData.files)) {
+                            const matched = listData.files.find(f => f.name === item.name) || listData.files[0];
+                            if (matched) {
+                                fileId = matched.id;
+                                fileUrl = matched.url || `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
+                            }
+                        }
+                    } catch(listErr) {
+                        console.warn("تعذر الاستعلام عن ملف الدرايف:", listErr);
+                    }
                 }
+
+                if (!fileUrl && fileId) {
+                    fileUrl = `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
+                }
+
+                uploadedFilesMetadata.push({
+                    name: item.name,
+                    size: item.size,
+                    mime: item.mime,
+                    fileId: fileId,
+                    url: fileUrl
+                });
             } catch(uploadErr) {
                 console.warn("تعذر رفع الملف إلى درايف، سيتم الحفظ بدون رابط مباشر:", uploadErr);
             }

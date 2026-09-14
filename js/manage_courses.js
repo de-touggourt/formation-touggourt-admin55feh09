@@ -293,15 +293,20 @@ window.openVideos = function() {
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
 
 function isCycleOpen(module, cycle) {
-  if(!SITE_SETTINGS) return cycle === 1;
-  const isGlobalOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS ? SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] : (cycle === 1);
+  if(!SITE_SETTINGS) return false;
+  const isGlobalOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS 
+    ? ((typeof SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] !== 'undefined') ? SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] : SITE_SETTINGS.GLOBAL_CYCLE_STATUS[String(cycle)])
+    : true;
   if(isGlobalOpen === false) return false;
   if(SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module]) {
-    if (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined') {
-      return !!SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
+    const mStatus = (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined')
+      ? SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle]
+      : SITE_SETTINGS.MODULE_CYCLE_STATUS[module][String(cycle)];
+    if (typeof mStatus !== 'undefined') {
+      return !!mStatus;
     }
   }
-  return cycle === 1;
+  return !!isGlobalOpen;
 }
 
 function getFolderId(url) {

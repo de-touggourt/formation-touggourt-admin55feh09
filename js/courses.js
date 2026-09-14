@@ -61,15 +61,27 @@ if(typeof dbLinks !== 'undefined' && dbLinks[cId] && dbLinks[cId][lvl] && dbLink
 
 function isCycleOpen(module, cycle) {
   if (typeof SITE_SETTINGS !== 'undefined' && SITE_SETTINGS) {
+    // 1. فحص هل الدورة العامة مفتوحة
     if (SITE_SETTINGS.GLOBAL_CYCLE_STATUS) {
-      if (SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] === false) return false;
+      const gStatus = (typeof SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] !== 'undefined') 
+        ? SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] 
+        : SITE_SETTINGS.GLOBAL_CYCLE_STATUS[String(cycle)];
+      if (gStatus === false) return false;
     }
+    // 2. فحص حالة المقياس لهذه الدورة في جدول المديرية
     if (SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module]) {
-      if (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined') {
-        return !!SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
+      const mStatus = (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined')
+        ? SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle]
+        : SITE_SETTINGS.MODULE_CYCLE_STATUS[module][String(cycle)];
+      if (typeof mStatus !== 'undefined') {
+        return !!mStatus;
       }
     }
-    return cycle === 1;
+    // في حال عدم وجود تقييد خاص للمقياس يتبع حالة الدورة العامة
+    const gOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS 
+      ? ((typeof SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] !== 'undefined') ? SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] : SITE_SETTINGS.GLOBAL_CYCLE_STATUS[String(cycle)])
+      : (cycle === 1);
+    return !!gOpen;
   }
   if (typeof GLOBAL_CYCLE_STATUS !== 'undefined' && GLOBAL_CYCLE_STATUS[cycle] === false) return false;
   if (typeof MODULE_CYCLE_STATUS !== 'undefined' && MODULE_CYCLE_STATUS[module]) {
@@ -128,7 +140,6 @@ window.onload = async function() {
         document.getElementById('userWorkplaceDisplay').innerText = loggedInUser.place || loggedInUser.workplace || 'مكان العمل غير محدد';
 
         // الصورة الشخصية
-                // 🌟 1. استرجاع وعرض الصورة فوراً من الكاش المحلي في 0 جزء من الثانية 🌟
         const avatarBox = document.getElementById('userAvatarContainer');
         const coreId = extractCoreId(empId);
         
@@ -137,7 +148,6 @@ window.onload = async function() {
             avatarBox.innerHTML = `<img src="${localCachedAvatar}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '')">`;
         }
 
-        // 🌟 2. التحقق من وجود صورة فايربيز / ImgBB أو درايف وتحديث العرض 🌟
         if (loggedInUser.photoUrl_fb) {
             let imgUrl = loggedInUser.photoUrl_fb;
             if (imgUrl.includes('sz=w200')) imgUrl = imgUrl.replace('sz=w200', 'sz=w800');
@@ -149,74 +159,79 @@ window.onload = async function() {
 
             avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="fetchPhotosFromDrive('${coreId}', document.getElementById('userAvatarContainer'))">`;
         } else {
-            // جلب وتحديث صورة درايف في الخلفية دون تعطيل الواجهة
             fetchPhotosFromDrive(coreId, avatarBox);
         }
 
-        // 2. 🌟 جلب إعدادات الموقع والعناوين وروابط المقاييس من Firestore مباشرة 🌟
-        const settingsDoc = await db.collection("site_settings").doc("main").get();
-        if (settingsDoc.exists) {
-            SITE_SETTINGS = settingsDoc.data();
-            
-            const params = new URLSearchParams(window.location.search);
-            const cId = params.get('c');
-            const lvl = params.get('l');
-            const spc = params.get('s');
-
-            if (cId && lvl && spc) {
-                // تعيين اسم المركز
-                const centerName = SITE_SETTINGS.UI_NAMES.centers[cId] || "";
-                document.getElementById('page-title').innerText = "مركز التكوين " + centerName;
+        // 2. 🌟 الاستماع اللحظي لإعدادات الموقع والربط بنظام الفتح والغلق في المديرية 🌟
+        db.collection("site_settings").doc("main").onSnapshot((settingsDoc) => {
+            if (settingsDoc.exists) {
+                SITE_SETTINGS = settingsDoc.data();
                 
-                // تعيين اسم الطور
-                let levelText = "";
-                if (lvl === 'primary') levelText = "أساتذة التعليم الابتدائي";
-                else if (lvl === 'middle') levelText = "أساتذة التعليم المتوسط";
-                else if (lvl === 'secondary') levelText = "أساتذة التعليم الثانوي";
-                else levelText = (SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvl]) || lvl;
+                const params = new URLSearchParams(window.location.search);
+                const cId = params.get('c');
+                const lvl = params.get('l');
+                const spc = params.get('s');
 
-                // تعيين اسم التخصص
-                let specText = (SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[spc]) || spc;
-                document.getElementById('page-subtitle').innerText = levelText + " - " + specText;
+                if (cId && lvl && spc) {
+                    // تعيين اسم المركز
+                    const centerName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers && SITE_SETTINGS.UI_NAMES.centers[cId]) || "";
+                    document.getElementById('page-title').innerText = "مركز التكوين " + centerName;
+                    
+                    // تعيين اسم الطور
+                    let levelText = "";
+                    if (lvl === 'primary') levelText = "أساتذة التعليم الابتدائي";
+                    else if (lvl === 'middle') levelText = "أساتذة التعليم المتوسط";
+                    else if (lvl === 'secondary') levelText = "أساتذة التعليم الثانوي";
+                    else levelText = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvl]) || lvl;
 
-                // 🌟 حصر المتكون للدخول إلى ملفات تخصصه المعتمد فقط 🌟
-                const userRole = sessionStorage.getItem("userRole");
-                if (userRole === "USER" || !sessionStorage.getItem("inspectorCenter")) {
-                    const detected = detectUserLevelAndSpec(loggedInUser);
-                    if (detected.specKey && spc && detected.specKey !== spc) {
-                        document.getElementById("loader").style.display = "none";
-                        Swal.fire({
-                            icon: 'warning',
-                            title: '<h3 style="color:#e67e22; margin:0; font-family:\'Cairo\';"><i class="fa-solid fa-lock"></i> وصول مقيد بالتخصص</h3>',
-                            html: `
-                                <div style="font-size:15px; line-height:1.8; color:#334e68; padding:10px 0; font-family:\'Cairo\';">
-                                    أستاذ(ة) محترم(ة): <b>${loggedInUser.name || ''}</b><br>
-                                    النظام يحصر وصول المتكونين في ملفات مادة تخصصهم المعتمدة حصراً.<br>
-                                    <div style="background:#fff3cd; border:1px solid #ffeeba; border-radius:10px; padding:10px; margin:15px 0; color:#856404; font-weight:bold;">
-                                        تخصصك المعتمد هو: ${loggedInUser.maty || loggedInUser.specialty || 'تخصصك المعتمد'}
+                    // تعيين اسم التخصص
+                    let specText = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[spc]) || spc;
+                    document.getElementById('page-subtitle').innerText = levelText + " - " + specText;
+
+                    // 🌟 حصر المتكون للدخول إلى ملفات تخصصه المعتمد فقط 🌟
+                    const userRole = sessionStorage.getItem("userRole");
+                    if (userRole === "USER" || !sessionStorage.getItem("inspectorCenter")) {
+                        const detected = detectUserLevelAndSpec(loggedInUser);
+                        if (detected.specKey && spc && detected.specKey !== spc) {
+                            document.getElementById("loader").style.display = "none";
+                            Swal.fire({
+                                icon: 'warning',
+                                title: '<h3 style="color:#e67e22; margin:0; font-family:\'Cairo\';"><i class="fa-solid fa-lock"></i> وصول مقيد بالتخصص</h3>',
+                                html: `
+                                    <div style="font-size:15px; line-height:1.8; color:#334e68; padding:10px 0; font-family:\'Cairo\';">
+                                        أستاذ(ة) محترم(ة): <b>${loggedInUser.name || ''}</b><br>
+                                        النظام يحصر وصول المتكونين في ملفات مادة تخصصهم المعتمدة حصراً.<br>
+                                        <div style="background:#fff3cd; border:1px solid #ffeeba; border-radius:10px; padding:10px; margin:15px 0; color:#856404; font-weight:bold;">
+                                            تخصصك المعتمد هو: ${loggedInUser.maty || loggedInUser.specialty || 'تخصصك المعتمد'}
+                                        </div>
+                                        جاري توجيهك إلى مقاييس تخصصك...
                                     </div>
-                                    جاري توجيهك إلى مقاييس تخصصك...
-                                </div>
-                            `,
-                            confirmButtonColor: '#0FBA50',
-                            confirmButtonText: 'الدخول لمقاييس تخصصي',
-                            allowOutsideClick: false
-                        }).then(() => {
-                            window.location.replace(`/courses?c=${cId}&l=${detected.levelKey || lvl}&s=${detected.specKey}`);
-                        });
-                        return;
+                                `,
+                                confirmButtonColor: '#0FBA50',
+                                confirmButtonText: 'الدخول لمقاييس تخصصي',
+                                allowOutsideClick: false
+                            }).then(() => {
+                                window.location.replace(`/courses?c=${cId}&l=${detected.levelKey || lvl}&s=${detected.specKey}`);
+                            });
+                            return;
+                        }
                     }
-                }
 
-                // جلب الروابط الخاصة بهذا المقياس
-                if (SITE_SETTINGS.dbLinks && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
-                    currentLinks = SITE_SETTINGS.dbLinks[cId][lvl][spc];
-                }
+                    // جلب الروابط الخاصة بهذا المقياس
+                    if (SITE_SETTINGS.dbLinks && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
+                        currentLinks = SITE_SETTINGS.dbLinks[cId][lvl][spc];
+                    }
 
-                // 🌟 تفعيل فحص وإظهار إشعارات أعداد الملفات على أيقونات المقاييس 🌟
-                updateModuleFileBadges();
+                    // 🌟 تفعيل فحص وإظهار إشعارات أعداد الملفات على أيقونات المقاييس 🌟
+                    updateModuleFileBadges();
+                }
             }
-        }
+
+            document.getElementById("loader").style.display = "none";
+        }, (err) => {
+            console.warn("تنبيه جلب إعدادات الموقع:", err);
+            document.getElementById("loader").style.display = "none";
+        });
 
         document.getElementById("loader").style.display = "none";
 

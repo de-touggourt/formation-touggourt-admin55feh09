@@ -620,6 +620,7 @@ function openLink(centerId, type, level) {
 // 🔔 نظام الإشعارات الذكي والموجه للمتكون (Trainee Notifications System)
 // ==========================================================================
 let traineeNotificationsList = [];
+let isInitialTraineeNotifLoad = true;
 
 function initTraineeNotifications() {
     const empId = sessionStorage.getItem("userEmpId");
@@ -647,6 +648,8 @@ function initTraineeNotifications() {
             const userCenter = loggedInUser.center || "";
             const userLevel = detected.levelKey || "";
 
+            const prevUnreadCount = traineeNotificationsList.filter(n => !getReadNotifsMap()[n.id]).length;
+
             traineeNotificationsList = allNotifs.filter(n => {
                 const aud = n.targetAudience;
                 if (aud === "all_trainees") return true;
@@ -666,6 +669,24 @@ function initTraineeNotifications() {
             });
 
             updateTraineeNotifBadge();
+
+            // تنبيه لحظي عند وصول إشعار جديد أثناء تصفح المتكون
+            const currentUnread = traineeNotificationsList.filter(n => !getReadNotifsMap()[n.id]);
+            if (!isInitialTraineeNotifLoad && currentUnread.length > prevUnreadCount) {
+                const latest = currentUnread[0];
+                Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 5000,
+                    timerProgressBar: true
+                }).fire({
+                    icon: latest.priority === 'urgent' ? 'warning' : 'info',
+                    title: latest.title || 'إشعار وتنبيه جديد',
+                    text: 'وردك إشعار وتنبيه رسمي جديد من الإدارة'
+                });
+            }
+            isInitialTraineeNotifLoad = false;
 
             // فحص وجود استدعاء أو إشعار عاجل غير مقروء لإظهاره تلقائياً لمرة واحدة
             checkAndTriggerUrgentNotice();
@@ -806,11 +827,17 @@ function showNotificationModal(notif) {
 
     let imageHtml = '';
     if (notif.imageUrl && notif.imageUrl.trim() !== '') {
+        let fId = notif.imageFileId || '';
+        if (!fId) {
+            if (notif.imageUrl.includes('id=')) fId = notif.imageUrl.split('id=')[1].split('&')[0];
+            else if (notif.imageUrl.includes('/d/')) fId = notif.imageUrl.split('/d/')[1].split(/[=/]/)[0];
+        }
+        const fullSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1200` : notif.imageUrl;
+        const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1200` : '';
+
         imageHtml = `
             <div style="margin:15px 0; text-align:center;">
-                <a href="${notif.imageUrl}" target="_blank" title="انقر لتكبير الصورة">
-                    <img src="${notif.imageUrl}" alt="مرفق الإشعار" style="max-width:100%; max-height:350px; border-radius:12px; border:2px solid #e2e8f0; object-fit:contain; box-shadow:0 4px 15px rgba(0,0,0,0.1); cursor:zoom-in;">
-                </a>
+                <img src="${fullSrc}" alt="مرفق الإشعار" referrerpolicy="no-referrer" onerror="if(!this.dataset.retried && '${fbSrc}'){this.dataset.retried=1; this.src='${fbSrc}';}" style="max-width:100%; max-height:350px; border-radius:12px; border:2px solid #e2e8f0; object-fit:contain; box-shadow:0 4px 15px rgba(0,0,0,0.1); cursor:zoom-in;" onclick="previewTraineeNotifZoom('${fullSrc}', '${fId}')">
                 <div style="font-size:11px; color:#64748b; margin-top:4px;"><i class="fa-solid fa-magnifying-glass-plus"></i> انقر على الصورة لفتحها بالحجم الكامل</div>
             </div>
         `;
@@ -839,6 +866,30 @@ ${notif.content || ''}
         scrollbarPadding: false
     });
 }
+
+window.previewTraineeNotifZoom = function(url, fileId) {
+    if (!url && !fileId) return;
+    let fId = fileId || '';
+    if (!fId && url) {
+        if (url.includes('id=')) fId = url.split('id=')[1].split('&')[0];
+        else if (url.includes('/d/')) fId = url.split('/d/')[1].split(/[=/]/)[0];
+    }
+    const zoomSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1600` : url;
+    const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1600` : '';
+
+    Swal.fire({
+        html: `
+            <div style="text-align:center; padding:5px;">
+                <img src="${zoomSrc}" alt="معاينة الصورة" referrerpolicy="no-referrer" onerror="if(!this.dataset.retried && '${fbSrc}'){this.dataset.retried=1; this.src='${fbSrc}';}" style="max-width:100%; max-height:80vh; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.15); object-fit:contain;">
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'إغلاق',
+        confirmButtonColor: '#102a43',
+        width: 'auto',
+        scrollbarPadding: false
+    });
+};
 
 function logout() {
     Swal.fire({
