@@ -37,9 +37,10 @@ let currentEntity = {
 };
 let SITE_SETTINGS = null;
 let allMessages = [];
-let currentFilterTab = 'all';
+let currentFilterTab = 'inbox';
 let currentSelectedMsgId = null;
 let selectedFilesToUpload = [];
+let currentDateFilter = null;
 
 // 4. تهيئة النظام عند التحميل
 window.onload = function() {
@@ -65,13 +66,60 @@ function initUserIdentity() {
     } else {
         currentEntity = {
             type: 'CENTER',
-            name: inspectorCenter || 'مركز تكوين',
+            name: inspectorCenter || 'مركز تككوين',
             id: empId,
             role: 'INSPECTOR',
             officer: userName || 'مشرف المركز'
         };
         document.getElementById("userEntityName").innerText = `مركز: ${currentEntity.name}`;
     }
+}
+
+function getEntityKey() {
+    return currentEntity.type === 'DIRECTORATE' ? 'DIRECTORATE' : currentEntity.name;
+}
+
+function isMsgStarred(msg) {
+    if (!msg) return false;
+    const key = getEntityKey();
+    const arr = Array.isArray(msg.starredBy) ? msg.starredBy : [];
+    return arr.includes(key) || (currentEntity.type === 'DIRECTORATE' && (arr.includes('مديرية التربية لولاية توقرت') || arr.includes('المديرية')));
+}
+
+function isMsgArchived(msg) {
+    if (!msg) return false;
+    const key = getEntityKey();
+    const arr = Array.isArray(msg.archivedBy) ? msg.archivedBy : [];
+    return arr.includes(key) || (currentEntity.type === 'DIRECTORATE' && (arr.includes('مديرية التربية لولاية توقرت') || arr.includes('المديرية')));
+}
+
+function getMsgReceiptStatus(m) {
+    const readBy = Array.isArray(m.readBy) ? m.readBy : [];
+    if (m.recipientCenter === "ALL") {
+        const readCount = readBy.filter(r => r !== m.senderCenter && r !== m.senderName).length;
+        return {
+            isRead: readCount > 0,
+            text: readCount > 0 ? `قرأها ${readCount} جهات` : 'تم التعميم',
+            fullText: readCount > 0 ? `تم الاطلاع من طرف ${readCount} مركز/جهة` : 'تم تسليم التعميم لكافة المراكز (بانتظار القراءة)',
+            badgeClass: readCount > 0 ? 'receipt-read' : 'receipt-delivered',
+            icon: readCount > 0 ? 'fa-check-double' : 'fa-check'
+        };
+    }
+
+    let isRead = false;
+    if (m.recipientCenter === "المديرية") {
+        isRead = ['مديرية التربية لولاية توقرت', 'المديرية', 'ADMIN_ACCESS', 'DIRECTORATE'].some(k => readBy.includes(k));
+    } else {
+        isRead = readBy.includes(m.recipientCenter);
+    }
+
+    return {
+        isRead: isRead,
+        text: isRead ? 'تمت القراءة' : 'تم التسليم',
+        fullText: isRead ? `تمت القراءة والاطلاع من طرف: ${m.recipientCenter}` : `تم تسليم المراسلة إلى: ${m.recipientCenter} (لم تقرأ بعد)`,
+        badgeClass: isRead ? 'receipt-read' : 'receipt-delivered',
+        icon: isRead ? 'fa-check-double' : 'fa-check'
+    };
 }
 
 function returnToDashboard() {
@@ -188,15 +236,46 @@ function listenToMessages() {
 
 // 7. تحديث العدادات وتبويبات الفلترة
 function updateCounters() {
-    const total = allMessages.length;
-    const inbox = allMessages.filter(m => m.senderCenter !== currentEntity.name).length;
-    const sent = allMessages.filter(m => m.senderCenter === currentEntity.name).length;
-    const urgent = allMessages.filter(m => m.priority === 'urgent' || m.priority === 'official').length;
+    let total = 0;
+    let inbox = 0;
+    let sent = 0;
+    let starred = 0;
+    let archive = 0;
+    let urgent = 0;
 
-    document.getElementById("cntAll").innerText = total;
-    document.getElementById("cntInbox").innerText = inbox;
-    document.getElementById("cntSent").innerText = sent;
-    document.getElementById("cntUrgent").innerText = urgent;
+    allMessages.forEach(m => {
+        const archived = isMsgArchived(m);
+        const isStarredItem = isMsgStarred(m);
+
+        if (isStarredItem) starred++;
+        if (archived) {
+            archive++;
+            return;
+        }
+
+        total++;
+        if (m.senderCenter === currentEntity.name) {
+            sent++;
+        } else {
+            inbox++;
+        }
+
+        if (m.priority === 'urgent' || m.priority === 'official') {
+            urgent++;
+        }
+    });
+
+    const setCnt = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val;
+    };
+
+    setCnt("cntAll", total);
+    setCnt("cntInbox", inbox);
+    setCnt("cntSent", sent);
+    setCnt("cntStarred", starred);
+    setCnt("cntArchive", archive);
+    setCnt("cntUrgent", urgent);
 }
 
 window.switchFilterTab = function(tabName, btnEl) {
@@ -210,16 +289,64 @@ window.filterMessages = function() {
     renderThreadsList();
 };
 
+window.handleDateFilterChange = function() {
+    const el = document.getElementById("filterDate");
+    const clearBtn = document.getElementById("btnClearDate");
+    if (el && el.value) {
+        currentDateFilter = el.value;
+        if (clearBtn) clearBtn.style.display = "inline-flex";
+    } else {
+        currentDateFilter = null;
+        if (clearBtn) clearBtn.style.display = "none";
+    }
+    renderThreadsList();
+};
+
+window.clearDateFilter = function() {
+    const el = document.getElementById("filterDate");
+    const clearBtn = document.getElementById("btnClearDate");
+    if (el) el.value = "";
+    if (clearBtn) clearBtn.style.display = "none";
+    currentDateFilter = null;
+    renderThreadsList();
+};
+
 function getFilteredMessages() {
     const query = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
 
     return allMessages.filter(m => {
+        const archived = isMsgArchived(m);
+        const starred = isMsgStarred(m);
+
+        // تبويب الأرشيف يظهر فقط المراسلات المؤرشفة
+        if (currentFilterTab === 'archive') {
+            if (!archived) return false;
+        } else {
+            // بقية التبويبات تستثني المؤرشفة ما عدا تبويب المفضلة
+            if (archived && currentFilterTab !== 'starred') return false;
+        }
+
         // فلترة التبويب
         if (currentFilterTab === 'inbox' && m.senderCenter === currentEntity.name) return false;
         if (currentFilterTab === 'sent' && m.senderCenter !== currentEntity.name) return false;
+        if (currentFilterTab === 'starred' && !starred) return false;
         if (currentFilterTab === 'urgent' && m.priority !== 'urgent' && m.priority !== 'official') return false;
 
-        // فلترة البحث
+        // فلترة التاريخ
+        if (currentDateFilter) {
+            let msgDate = null;
+            if (m.createdAt && m.createdAt.seconds) msgDate = new Date(m.createdAt.seconds * 1000);
+            else if (m.createdAt) msgDate = new Date(m.createdAt);
+            if (msgDate) {
+                const yyyy = msgDate.getFullYear();
+                const mm = String(msgDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(msgDate.getDate()).padStart(2, '0');
+                const msgDateStr = `${yyyy}-${mm}-${dd}`;
+                if (msgDateStr !== currentDateFilter) return false;
+            }
+        }
+
+        // فلترة البحث النصي
         if (query) {
             const matchSub = (m.subject || "").toLowerCase().includes(query);
             const matchContent = (m.content || "").toLowerCase().includes(query);
@@ -253,6 +380,7 @@ function renderThreadsList() {
         const isSelected = m.id === currentSelectedMsgId;
         const readBy = Array.isArray(m.readBy) ? m.readBy : [];
         const isUnread = !readBy.includes(currentEntity.name) && m.senderCenter !== currentEntity.name;
+        const starred = isMsgStarred(m);
         
         let priorityBadge = '';
         if (m.priority === 'urgent') priorityBadge = '<span class="priority-badge priority-urgent"><i class="fa-solid fa-circle-exclamation"></i> عاجل</span>';
@@ -263,10 +391,18 @@ function renderThreadsList() {
         const hasFiles = m.files && Array.isArray(m.files) && m.files.length > 0;
         const dateStr = formatDateTime(m.createdAt);
 
+        // شارة استلام وقراءة الرسالة للصادر
+        let receiptHtml = '';
+        if (m.senderCenter === currentEntity.name) {
+            const rcpt = getMsgReceiptStatus(m);
+            receiptHtml = `<span class="receipt-badge ${rcpt.badgeClass}" title="${escapeHtml(rcpt.fullText)}"><i class="fa-solid ${rcpt.icon}"></i> ${rcpt.text}</span>`;
+        }
+
         return `
             <div class="thread-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}" onclick="selectMessage('${m.id}')">
                 <div class="thread-header">
                     <span class="thread-sender">
+                        ${starred ? '<i class="fa-solid fa-star" style="color:#eab308; margin-left:4px;" title="في المفضلة"></i>' : ''}
                         <i class="fa-solid ${m.senderType === 'DIRECTORATE' ? 'fa-shield-halved' : 'fa-school'}" style="color:${m.senderType === 'DIRECTORATE' ? '#0FBA50' : '#1E68E8'}"></i>
                         ${escapeHtml(m.senderCenter || m.senderName || 'غير معروف')}
                     </span>
@@ -277,7 +413,10 @@ function renderThreadsList() {
                 <div class="thread-preview">${escapeHtml(m.content || '')}</div>
 
                 <div class="thread-footer">
-                    <div>${priorityBadge}</div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        ${priorityBadge}
+                        ${receiptHtml}
+                    </div>
                     ${hasFiles ? `<span class="files-badge-indicator"><i class="fa-solid fa-paperclip"></i> ${m.files.length} مرفق</span>` : '<span></span>'}
                 </div>
             </div>
@@ -323,6 +462,51 @@ function renderMessageDetails(msg) {
     document.getElementById("viewMsgDate").innerText = formatDateTime(msg.createdAt, true);
     document.getElementById("viewMsgContent").innerText = msg.content || '';
 
+    // تحديث حالة زر المفضلة
+    const btnStar = document.getElementById("btnToggleStar");
+    const iconStar = document.getElementById("iconStar");
+    const textStar = document.getElementById("textStar");
+    const starred = isMsgStarred(msg);
+    if (btnStar && iconStar && textStar) {
+        if (starred) {
+            btnStar.classList.add("active-star");
+            iconStar.className = "fa-solid fa-star";
+            textStar.innerText = "مفضلة";
+        } else {
+            btnStar.classList.remove("active-star");
+            iconStar.className = "fa-regular fa-star";
+            textStar.innerText = "المفضلة";
+        }
+    }
+
+    // تحديث حالة زر الأرشيف
+    const btnArch = document.getElementById("btnToggleArchive");
+    const textArch = document.getElementById("textArchive");
+    const archived = isMsgArchived(msg);
+    if (btnArch && textArch) {
+        if (archived) {
+            btnArch.classList.add("active-archive");
+            textArch.innerText = "مؤرشفة (إلغاء)";
+        } else {
+            btnArch.classList.remove("active-archive");
+            textArch.innerText = "أرشفة";
+        }
+    }
+
+    // شارة استلام وقراءة الرسالة
+    const rcptContainer = document.getElementById("viewMsgReceiptContainer");
+    const rcptBadge = document.getElementById("viewMsgReceiptBadge");
+    if (rcptContainer && rcptBadge) {
+        if (msg.senderCenter === currentEntity.name) {
+            rcptContainer.style.display = "flex";
+            const rcpt = getMsgReceiptStatus(msg);
+            rcptBadge.className = `receipt-badge ${rcpt.badgeClass}`;
+            rcptBadge.innerHTML = `<i class="fa-solid ${rcpt.icon}"></i> ${escapeHtml(rcpt.fullText)}`;
+        } else {
+            rcptContainer.style.display = "none";
+        }
+    }
+
     // البادج
     let priorityBadge = '';
     if (msg.priority === 'urgent') priorityBadge = '<span class="priority-badge priority-urgent" style="font-size:12px; padding:4px 12px;"><i class="fa-solid fa-triangle-exclamation"></i> عاجل جداً</span>';
@@ -363,7 +547,152 @@ function renderMessageDetails(msg) {
     }
 }
 
-// 10. الرد السريع
+// 10. الإجراءات المتقدمة (مفضلة، أرشفة، إعادة توجيه، رد، حذف)
+window.toggleStarredCurrentMessage = async function() {
+    const msg = allMessages.find(m => m.id === currentSelectedMsgId);
+    if (!msg) return;
+
+    const key = getEntityKey();
+    const currentlyStarred = isMsgStarred(msg);
+    const op = currentlyStarred 
+        ? firebase.firestore.FieldValue.arrayRemove(key, 'مديرية التربية لولاية توقرت', 'المديرية') 
+        : firebase.firestore.FieldValue.arrayUnion(key);
+
+    try {
+        await db.collection("messages").doc(msg.id).update({
+            starredBy: op
+        });
+        
+        // تحديث محلي فوري
+        if (!Array.isArray(msg.starredBy)) msg.starredBy = [];
+        if (currentlyStarred) {
+            msg.starredBy = msg.starredBy.filter(k => k !== key && k !== 'المديرية' && k !== 'مديرية التربية لولاية توقرت');
+        } else {
+            msg.starredBy.push(key);
+        }
+        updateCounters();
+        renderMessageDetails(msg);
+        renderThreadsList();
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: currentlyStarred ? 'تمت الإزالة من المفضلة' : 'تمت الإضافة للمفضلة ⭐',
+            showConfirmButton: false,
+            timer: 1500
+        });
+    } catch (err) {
+        console.error("خطأ تحديث المفضلة:", err);
+        Swal.fire('خطأ', 'تعذر تحديث المفضلة، يرجى المحاولة مرة أخرى.', 'error');
+    }
+};
+
+window.toggleArchiveCurrentMessage = async function() {
+    const msg = allMessages.find(m => m.id === currentSelectedMsgId);
+    if (!msg) return;
+
+    const key = getEntityKey();
+    const currentlyArchived = isMsgArchived(msg);
+    const op = currentlyArchived 
+        ? firebase.firestore.FieldValue.arrayRemove(key, 'مديرية التربية لولاية توقرت', 'المديرية') 
+        : firebase.firestore.FieldValue.arrayUnion(key);
+
+    try {
+        await db.collection("messages").doc(msg.id).update({
+            archivedBy: op
+        });
+
+        if (!Array.isArray(msg.archivedBy)) msg.archivedBy = [];
+        if (currentlyArchived) {
+            msg.archivedBy = msg.archivedBy.filter(k => k !== key && k !== 'المديرية' && k !== 'مديرية التربية لولاية توقرت');
+        } else {
+            msg.archivedBy.push(key);
+        }
+        updateCounters();
+        renderMessageDetails(msg);
+        renderThreadsList();
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            title: currentlyArchived ? 'تم استرجاع المراسلة من الأرشيف' : 'تم نقل المراسلة إلى الأرشيف 📦',
+            showConfirmButton: false,
+            timer: 1500
+        });
+    } catch (err) {
+        console.error("خطأ تحديث الأرشيف:", err);
+        Swal.fire('خطأ', 'تعذر تحديث الأرشيف، يرجى المحاولة مرة أخرى.', 'error');
+    }
+};
+
+window.forwardCurrentMessage = function() {
+    const msg = allMessages.find(m => m.id === currentSelectedMsgId);
+    if (!msg) return;
+
+    openComposeModal();
+    
+    document.getElementById("composeSubject").value = msg.subject.startsWith("توجيه: ") ? msg.subject : `توجيه: ${msg.subject}`;
+    document.getElementById("composeContent").value = `\n\n---------- إعادة توجيه المراسلة ----------\nمن: ${msg.senderCenter} (${msg.senderName || ''})\nالتاريخ: ${formatDateTime(msg.createdAt, true)}\nالموضوع: ${msg.subject}\n\n${msg.content || ''}`;
+    
+    // إرفاق الملفات الأصلية
+    if (msg.files && Array.isArray(msg.files) && msg.files.length > 0) {
+        selectedFilesToUpload = msg.files.map(f => ({
+            name: f.name,
+            size: f.size || 'ملف سحابي',
+            mime: f.mime || '',
+            fileId: f.fileId || '',
+            url: f.url || '',
+            isPreUploaded: true
+        }));
+        renderSelectedFilesList();
+    }
+    
+    document.getElementById("composeContent").focus();
+};
+
+window.deleteCurrentMessage = async function() {
+    const msg = allMessages.find(m => m.id === currentSelectedMsgId);
+    if (!msg) return;
+
+    const confirmRes = await Swal.fire({
+        title: 'تأكيد الحذف',
+        text: `هل أنت متأكد من رغبتك في حذف المراسلة: "${msg.subject}" نهائياً؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    try {
+        await db.collection("messages").doc(msg.id).delete();
+        currentSelectedMsgId = null;
+        
+        const emptyPane = document.getElementById("emptyStatePane");
+        const detailsCard = document.getElementById("messageDetailsCard");
+        const viewer = document.getElementById("messageViewer");
+        if (emptyPane) emptyPane.style.display = "block";
+        if (detailsCard) detailsCard.style.display = "none";
+        if (viewer) viewer.classList.remove("active-mobile");
+
+        Swal.fire({
+            icon: 'success',
+            title: 'تم الحذف',
+            text: 'تم حذف المراسلة بنجاح.',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        console.error("خطأ أثناء حذف الرسالة:", err);
+        Swal.fire('خطأ', 'تعذر حذف المراسلة، يرجى المحاولة لاحقاً.', 'error');
+    }
+};
+
 window.replyToCurrentMessage = function() {
     const msg = allMessages.find(m => m.id === currentSelectedMsgId);
     if (!msg) return;
@@ -398,8 +727,21 @@ window.closeComposeModal = function() {
 window.handleFileSelect = function(files) {
     if (!files || files.length === 0) return;
 
+    const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30 ميغابايت
+
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
+
+        if (file.size > MAX_FILE_SIZE) {
+            Swal.fire({
+                icon: 'error',
+                title: 'الملف كبير جداً!',
+                text: `حجم الملف "${file.name}" (${formatBytes(file.size)}) يتجاوز الحد الأقصى المسموح به وهو 30 ميغابايت.`,
+                confirmButtonColor: '#ef4444'
+            });
+            continue;
+        }
+
         selectedFilesToUpload.push({
             file: file,
             name: file.name,
@@ -425,6 +767,7 @@ function renderSelectedFilesList() {
                 <i class="fa-solid fa-file" style="color:#1E68E8;"></i>
                 <span>${escapeHtml(item.name)}</span>
                 <span style="color:#94a3b8; font-size:11px;">(${item.size})</span>
+                ${item.isPreUploaded ? '<span style="color:#0FBA50; font-size:10px; font-weight:bold;">[مُرفق سحابي]</span>' : ''}
             </div>
             <button class="btn-remove-file" onclick="removeSelectedFile(${idx})" title="إزالة"><i class="fa-solid fa-trash-can"></i></button>
         </div>
@@ -453,13 +796,15 @@ window.submitNewMessage = async function() {
     const btnSubmit = document.getElementById("btnSubmitMessage");
     btnSubmit.disabled = true;
 
+    const filesToUploadDirectly = selectedFilesToUpload.filter(item => !item.isPreUploaded);
+
     Swal.fire({
         title: 'جاري إرسال المراسلة...',
         html: `
             <div style="text-align:center; padding:15px;">
                 <div class="spinner" style="margin: 0 auto 15px auto;"></div>
                 <p id="uploadStatusText" style="color:#0FBA50; font-weight:bold; font-size:14px; margin:0;">
-                    ${selectedFilesToUpload.length > 0 ? 'جاري رفع الملفات المرفقة إلى Google Drive...' : 'جاري تسجيل المراسلة في النظام...'}
+                    ${filesToUploadDirectly.length > 0 ? 'جاري رفع الملفات المرفقة إلى Google Drive...' : 'جاري تسجيل المراسلة في النظام...'}
                 </p>
             </div>
         `,
@@ -470,9 +815,21 @@ window.submitNewMessage = async function() {
     try {
         const uploadedFilesMetadata = [];
 
-        // رفع الملفات سحابياً على Google Drive
+        // معالجة الملفات المرفوعة
         for (let i = 0; i < selectedFilesToUpload.length; i++) {
             const item = selectedFilesToUpload[i];
+
+            if (item.isPreUploaded) {
+                uploadedFilesMetadata.push({
+                    name: item.name,
+                    size: item.size,
+                    mime: item.mime,
+                    fileId: item.fileId || '',
+                    url: item.url || ''
+                });
+                continue;
+            }
+
             const statusEl = document.getElementById("uploadStatusText");
             if (statusEl) statusEl.innerText = `جاري رفع المرفق (${i + 1}/${selectedFilesToUpload.length}): ${item.name}`;
 
@@ -520,7 +877,9 @@ window.submitNewMessage = async function() {
             priority: priority,
             files: uploadedFilesMetadata,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            readBy: [currentEntity.name]
+            readBy: [currentEntity.name],
+            starredBy: [],
+            archivedBy: []
         };
 
         await db.collection("messages").add(messageDoc);

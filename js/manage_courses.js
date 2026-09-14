@@ -1,6 +1,6 @@
 // التحقق الأمني من الصلاحيات
 if (typeof SecurityGuard !== 'undefined') {
-    SecurityGuard.verifySession("ADMIN");
+    SecurityGuard.verifySession("INSPECTOR");
 }
 // ==================== إعدادات Firebase والاتصال اللحظي ====================
 const firebaseConfig = {
@@ -293,10 +293,15 @@ window.openVideos = function() {
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec"; 
 
 function isCycleOpen(module, cycle) {
-  if(!SITE_SETTINGS) return false;
-  const isGlobalOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS && SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle];
-  if(!isGlobalOpen) return false;
-  return SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module] && SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
+  if(!SITE_SETTINGS) return cycle === 1;
+  const isGlobalOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS ? SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] : (cycle === 1);
+  if(isGlobalOpen === false) return false;
+  if(SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module]) {
+    if (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined') {
+      return !!SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
+    }
+  }
+  return cycle === 1;
 }
 
 function getFolderId(url) {
@@ -331,13 +336,38 @@ function openFileManager(module, cycle) {
     return;
   }
 
+  // استخدام الكاش المحلي لعرض الملفات فوراً
+  const cacheKey = `files_data_${folderId}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const cachedFiles = JSON.parse(cached);
+      renderFileManager(folderId, cachedFiles, module, cycle);
+
+      // تحديث صامت في الخلفية
+      fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (!d.error && d.files) {
+            sessionStorage.setItem(cacheKey, JSON.stringify(d.files));
+            sessionStorage.setItem(`files_count_${folderId}`, d.files.length);
+          }
+        }).catch(() => {});
+      return;
+    } catch(e) {}
+  }
+
   Swal.fire({ title: 'جاري جلب الملفات...', html: '<div class="spinner"></div>', showConfirmButton: false, width: window.innerWidth < 768 ? '95%' : '850px', allowOutsideClick: false });
 
   fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
   .then(res => res.json())
   .then(data => {
     if(data.error) Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد', 'error');
-    else renderFileManager(folderId, data.files, module, cycle);
+    else {
+      sessionStorage.setItem(cacheKey, JSON.stringify(data.files || []));
+      sessionStorage.setItem(`files_count_${folderId}`, (data.files || []).length);
+      renderFileManager(folderId, data.files, module, cycle);
+    }
   }).catch(err => Swal.fire('خطأ في الاتصال', 'حدث خطأ في قراءة الملفات.', 'error'));
 }
 
@@ -386,7 +416,11 @@ function deleteFile(fileId, folderId, module, cycle) {
             fetch(`${APPS_SCRIPT_URL}?action=delete&fileId=${fileId}&folderId=${folderId}`, {method: 'POST'})
             .then(res => res.json())
             .then(data => {
-                if(data.status === 'success') { Swal.fire('تم!', 'تم حذف الملف بنجاح.', 'success').then(() => openFileManager(module, cycle)); }
+                if(data.status === 'success') { 
+                    sessionStorage.removeItem(`files_data_${folderId}`);
+                    sessionStorage.removeItem(`files_count_${folderId}`);
+                    Swal.fire('تم!', 'تم حذف الملف بنجاح.', 'success').then(() => openFileManager(module, cycle)); 
+                }
                 else { Swal.fire('خطأ', 'فشل الحذف', 'error'); }
             });
         }
@@ -414,7 +448,11 @@ function uploadFile(folderId, module, cycle) {
         fetch(APPS_SCRIPT_URL, {method: 'POST', body: formData})
         .then(res => res.json())
         .then(data => {
-            if(data.status === 'success') { Swal.fire('نجاح', 'تم رفع الملف بنجاح', 'success').then(() => openFileManager(module, cycle)); }
+            if(data.status === 'success') { 
+                sessionStorage.removeItem(`files_data_${folderId}`);
+                sessionStorage.removeItem(`files_count_${folderId}`);
+                Swal.fire('نجاح', 'تم رفع الملف بنجاح', 'success').then(() => openFileManager(module, cycle)); 
+            }
             else { Swal.fire('خطأ', 'فشل الرفع، الرجاء المحاولة مرة أخرى', 'error'); }
         })
         .catch(err => Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بالخادم', 'error'));

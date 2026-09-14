@@ -397,6 +397,67 @@
     .msg-meta-item b {
       color: #1e293b;
     }
+    .msg-actions-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 14px;
+    }
+    .btn-action-tool {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      padding: 6px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Cairo';
+      color: #334155;
+      transition: 0.2s;
+    }
+    .btn-action-tool:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .btn-action-tool.active-star {
+      background: #fef9c3;
+      border-color: #fde047;
+      color: #a16207;
+    }
+    .btn-action-tool.active-archive {
+      background: #e0f2fe;
+      border-color: #bae6fd;
+      color: #0284c7;
+    }
+    .btn-action-tool.btn-delete-tool:hover {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #dc2626;
+    }
+
+    /* شارات القراءة للمرسل */
+    .receipt-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .receipt-badge.read {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .receipt-badge.sent {
+      background: #f1f5f9;
+      color: #64748b;
+    }
 
     .msg-body-text {
       font-size: 15px;
@@ -721,16 +782,22 @@
     <!-- قائمة المراسلات (اللوحة الجانبية) -->
     <aside class="threads-sidebar">
       <div class="sidebar-controls">
-        <div class="search-wrapper">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" id="searchInput" placeholder="بحث بالموضوع، المرسل، النص..." oninput="filterMessages()">
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <div class="search-wrapper" style="flex:1; margin-bottom:0;">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="بحث بالموضوع، المرسل، النص..." oninput="filterMessages()">
+          </div>
+          <input type="date" id="filterDate" title="تصفية حسب التاريخ" onchange="handleDateFilterChange()" style="padding:7px 10px; border:1px solid #cbd5e1; border-radius:10px; font-family:'Cairo'; font-size:12px; outline:none; background:#fff; cursor:pointer;">
+          <button id="btnClearDate" onclick="clearDateFilter()" title="إلغاء فلتر التاريخ" style="display:none; background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; border-radius:8px; padding:0 10px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
         <div class="nav-tabs-row">
-          <button class="tab-pill active" onclick="switchFilterTab('all', this)">الكل <span class="pill-counter" id="cntAll">0</span></button>
-          <button class="tab-pill" onclick="switchFilterTab('inbox', this)">الوارد <span class="pill-counter" id="cntInbox">0</span></button>
-          <button class="tab-pill" onclick="switchFilterTab('sent', this)">الصادر <span class="pill-counter" id="cntSent">0</span></button>
-          <button class="tab-pill" onclick="switchFilterTab('urgent', this)">عاجل <span class="pill-counter" id="cntUrgent">0</span></button>
+          <button class="tab-pill active" onclick="switchFilterTab('inbox', this)"><i class="fa-solid fa-inbox"></i> الوارد <span class="pill-counter" id="cntInbox">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('sent', this)"><i class="fa-solid fa-paper-plane"></i> الصادر <span class="pill-counter" id="cntSent">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('starred', this)"><i class="fa-solid fa-star" style="color:#eab308;"></i> المفضلة <span class="pill-counter" id="cntStarred">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('archive', this)"><i class="fa-solid fa-box-archive"></i> الأرشيف <span class="pill-counter" id="cntArchive">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('urgent', this)"><i class="fa-solid fa-bolt" style="color:#ef4444;"></i> عاجل <span class="pill-counter" id="cntUrgent">0</span></button>
+          <button class="tab-pill" onclick="switchFilterTab('all', this)"><i class="fa-solid fa-list-ul"></i> الكل <span class="pill-counter" id="cntAll">0</span></button>
         </div>
       </div>
 
@@ -751,6 +818,25 @@
       </div>
 
       <div class="message-details-card" id="messageDetailsCard" style="display:none;">
+        <!-- شريط أدوات إجراءات الرسالة -->
+        <div class="msg-actions-toolbar">
+          <button class="btn-action-tool" id="btnToggleStar" onclick="toggleStarredCurrentMessage()">
+            <i class="fa-regular fa-star" id="iconStar"></i> <span id="textStar">المفضلة</span>
+          </button>
+          <button class="btn-action-tool" id="btnToggleArchive" onclick="toggleArchiveCurrentMessage()">
+            <i class="fa-solid fa-box-archive" id="iconArchive"></i> <span id="textArchive">أرشفة</span>
+          </button>
+          <button class="btn-action-tool" onclick="forwardCurrentMessage()">
+            <i class="fa-solid fa-share"></i> <span>إعادة توجيه</span>
+          </button>
+          <button class="btn-action-tool" style="background:#0FBA50; color:#fff; border-color:#0FBA50;" onclick="replyToCurrentMessage()">
+            <i class="fa-solid fa-reply"></i> <span>رد سريع</span>
+          </button>
+          <button class="btn-action-tool btn-delete-tool" onclick="deleteCurrentMessage()">
+            <i class="fa-solid fa-trash-can"></i> <span>حذف</span>
+          </button>
+        </div>
+
         <div class="msg-header-row">
           <div class="msg-title-box">
             <h2 id="viewMsgSubject">الموضوع</h2>
@@ -766,6 +852,10 @@
               <div class="msg-meta-item">
                 <i class="fa-regular fa-clock"></i>
                 <span id="viewMsgDate">-</span>
+              </div>
+              <!-- شارة حالة استلام وقراءة الرسالة -->
+              <div class="msg-meta-item" id="viewMsgReceiptContainer" style="display:none;">
+                <span id="viewMsgReceiptBadge"></span>
               </div>
             </div>
           </div>
@@ -783,12 +873,6 @@
           <div class="attachments-grid" id="viewAttachmentsGrid">
             <!-- كروت الملفات -->
           </div>
-        </div>
-
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
-          <button class="btn-compose" style="background:#102a43;" onclick="replyToCurrentMessage()">
-            <i class="fa-solid fa-reply"></i> الرد على المراسلة
-          </button>
         </div>
       </div>
     </section>
@@ -840,7 +924,7 @@
           <div class="upload-dropzone" onclick="document.getElementById('composeFileInput').click()">
             <i class="fa-solid fa-cloud-arrow-up"></i>
             <p>انقر لاختيار ملفات من جهازك (PDF، وورد، إكسل، صور، ملفات مضغوطة)</p>
-            <span style="font-size:11px; color:#94a3b8;">سيتم رفعها وتخزينها بأمان في Google Drive</span>
+            <span style="font-size:11px; color:#94a3b8;">سيتم رفعها وتخزينها بأمان في Google Drive (الحد الأقصى المسموح به لكل ملف: 30 ميغابايت)</span>
           </div>
 
           <div class="selected-files-list" id="selectedFilesList"></div>

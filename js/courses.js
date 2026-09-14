@@ -44,6 +44,7 @@ if (!firebase.apps.length) {
 const db = firebase.firestore();
 
 let loggedInUser = null;
+let SITE_SETTINGS = null;
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec";
 
 // جلب البارامترات
@@ -51,8 +52,6 @@ const params = new URLSearchParams(window.location.search);
 const cId = params.get('c');
 const lvl = params.get('l');
 const spc = params.get('s');
-
-
 
 // جلب الروابط
 let currentLinks = {};
@@ -62,16 +61,23 @@ if(typeof dbLinks !== 'undefined' && dbLinks[cId] && dbLinks[cId][lvl] && dbLink
 
 function isCycleOpen(module, cycle) {
   if (typeof SITE_SETTINGS !== 'undefined' && SITE_SETTINGS) {
-    if (SITE_SETTINGS.GLOBAL_CYCLE_STATUS && !SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle]) return false;
+    if (SITE_SETTINGS.GLOBAL_CYCLE_STATUS) {
+      if (SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] === false) return false;
+    }
     if (SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module]) {
-      return !!SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
+      if (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined') {
+        return !!SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle];
+      }
+    }
+    return cycle === 1;
+  }
+  if (typeof GLOBAL_CYCLE_STATUS !== 'undefined' && GLOBAL_CYCLE_STATUS[cycle] === false) return false;
+  if (typeof MODULE_CYCLE_STATUS !== 'undefined' && MODULE_CYCLE_STATUS[module]) {
+    if (typeof MODULE_CYCLE_STATUS[module][cycle] !== 'undefined') {
+      return !!MODULE_CYCLE_STATUS[module][cycle];
     }
   }
-  if (typeof GLOBAL_CYCLE_STATUS !== 'undefined' && !GLOBAL_CYCLE_STATUS[cycle]) return false;
-  if (typeof MODULE_CYCLE_STATUS !== 'undefined' && MODULE_CYCLE_STATUS[module]) {
-    return !!MODULE_CYCLE_STATUS[module][cycle];
-  }
-  return false;
+  return cycle === 1;
 }
 
 function getFolderId(url) {
@@ -150,7 +156,7 @@ window.onload = async function() {
         // 2. 🌟 جلب إعدادات الموقع والعناوين وروابط المقاييس من Firestore مباشرة 🌟
         const settingsDoc = await db.collection("site_settings").doc("main").get();
         if (settingsDoc.exists) {
-            const SITE_SETTINGS = settingsDoc.data();
+            SITE_SETTINGS = settingsDoc.data();
             
             const params = new URLSearchParams(window.location.search);
             const cId = params.get('c');

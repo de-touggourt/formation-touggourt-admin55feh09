@@ -654,7 +654,14 @@ function initTraineeNotifications() {
                 if (aud === "level_trainees" && (n.targetLevel === userLevel || n.targetLevel === "all")) {
                     if (!n.targetCenter || n.targetCenter === userCenter || n.targetCenter === "ALL") return true;
                 }
-                if (aud === "single_trainee" && (n.targetTraineeId === empId || n.targetTraineeId === extractCoreId(empId))) return true;
+                if (aud === "single_trainee" || aud === "specific_trainees") {
+                    const coreEmpId = extractCoreId(empId);
+                    if (n.targetTraineeId === empId || n.targetTraineeId === coreEmpId) return true;
+                    if (Array.isArray(n.targetTraineeIds)) {
+                        return n.targetTraineeIds.includes(empId) || n.targetTraineeIds.includes(coreEmpId);
+                    }
+                    return false;
+                }
                 return false;
             });
 

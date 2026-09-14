@@ -300,27 +300,28 @@ function startFadeOut() {
 window.onload = async function() { 
     typeWriter(); 
 
-    // ننتظر تحقق سيرفر فايربيز أولاً بدلاً من التسرع في الطرد
+    // إذا كانت الجلسة معتمدة لدى المفتش أو المديرية، نبدأ فوراً
+    if (userEmpId) {
+        const hasPermission = await checkUserPermissions();
+        if (hasPermission) {
+            initSiteSettings();
+        }
+    } else {
+        window.location.href = "/login";
+        return;
+    }
+
+    // التحقق التلقائي الإضافي لحساب المديرية في فايربيز إن وجد
     firebase.auth().onAuthStateChanged(async (user) => {
-        if (user) {
-            // 🌟 التعرف التلقائي على حساب المديرية ومنحه الصلاحية الشاملة 🌟
-            if (user.email === "admin_directorate@system.local") {
-                userEmpId = "ADMIN_ACCESS";
-                sessionStorage.setItem("userEmpId", "ADMIN_ACCESS");
+        if (user && user.email === "admin_directorate@system.local") {
+            userEmpId = "ADMIN_ACCESS";
+            sessionStorage.setItem("userEmpId", "ADMIN_ACCESS");
+            if (!SITE_SETTINGS) {
+                const hasPermission = await checkUserPermissions();
+                if (hasPermission) {
+                    initSiteSettings();
+                }
             }
-
-            // الآن، إذا كان لا يزال مجهولاً، نقوم بطرده
-            if (!userEmpId) { 
-                window.location.href = "/secure-login"; 
-                return; 
-            }
-
-            const hasPermission = await checkUserPermissions();
-            if (hasPermission) {
-                initSiteSettings();
-            }
-        } else {
-            window.location.href = "/secure-login";
         }
     });
 };
