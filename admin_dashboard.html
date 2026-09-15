@@ -247,6 +247,11 @@
         <i class="fa-solid fa-user-tie"></i> حسابات رؤساء المراكز
       </button>
 	  
+      <!-- الزر الجديد: إدارة المواقع الجغرافية -->
+      <button class="logout-btn" style="background: #e67e22; color: white;" onclick="openCentersMapModal()">
+        <i class="fa-solid fa-map-location-dot"></i> الخريطة والمواقع الجغرافية
+      </button>
+	  
 	  <!-- زر الحجم الساعي المستقل -->
        <button class="logout-btn" style="background: #8e44ad; color: white;" onclick="openHourlyVolumeModal()">
          <i class="fa-solid fa-clock"></i> الحجم الساعي
@@ -891,6 +896,59 @@
                     </tr>
                 </thead>
                 <tbody id="adGradesTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= نافذة الخريطة والمواقع الجغرافية للمراكز ================= -->
+<div class="modal-overlay" id="centersMapModal" style="z-index: 1010;">
+  <div class="modal-content" style="width: 95%; max-width: 1100px; height: auto; max-height: 90vh;">
+    <div class="modal-header" style="background: #e67e22;">
+      <h2><i class="fa-solid fa-map-location-dot"></i> إدارة المواقع الجغرافية للمراكز (GPS)</h2>
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          
+          <!-- الزر الأول: البطاقات التوجيهية -->
+          <button class="nav-btn" style="background: white; color: #e67e22; border: 2px solid white; padding: 8px 18px; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-radius: 8px;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(0,0,0,0.15)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(0,0,0,0.1)';" onclick="printCentersMapPoster()">
+              <i class="fa-solid fa-address-card"></i> البطاقات التوجيهية
+          </button>
+          
+          <!-- الزر الثاني: خريطة الولاية -->
+          <button class="nav-btn" style="background: #102a43; color: white; border: 2px solid #102a43; padding: 8px 18px; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); border-radius: 8px;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(0,0,0,0.25)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(0,0,0,0.15)';" onclick="printInteractiveStateMap()">
+              <i class="fa-solid fa-map"></i> خريطة الولاية
+          </button>
+          
+          <!-- زر الإغلاق -->
+          <button class="nav-btn danger" style="padding: 8px 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';" onclick="closeCentersMapModal()">
+              <i class="fa-solid fa-xmark"></i>
+          </button>
+      </div>
+    </div>
+    
+    <div class="modal-body" style="overflow-y: auto; padding: 20px; background: #f8fbff;">
+        <div style="background: #fff8f3; border: 1px solid #ffcc80; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+            <h3 style="margin-top: 0; color: #d35400; font-size: 15px;"><i class="fa-solid fa-circle-info"></i> معلومات هامة</h3>
+            <p style="margin: 0; font-size: 13px; font-weight: bold; color: #555;">
+                الإحداثيات المدخلة هنا تتزامن فوراً مع لوحات تحكم المفتشين وتطبيقات ماسح الباركود. يمكنك إدخال الإحداثيات يدوياً للمركز، أو النقر على "تحديد آلي" لجلب موقعك الحالي (إذا كنت متواجداً داخل المركز).
+            </p>
+        </div>
+
+        <div class="table-responsive" style="border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: none;">
+            <table class="att-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                <thead style="background: #102a43; color: white;">
+                    <tr>
+                        <th style="padding: 10px; width: 40px; text-align: center;">#</th>
+                        <th style="padding: 10px; text-align: right;">اسم المركز</th>
+                        <th style="padding: 10px; text-align: center;">خط العرض (Lat)</th>
+                        <th style="padding: 10px; text-align: center;">خط الطول (Lng)</th>
+                        <th style="padding: 10px; text-align: center;">النطاق (متر)</th>
+                        <th style="padding: 10px; text-align: center; width: 220px;">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="centersMapTableBody">
+                    <!-- سيتم توليد المراكز وحقولها هنا برمجياً -->
+                </tbody>
             </table>
         </div>
     </div>

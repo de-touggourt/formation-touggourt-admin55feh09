@@ -26,6 +26,171 @@ let todayDate = "";
 let activeCenter = "";
 let scannedCardsCount = 0;
 
+let currentToken = "";
+let myDeviceId = "";
+let myDeviceModel = "";
+
+function getDeviceModelName() {
+    const ua = navigator.userAgent;
+    if (/android/i.test(ua)) {
+        const match = ua.match(/;\s*([^;]+)\s+Build/);
+        return match ? match[1].trim() : "هاتف أندرويد";
+    }
+    if (/iPhone/i.test(ua)) return "iPhone";
+    if (/iPad/i.test(ua)) return "iPad";
+    if (/Windows/i.test(ua)) return "كمبيوتر Windows";
+    if (/Macintosh/i.test(ua)) return "جهاز Mac";
+    return "هاتف ذكي";
+}
+
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // metres
+    const rad = Math.PI / 180;
+    const φ1 = lat1 * rad;
+    const φ2 = lat2 * rad;
+    const Δφ = (lat2 - lat1) * rad;
+    const Δλ = (lon2 - lon1) * rad;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+}
+
+function checkGeofence(centerLat, centerLng, allowedRadius) {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'تحديد الموقع الجغرافي',
+                text: 'متصفحك لا يدعم تحديد الموقع الجغرافي للتحقق من التواجد داخل مقر المركز.',
+                confirmButtonText: 'متابعة'
+            }).then(() => resolve());
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const userLat = position.coords.latitude;
+                const userLng = position.coords.longitude;
+                const dist = getDistanceFromLatLonInMeters(userLat, userLng, centerLat, centerLng);
+                const roundedDist = Math.round(dist);
+
+                if (dist > allowedRadius) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خارج النطاق الجغرافي للمركز',
+                        html: 'أنت تبعد مسافة <b>' + roundedDist + ' متر</b> عن مقر المركز المعتمد.<br>النطاق المسموح به هو <b>' + allowedRadius + ' متر</b> فقط.<br>يرجى التواجد داخل مقر المركز لتسجيل الحضور.',
+                        allowOutsideClick: false,
+                        showConfirmButton: false
+                    });
+                } else {
+                    console.log('Geofence verified: ' + roundedDist + 'm <= ' + allowedRadius + 'm');
+                    resolve();
+                }
+            },
+            (error) => {
+                console.warn("GPS error:", error);
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'تنبيه الموقع الجغرافي',
+                    text: 'تعذر تحديد موقعك الجغرافي للتحقق من التواجد داخل المركز. يرجى تفعيل الـ GPS والسماح بالإذن.',
+                    confirmButtonText: 'متابعة'
+                }).then(() => resolve());
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
+}
+
+function captureCameraSnapshot(quality = 0.55, maxWidth = 360) {
+    try {
+        const video = document.querySelector("#reader video");
+        if (!video || video.videoWidth === 0 || video.videoHeight === 0) return null;
+        const canvas = document.createElement("canvas");
+        let w = video.videoWidth;
+        let h = video.videoHeight;
+        if (w > maxWidth) {
+            h = Math.round((h * maxWidth) / w);
+            w = maxWidth;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, w, h);
+        return canvas.toDataURL("image/jpeg", quality);
+    } catch (e) {
+        console.warn("Snapshot capture error:", e);
+        return null;
+    }
+}
+
+async function recordFirstScanAuditIfNeeded(scannedEmpId) {
+    if (!currentToken || !myDeviceId) return;
+    try {
+        const tokenSnap = await db.collection('scanner_tokens').doc(currentToken).get();
+        if (tokenSnap.exists) {
+            const data = tokenSnap.data();
+            const audits = data.firstScanAudits || {};
+            if (!audits[myDeviceId]) {
+                const photo = captureCameraSnapshot(0.6, 360);
+                if (photo) {
+                    await db.collection('scanner_tokens').doc(currentToken).update({
+                        ['firstScanAudits.' + myDeviceId]: {
+                            capturedAt: new Date().toISOString(),
+                            deviceName: myDeviceModel,
+                            firstScannedEmpId: String(scannedEmpId || 'عام'),
+                            photoData: photo
+                        }
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("First scan audit error:", e);
+    }
+}
+
+function incrementTokenScanCounters() {
+    if (!currentToken || !myDeviceId) return;
+    db.collection('scanner_tokens').doc(currentToken).update({
+        totalScans: firebase.firestore.FieldValue.increment(1),
+        ['scanCounts.' + myDeviceId]: firebase.firestore.FieldValue.increment(1)
+    }).catch(err => console.warn("Counters update warning:", err));
+}
+
+function initRemotePhotoListener(tok) {
+    let lastHandledReqId = "";
+    db.collection('scanner_tokens').doc(tok).onSnapshot(doc => {
+        if (!doc.exists) return;
+        const data = doc.data();
+        if (data.remotePhotoCommand && data.remotePhotoCommand.requested) {
+            const cmd = data.remotePhotoCommand;
+            if (cmd.requestId && cmd.requestId !== lastHandledReqId) {
+                if (cmd.targetDevice === 'all' || cmd.targetDevice === myDeviceId) {
+                    lastHandledReqId = cmd.requestId;
+                    setTimeout(() => {
+                        const photo = captureCameraSnapshot(0.6, 400);
+                        if (photo) {
+                            db.collection('scanner_tokens').doc(tok).update({
+                                ['lastRemotePhotosMap.' + myDeviceId]: {
+                                    requestId: cmd.requestId,
+                                    deviceName: myDeviceModel,
+                                    capturedAt: new Date().toISOString(),
+                                    photoUrl: photo
+                                }
+                            }).catch(e => console.warn("Remote photo update error:", e));
+                        }
+                    }, 500);
+                }
+            }
+        }
+    });
+}
+
+
 // إعدادات التحكم التفاعلي
 let isScanningPaused = false;
 let isFastScanMode = true; // وضع المسح السريع المتتابع مفعل افتراضياً
@@ -144,12 +309,15 @@ window.onload = async function() {
         }
     }).catch(e => console.warn("تعذر جلب الصور في الخلفية:", e));
 
+    currentToken = token;
+
     // 3. التحقق من بصمة الجهاز
-    let myDeviceId = localStorage.getItem('scanner_device_id');
+    myDeviceId = localStorage.getItem('scanner_device_id');
     if (!myDeviceId) {
         myDeviceId = 'DEV_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
         localStorage.setItem('scanner_device_id', myDeviceId);
     }
+    myDeviceModel = getDeviceModelName();
 
     try {
         // 4. التحقق من الرمز في Firestore
@@ -160,30 +328,72 @@ window.onload = async function() {
                 text: 'هذا الرابط غير صالح أو تم إبطاله من قبل رئيس المركز.',
                 allowOutsideClick: false, showConfirmButton: false
             });
-            return;
+            return; 
         }
 
         let tokenData = tokenDoc.data();
+        let maxAllowed = parseInt(tokenData.maxDevices) || 1;
+        let registeredList = tokenData.registeredDevices || [];
 
-        if (tokenData.registeredDevice) {
-            if (tokenData.registeredDevice !== myDeviceId) {
+        if (tokenData.registeredDevice && !registeredList.some(d => (typeof d === 'object' ? d.deviceId : d) === tokenData.registeredDevice)) {
+            registeredList.push({
+                deviceId: tokenData.registeredDevice,
+                deviceModel: 'جهاز سابق',
+                registeredAt: new Date().toISOString()
+            });
+        }
+
+        const isAlreadyRegistered = registeredList.some(d => (typeof d === 'object' ? d.deviceId : d) === myDeviceId);
+
+        if (!isAlreadyRegistered) {
+            if (registeredList.length >= maxAllowed) {
                 Swal.fire({
                     icon: 'error', 
-                    title: 'حظر أمني: الرابط مستخدم!',
-                    text: 'هذا الرابط تم استخدامه مسبقاً في هاتف/جهاز آخر ومقفل عليه. اطلب رابطاً جديداً من رئيس المركز.',
+                    title: 'حظر أمني: استنفاد عدد الأجهزة!',
+                    text: 'تم استنفاد الحد الأقصى للأجهزة المسموح بها لهذا الرابط (' + maxAllowed + ' جهاز). يرجى مراجعة رئيس المركز لزيادة عدد الأجهزة المسموحة.',
                     allowOutsideClick: false, 
                     showConfirmButton: false
                 });
                 return; 
             }
-        } else {
+
+            const newDeviceEntry = {
+                deviceId: myDeviceId,
+                deviceModel: myDeviceModel,
+                registeredAt: new Date().toISOString()
+            };
+            registeredList.push(newDeviceEntry);
             await db.collection('scanner_tokens').doc(token).update({
+                registeredDevices: registeredList,
                 registeredDevice: myDeviceId
             });
         }
         
         activeCenter = tokenData.center.trim();
         document.getElementById("dateInfo").innerHTML = `تاريخ: <b>${todayDate}</b> | <span style="color:#0FBA50; font-weight:bold;">المركز: ${activeCenter}</span>`;
+
+        // 🌟 فحص النطاق الجغرافي للمركز (GPS Geofence) 🌟
+        const safeCenterId = activeCenter.replace(/\//g, '-').trim();
+        try {
+            const centerDoc = await db.collection("center_settings").doc(safeCenterId).get();
+            if (centerDoc.exists) {
+                const cData = centerDoc.data();
+                if (cData.latitude && cData.longitude) {
+                    const centerLat = parseFloat(cData.latitude);
+                    const centerLng = parseFloat(cData.longitude);
+                    const allowedRadius = parseInt(cData.radiusMeters) || 100;
+
+                    if (!isNaN(centerLat) && !isNaN(centerLng)) {
+                        await checkGeofence(centerLat, centerLng, allowedRadius);
+                    }
+                }
+            }
+        } catch (geoErr) {
+            console.warn("Geofence check warning:", geoErr);
+        }
+
+        // الاستماع لأوامر التقاط الصور عن بعد
+        initRemotePhotoListener(token);
 
         // 5. تحميل كاش الأساتذة والمؤطرين لحظياً في الذاكرة لتسريع المسح
         initCenterDataCache();
@@ -504,6 +714,10 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
         records: { [trainee.empId]: { status: status, time: timeString } }
     }, { merge: true }).catch(err => console.error("Firestore sync error:", err));
 
+    // تحديث عدادات الرابط وتسجيل صورة أول مسح
+    incrementTokenScanCounters();
+    recordFirstScanAuditIfNeeded(trainee.empId);
+
     playScanSound('success');
     triggerHaptic('success');
 
@@ -584,6 +798,10 @@ function handleFramerScan(framer, docId, timeString, scannedId) {
         date: todayDate,
         records: { [scannedId]: { status: status, time: timeString } }
     }, { merge: true }).catch(e => console.error(e));
+
+    // تحديث عدادات الرابط وتسجيل صورة أول مسح
+    incrementTokenScanCounters();
+    recordFirstScanAuditIfNeeded(scannedId);
 
     playScanSound('success');
     triggerHaptic('success');
