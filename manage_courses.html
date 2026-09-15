@@ -132,37 +132,38 @@ header p { margin: 0; font-size: 14px; color: #bbdefb; font-weight: 600; }
 
 footer { background: transparent; color: #64748b; padding: 20px; font-weight: 600; font-size: 13px; margin-top: auto; text-align: center; }
 
-/* تنسيقات مدير الملفات ملء الشاشة الفاخرة (SweetAlert) */
-.swal2-popup { border-radius: 24px !important; padding: 1.5em !important; max-width: 95vw !important; width: auto !important; font-family:'Cairo',sans-serif !important; z-index: 999999 !important;}
-.swal2-title { font-size: 1.6rem !important; font-weight: 800 !important; }
-.swal2-confirm { background:#64748b !important; color:#fff !important; border-radius:20px !important; padding:10px 30px !important; font-weight:700; border:none !important; margin: 5px !important; transition: 0.3s; font-size: 1rem !important; }
+/* تنسيقات مدير الملفات الأنيقة والمتناسقة (SweetAlert) */
+.swal2-popup { border-radius: 20px !important; padding: 1.2em !important; max-width: 95vw !important; width: auto !important; font-family:'Cairo',sans-serif !important; z-index: 999999 !important;}
+.swal2-title { font-size: 1.4rem !important; font-weight: 800 !important; }
+.swal2-confirm { background:#64748b !important; color:#fff !important; border-radius:12px !important; padding:8px 25px !important; font-weight:700; border:none !important; margin: 5px !important; transition: 0.3s; font-size: 0.95rem !important; }
 .swal2-confirm:hover { background: #475569 !important; }
-.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 20px !important; padding: 10px 30px !important; font-weight: 700; border: none !important; margin: 5px !important; transition: 0.3s; font-size: 1rem !important; }
+.swal2-deny { background: #1E68E8 !important; color: #fff !important; border-radius: 12px !important; padding: 8px 25px !important; font-weight: 700; border: none !important; margin: 5px !important; transition: 0.3s; font-size: 0.95rem !important; }
 .swal2-deny:hover { background: #1557c0 !important; }
 
 .swal-fullscreen-filemanager {
-    width: 96vw !important;
-    max-width: 98vw !important;
-    height: 92vh !important;
-    max-height: 94vh !important;
-    padding: 20px !important;
-    border-radius: 24px !important;
+    width: 920px !important;
+    max-width: 95vw !important;
+    max-height: 88vh !important;
+    height: auto !important;
+    padding: 16px 20px !important;
+    border-radius: 20px !important;
     display: flex !important;
     flex-direction: column !important;
-    box-shadow: 0 25px 60px rgba(16, 42, 67, 0.25) !important;
+    box-shadow: 0 20px 50px rgba(16, 42, 67, 0.2) !important;
     background: #f8fafc !important;
 }
 .swal-fullscreen-filemanager .swal2-html-container {
     flex: 1 !important;
     overflow-y: auto !important;
-    padding: 8px !important;
+    padding: 4px 6px !important;
     margin: 0 !important;
     display: flex !important;
     flex-direction: column !important;
+    max-height: calc(88vh - 120px) !important;
 }
 .swal-fullscreen-filemanager .swal2-actions {
-    margin-top: 8px !important;
-    padding-top: 8px !important;
+    margin-top: 6px !important;
+    padding-top: 6px !important;
     border-top: 1px solid #e2e8f0 !important;
 }
 
@@ -174,25 +175,25 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
     align-items: center;
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 10px 18px;
-    gap: 12px;
-    margin-bottom: 12px;
+    border-radius: 14px;
+    padding: 8px 14px;
+    gap: 10px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
 }
 .fm-search-box {
     flex: 1;
-    min-width: 220px;
+    min-width: 200px;
     position: relative;
 }
 .fm-search-box input {
     width: 100%;
-    padding: 9px 38px 9px 14px;
+    padding: 8px 34px 8px 12px;
     border: 1px solid #cbd5e1;
-    border-radius: 12px;
+    border-radius: 10px;
     font-family: 'Cairo';
-    font-size: 13px;
+    font-size: 12.5px;
     outline: none;
     transition: 0.2s;
     background: #f8fafc;
@@ -204,22 +205,23 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 }
 .fm-search-box i {
     position: absolute;
-    right: 12px;
+    right: 11px;
     top: 50%;
     transform: translateY(-50%);
     color: #94a3b8;
+    font-size: 13px;
 }
 
 .fm-upload-panel {
     background: #ffffff;
     border: 2px dashed #bfdbfe;
-    border-radius: 16px;
-    padding: 14px 18px;
-    margin-bottom: 14px;
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
     transition: 0.3s;
 }
@@ -230,17 +232,19 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 .fm-upload-controls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
+    flex: 1;
 }
 
+/* شبكة عرض الملفات مطابقة لصفحة المتكونين */
 .fm-files-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 12px;
     overflow-y: auto;
-    flex: 1;
-    padding: 4px;
+    max-height: 52vh;
+    padding: 5px 2px;
 }
 .fm-file-card {
     background: #ffffff;
@@ -250,23 +254,24 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 10px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    gap: 12px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.03);
+    position: relative;
 }
 .fm-file-card:hover {
-    border-color: #93c5fd;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(30,104,232,0.08);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    border-color: #1E68E8;
 }
 .fm-file-top {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
 }
 .fm-file-icon-box {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -274,74 +279,98 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
     font-size: 22px;
     flex-shrink: 0;
 }
+.file-icon-pdf { background: #fee2e2; color: #ef4444; }
+.file-icon-word { background: #dbeafe; color: #2563eb; }
+.file-icon-excel { background: #dcfce7; color: #16a34a; }
+.file-icon-ppt { background: #ffedd5; color: #ea580c; }
+.file-icon-image { background: #f3e8ff; color: #9333ea; }
+.file-icon-archive { background: #fef3c7; color: #d97706; }
+.file-icon-default { background: #f1f5f9; color: #475569; }
+
 .fm-file-info {
     flex: 1;
     overflow: hidden;
 }
 .fm-file-title {
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: 700;
     color: #1e293b;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin-bottom: 4px;
+    word-break: break-word;
     line-height: 1.4;
-    margin-bottom: 3px;
+    white-space: normal;
 }
 .fm-file-meta {
-    font-size: 11px;
-    color: #64748b;
     display: flex;
     align-items: center;
     gap: 8px;
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+}
+.file-ext-tag {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 10px;
 }
 .fm-file-actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     border-top: 1px dashed #e2e8f0;
-    padding-top: 8px;
+    padding-top: 10px;
 }
 .btn-fm-act {
     flex: 1;
-    padding: 6px 8px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 700;
-    font-family: 'Cairo';
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
     text-decoration: none;
     border: none;
     cursor: pointer;
     transition: 0.2s;
+    font-family: 'Cairo';
 }
 .btn-fm-preview {
-    background: #e0f2fe;
-    color: #0369a1;
+    background: #f0fdf4;
+    color: #0FBA50;
+    border: 1px solid #bbf7d0;
 }
 .btn-fm-preview:hover {
-    background: #bae6fd;
+    background: #0FBA50;
+    color: #fff;
 }
 .btn-fm-download {
-    background: #f0fdf4;
-    color: #15803d;
+    background: #eff6ff;
+    color: #1E68E8;
+    border: 1px solid #bfdbfe;
 }
 .btn-fm-download:hover {
-    background: #dcfce7;
+    background: #1E68E8;
+    color: #fff;
 }
 .btn-fm-delete {
-    background: #fee2e2;
-    color: #b91c1c;
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
     flex: 0 0 auto;
-    padding: 6px 12px;
+    padding: 7px 12px;
 }
 .btn-fm-delete:hover {
-    background: #fecaca;
+    background: #dc2626;
+    color: #fff;
 }
 
-.upload-btn-real { background: #d32f2f; color: white; border: none; padding: 10px 22px; border-radius: 50px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); font-size: 14px; flex-shrink: 0; transition: 0.3s; }
+.upload-btn-real { background: #2563eb; color: white; border: none; padding: 8px 18px; border-radius: 25px; cursor: pointer; font-weight: bold; font-family: 'Cairo'; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 3px 8px rgba(37,99,235,0.25); font-size: 13px; flex-shrink: 0; transition: 0.2s; }
+.upload-btn-real:hover { transform: translateY(-1px); box-shadow: 0 5px 12px rgba(37,99,235,0.35); }
 .upload-btn-real:hover { transform: scale(1.05); }
 .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1E68E8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 30px auto; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }

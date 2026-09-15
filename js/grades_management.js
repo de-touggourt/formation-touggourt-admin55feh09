@@ -85,34 +85,60 @@ window.onload = function() {
     if (loader) loader.style.display = "flex";
 
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    const userRole = (sessionStorage.getItem("userRole") || "").toUpperCase();
+    const userEmpId = sessionStorage.getItem("userEmpId");
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
-    if (!isLoggedIn || !INSPECTOR_CENTER) {
+    // التحقق من الرابط في حال تم تمرير المركز عبر المعاملات
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramCenter = urlParams.get("center") || urlParams.get("c");
+    if (paramCenter) {
+        INSPECTOR_CENTER = decodeURIComponent(paramCenter);
+        sessionStorage.setItem("inspectorCenter", INSPECTOR_CENTER);
+    }
+
+    // إذا كان حساب إدارة مركزية ولم يُحدد مركز، نضع افتراضياً أو نتحقق
+    if ((userEmpId === "ADMIN_ACCESS" || userRole === "ADMIN") && !INSPECTOR_CENTER) {
+        INSPECTOR_CENTER = "المقر الإداري - توقرت";
+        sessionStorage.setItem("inspectorCenter", INSPECTOR_CENTER);
+    }
+
+    if (!isLoggedIn || (!INSPECTOR_CENTER && userEmpId !== "ADMIN_ACCESS")) {
         if (loader) loader.style.display = "none";
-        window.location.href = "/secure-login";
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
         return;
     }
 
-    // التحقق الحقيقي من المصادقة عبر Firebase Auth
+    function proceedLoad() {
+        if (document.getElementById("headerCenterName")) {
+            document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
+        }
+
+        db.collection("site_settings").doc("main").get().then(doc => {
+            if (doc.exists && doc.data().DRIVE_SETTINGS && doc.data().DRIVE_SETTINGS.academicYear) {
+                TRAINING_YEAR = doc.data().DRIVE_SETTINGS.academicYear;
+            }
+        }).catch(e => console.log("تعذر جلب السنة التكوينية"));
+
+        checkPermissions();
+        fetchPhotos();
+        fetchData();
+
+        if (loader) loader.style.display = "none";
+    }
+
+    // التحقق الحقيقي من المصادقة عبر Firebase Auth مع مرونة الجلسة
     firebase.auth().onAuthStateChanged((user) => {
         if (user) {
-            document.getElementById("headerCenterName").innerText = `- ${INSPECTOR_CENTER}`;
-
-            db.collection("site_settings").doc("main").get().then(doc => {
-                if (doc.exists && doc.data().DRIVE_SETTINGS && doc.data().DRIVE_SETTINGS.academicYear) {
-                    TRAINING_YEAR = doc.data().DRIVE_SETTINGS.academicYear;
-                }
-            }).catch(e => console.log("تعذر جلب السنة التكوينية"));
-
-            checkPermissions();
-            fetchPhotos();
-            fetchData();
-
-            // إخفاء شاشة التحميل فوراً عند نجاح المصادقة
-            if (loader) loader.style.display = "none";
+            proceedLoad();
         } else {
-            if (loader) loader.style.display = "none";
-            window.location.href = "/secure-login";
+            // إذا كانت الجلسة المحلية موثوقة بالفعل عبر SecurityGuard
+            if (sessionStorage.getItem("userEmpId")) {
+                proceedLoad();
+            } else {
+                if (loader) loader.style.display = "none";
+                window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
+            }
         }
     });
 };
@@ -120,24 +146,36 @@ window.onload = function() {
 function logout() {
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "/secure-login";
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
     }).catch((error) => {
         console.error("خطأ أثناء تسجيل الخروج:", error);
+        sessionStorage.clear();
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
     });
 }
 
 function checkPermissions() {
     let userEmpId = sessionStorage.getItem("userEmpId");
+    if (userEmpId === "ADMIN_ACCESS") {
+        CURRENT_USER_ROLE = "مدير النظام";
+        CURRENT_ADMIN_NAME = "الإدارة المركزية";
+        if (document.getElementById("welcomeName")) {
+            document.getElementById("welcomeName").innerText = `${CURRENT_USER_ROLE} | ${CURRENT_ADMIN_NAME}`;
+        }
+        return;
+    }
     db.collection("center_admins").where("center", "==", INSPECTOR_CENTER).get().then(snap => {
         snap.forEach(doc => {
             let data = doc.data();
             if(extractCoreId(data.id) === extractCoreId(userEmpId)) {
                 CURRENT_USER_ROLE = data.jobTitle || data.role || "";
                 CURRENT_ADMIN_NAME = data.name || ""; 
-                document.getElementById("welcomeName").innerText = CURRENT_USER_ROLE + " | " + CURRENT_ADMIN_NAME;
+                if (document.getElementById("welcomeName")) {
+                    document.getElementById("welcomeName").innerText = CURRENT_USER_ROLE + " | " + CURRENT_ADMIN_NAME;
+                }
             }
         });
-    });
+    }).catch(e => console.warn("تعذر التحقق من دور المستخدم:", e));
 }
 
 function fetchPhotos() {
@@ -159,6 +197,7 @@ function fetchPhotos() {
 
 // ================= Data Loading & Merging =================
 function fetchData() {
+    if (!INSPECTOR_CENTER) return;
     const loader = document.getElementById("loader");
     
     db.collection("employeescomnew").where("center", "==", INSPECTOR_CENTER).onSnapshot((empSnap) => {
@@ -181,10 +220,16 @@ function fetchData() {
         });
         
         fetchGrades();
-    }, e => showError("خطأ في جلب المتكونين"));
+    }, e => {
+        console.error("خطأ في جلب المتكونين:", e);
+        const ldr = document.getElementById("loader");
+        if(ldr) ldr.style.display = "none";
+        showError("تعذر جلب قائمة المتكونين من قاعدة البيانات.");
+    });
 }
 
 function fetchGrades() {
+    if (!INSPECTOR_CENTER) return;
     db.collection("training_grades").where("center", "==", INSPECTOR_CENTER).onSnapshot((gradeSnap) => {
         gradesData = {};
         gradeSnap.forEach(doc => {
@@ -195,7 +240,13 @@ function fetchGrades() {
         
         const loader = document.getElementById("loader");
         if(loader) loader.style.display = "none";
-    }, e => showError("خطأ في جلب النقاط"));
+    }, e => {
+        console.error("خطأ في جلب النقاط:", e);
+        buildMergedData();
+        const loader = document.getElementById("loader");
+        if(loader) loader.style.display = "none";
+        showError("تعذر تحديث النقاط من السيرفر، تم عرض بيانات المتكونين.");
+    });
 }
 
 

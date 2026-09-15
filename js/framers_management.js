@@ -1,6 +1,6 @@
-// التحقق الأمني من الصلاحيات
+// التحقق الأمني من الصلاحيات للمفتش والإدارة
 if (typeof SecurityGuard !== 'undefined') {
-    SecurityGuard.verifySession("ADMIN");
+    SecurityGuard.verifySession("INSPECTOR");
 }
 // ================= إعدادات Firebase والمطابقة =================
 const firebaseConfig = {
@@ -153,25 +153,50 @@ window.onload = function() {
     if (loader) loader.style.display = "flex";
 
     const isLoggedIn = sessionStorage.getItem("isLoggedIn");
+    const userRole = (sessionStorage.getItem("userRole") || "").toUpperCase();
+    const userEmpId = sessionStorage.getItem("userEmpId");
     INSPECTOR_CENTER = sessionStorage.getItem("inspectorCenter");
 
-    if (!isLoggedIn || !INSPECTOR_CENTER) {
+    // التحقق من الرابط في حال تم تمرير المركز عبر المعاملات
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramCenter = urlParams.get("center") || urlParams.get("c");
+    if (paramCenter) {
+        INSPECTOR_CENTER = decodeURIComponent(paramCenter);
+        sessionStorage.setItem("inspectorCenter", INSPECTOR_CENTER);
+    }
+
+    // إذا كان حساب إدارة مركزية ولم يُحدد مركز، نضع افتراضياً أو نتحقق
+    if ((userEmpId === "ADMIN_ACCESS" || userRole === "ADMIN") && !INSPECTOR_CENTER) {
+        INSPECTOR_CENTER = "المقر الإداري - توقرت";
+        sessionStorage.setItem("inspectorCenter", INSPECTOR_CENTER);
+    }
+
+    if (!isLoggedIn || (!INSPECTOR_CENTER && userEmpId !== "ADMIN_ACCESS")) {
         if (loader) loader.style.display = "none";
-        window.location.href = "/login"; // أو admin095526.html حسب صفحة الدخول الخاصة بالمفتش
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
         return;
     }
 
-    // التحقق الحقيقي من المصادقة عبر سيرفرات فايربيز
+    // التحقق الحقيقي من المصادقة عبر سيرفرات فايربيز مع حماية الجلسة المحلية
     firebase.auth().onAuthStateChanged((user) => {
         if (user) {
-            document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
+            if (document.getElementById("headerCenterName")) {
+                document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
+            }
             initializeSystem();
-            
-            // إخفاء شاشة التحميل فوراً بعد التحقق وبدء التهيئة
             if (loader) loader.style.display = "none";
         } else {
-            if (loader) loader.style.display = "none";
-            window.location.href = "/login";
+            // في حال كانت الجلسة المحلية موثوقة من SecurityGuard
+            if (sessionStorage.getItem("userEmpId")) {
+                if (document.getElementById("headerCenterName")) {
+                    document.getElementById("headerCenterName").innerText = INSPECTOR_CENTER;
+                }
+                initializeSystem();
+                if (loader) loader.style.display = "none";
+            } else {
+                if (loader) loader.style.display = "none";
+                window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
+            }
         }
     });
 };
@@ -179,9 +204,11 @@ window.onload = function() {
 function logout() {
     firebase.auth().signOut().then(() => {
         sessionStorage.clear();
-        window.location.href = "/login";
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
     }).catch((error) => {
         console.error("خطأ أثناء تسجيل الخروج:", error);
+        sessionStorage.clear();
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
     });
 }
 

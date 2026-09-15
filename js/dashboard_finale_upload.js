@@ -269,7 +269,8 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
 }
 
 function openLink(centerId, levelId, specId) {
-    window.location.href = `/courses-manage?c=${centerId}&l=${levelId}&s=${specId}`;
+    const basePath = (window.location.protocol === "file:") ? "manage_courses.html" : "/courses-manage";
+    window.location.href = `${basePath}?c=${centerId}&l=${levelId}&s=${specId}`;
 }
 
 // ==================== 4. تأثير الكتابة السلسة ====================

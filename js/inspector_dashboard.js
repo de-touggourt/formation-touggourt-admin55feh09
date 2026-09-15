@@ -510,7 +510,7 @@ function logout() {
     });
 }
 
-// ================= دوال التحقق من الصلاحيات والمنع =================
+// // ================= دوال التحقق من الصلاحيات والمنع =================
 function checkAndOpenFileManager() {
     if (currentUserRole === "المسؤول الإداري") {
         Swal.fire({
@@ -521,12 +521,15 @@ function checkAndOpenFileManager() {
         });
         return;
     }
-    window.location.href = "/files-upload";
+    window.location.href = (window.location.protocol === "file:") ? "dashboard_finale_upload.html" : "/files-upload";
 }
 
 function checkAndOpenFramers() {
-    
-    window.location.href = "/framers";
+    window.location.href = (window.location.protocol === "file:") ? "framers_management.html" : "/framers";
+}
+
+function checkAndOpenGrades() {
+    window.location.href = (window.location.protocol === "file:") ? "grades_management.html" : "/grades";
 }
 
 // ================= دوال الفلاتر المتعددة =================

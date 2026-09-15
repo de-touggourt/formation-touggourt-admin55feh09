@@ -25,10 +25,28 @@ const inspectorCenter = sessionStorage.getItem("inspectorCenter");
 // ==================== فحص صلاحيات المسؤول الإداري ====================
 async function checkUserPermissions() {
     if (userEmpId !== "ADMIN_ACCESS") {
+        const cachedRole = sessionStorage.getItem("userJobTitle");
+        if (cachedRole === "المسؤول الإداري") {
+            document.body.innerHTML = ""; 
+            Swal.fire({
+                icon: 'error',
+                title: 'صلاحيات مقيدة',
+                text: 'عذراً أستاذي الكريم، إدارة ملفات المقاييس هي صلاحية حصرية للمسؤول البيداغوجي.',
+                allowOutsideClick: false,
+                confirmButtonText: 'العودة للوحة التحكم',
+                confirmButtonColor: '#1E68E8'
+            }).then(() => {
+                window.location.href = (window.location.protocol === "file:") ? "inspector_dashboard.html" : "/inspector"; 
+            });
+            return false;
+        } else if (cachedRole) {
+            return true;
+        }
         try {
             const adminDoc = await db.collection("center_admins").doc(String(userEmpId)).get();
             if (adminDoc.exists) {
                 const data = adminDoc.data();
+                sessionStorage.setItem("userJobTitle", data.jobTitle || "");
                 if (data.jobTitle === "المسؤول الإداري") {
                     document.body.innerHTML = ""; 
                     Swal.fire({
@@ -39,7 +57,7 @@ async function checkUserPermissions() {
                         confirmButtonText: 'العودة للوحة التحكم',
                         confirmButtonColor: '#1E68E8'
                     }).then(() => {
-                        window.location.href = "/inspector"; 
+                        window.location.href = (window.location.protocol === "file:") ? "inspector_dashboard.html" : "/inspector"; 
                     });
                     return false; 
                 }
@@ -57,7 +75,9 @@ const cId = params.get('c');
 const lvl = params.get('l');
 const spc = params.get('s');
 
-function goBack() { window.location.href = "/files-upload"; }
+function goBack() { 
+    window.location.href = (window.location.protocol === "file:") ? "dashboard_finale_upload.html" : "/files-upload"; 
+}
 
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
@@ -120,18 +140,19 @@ window.onload = async function() {
     // التحقق من وجود الجلسة وسيرفرات فايربيز
     const userEmpId = sessionStorage.getItem("userEmpId");
     if (!userEmpId) { 
-        window.location.href = "/secure-login"; 
+        window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login"; 
         return; 
     }
 
+    // بدء التحميل الفوري دون انتظار تسلسلي بطيء
+    const hasPermission = await checkUserPermissions();
+    if (hasPermission) {
+        initSiteSettings();
+    }
+
     firebase.auth().onAuthStateChanged(async (user) => {
-        if (user) {
-            const hasPermission = await checkUserPermissions();
-            if (hasPermission) {
-                initSiteSettings();
-            }
-        } else {
-            window.location.href = "/secure-login";
+        if (!user && !sessionStorage.getItem("userEmpId")) {
+            window.location.href = (window.location.protocol === "file:") ? "admin095526.html" : "/secure-login";
         }
     });
 };
@@ -317,6 +338,9 @@ function getFolderId(url) {
 
 function openCourses(module){
   if(!SITE_SETTINGS) return;
+  // بدء الجلب المسبق لملفات الدورات في الخلفية لتكون جاهزة فور النقر
+  prefetchCycleFiles(module);
+
   let html='<div class="cycles-container">';
   for(let i=1;i<=3;i++){
     const open = isCycleOpen(module,i);
@@ -332,8 +356,32 @@ function openCourses(module){
   Swal.fire({ title: 'اختر الدورة للإدارة', html: html, showConfirmButton: true, confirmButtonText: 'إغلاق', width: window.innerWidth < 768 ? '95%' : '850px' });
 }
 
+// دالة الجلب المسبق الذكي لملفات الدورات لفتحها في 0 ثانية
+function prefetchCycleFiles(module) {
+    if (!currentLinks || !currentLinks[module]) return;
+    for (let i = 1; i <= 3; i++) {
+        const url = currentLinks[module][i];
+        const folderId = getFolderId(url);
+        if (folderId) {
+            const cacheKey = `files_data_${folderId}`;
+            if (!localStorage.getItem(cacheKey) && !sessionStorage.getItem(cacheKey)) {
+                fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (!d.error) {
+                            const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
+                            localStorage.setItem(cacheKey, JSON.stringify(filesList));
+                            sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
+                            sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
+                        }
+                    }).catch(() => {});
+            }
+        }
+    }
+}
+
 function formatFileSize(bytes) {
-    if (!bytes || isNaN(bytes) || bytes === 0) return 'حجم غير معروف';
+    if (!bytes || isNaN(bytes) || bytes === 0) return '';
     const k = 1024;
     const sizes = ['بايت', 'ك.ب', 'م.ب', 'ج.ب'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -342,30 +390,31 @@ function formatFileSize(bytes) {
 
 function getFileTypeMeta(file) {
     const name = (file.name || '').toLowerCase();
+    const ext = (name.split('.').pop() || '').toLowerCase();
     const mime = (file.type || '').toLowerCase();
     
-    if (name.endsWith('.pdf') || mime.includes('pdf')) {
-        return { icon: 'fa-file-pdf', color: '#ef4444', bg: '#fee2e2', label: 'PDF' };
+    if (ext === 'pdf' || mime.includes('pdf')) {
+        return { icon: 'fa-file-pdf', css: 'file-icon-pdf', label: 'PDF' };
     }
-    if (name.endsWith('.doc') || name.endsWith('.docx') || mime.includes('word') || mime.includes('officedocument.wordprocessing')) {
-        return { icon: 'fa-file-word', color: '#2563eb', bg: '#dbeafe', label: 'Word' };
+    if (['doc', 'docx'].includes(ext) || mime.includes('word') || mime.includes('officedocument.wordprocessing')) {
+        return { icon: 'fa-file-word', css: 'file-icon-word', label: 'Word' };
     }
-    if (name.endsWith('.xls') || name.endsWith('.xlsx') || mime.includes('excel') || mime.includes('spreadsheet')) {
-        return { icon: 'fa-file-excel', color: '#16a34a', bg: '#dcfce7', label: 'Excel' };
+    if (['xls', 'xlsx'].includes(ext) || mime.includes('excel') || mime.includes('spreadsheet')) {
+        return { icon: 'fa-file-excel', css: 'file-icon-excel', label: 'Excel' };
     }
-    if (name.endsWith('.ppt') || name.endsWith('.pptx') || mime.includes('powerpoint') || mime.includes('presentation')) {
-        return { icon: 'fa-file-powerpoint', color: '#ea580c', bg: '#ffedd5', label: 'PowerPoint' };
+    if (['ppt', 'pptx'].includes(ext) || mime.includes('powerpoint') || mime.includes('presentation')) {
+        return { icon: 'fa-file-powerpoint', css: 'file-icon-ppt', label: 'PowerPoint' };
     }
-    if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.gif') || mime.includes('image')) {
-        return { icon: 'fa-file-image', color: '#8b5cf6', bg: '#ede9fe', label: 'صورة' };
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) || mime.includes('image')) {
+        return { icon: 'fa-file-image', css: 'file-icon-image', label: 'صورة' };
     }
-    if (name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z') || mime.includes('zip') || mime.includes('rar')) {
-        return { icon: 'fa-file-zipper', color: '#d97706', bg: '#fef3c7', label: 'أرشيف' };
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mime.includes('zip') || mime.includes('rar')) {
+        return { icon: 'fa-file-zipper', css: 'file-icon-archive', label: 'أرشيف' };
     }
-    if (name.endsWith('.mp4') || name.endsWith('.mkv') || mime.includes('video')) {
-        return { icon: 'fa-file-video', color: '#ec4899', bg: '#fce7f3', label: 'فيديو' };
+    if (['mp4', 'mkv', 'avi', 'webm'].includes(ext) || mime.includes('video')) {
+        return { icon: 'fa-file-video', css: 'file-icon-ppt', label: 'فيديو' };
     }
-    return { icon: 'fa-file-lines', color: '#64748b', bg: '#f1f5f9', label: 'ملف' };
+    return { icon: 'fa-file-lines', css: 'file-icon-default', label: 'ملف' };
 }
 
 window.handleFileManagerFileSelect = function(input) {
@@ -423,13 +472,14 @@ window.filterManagerFiles = function(query) {
     }
 };
 
+// توليد بطاقات الملفات بحجم وهيئة بطاقات صفحة المتكونين تماماً
 function generateFilesGridHtml(files, folderId, module, cycle) {
     if (!files || files.length === 0) {
         return `
-        <div style="grid-column: 1 / -1; text-align:center; padding:50px 20px; color:#94a3b8; border:2px dashed #cbd5e1; border-radius:16px; background:#fff;">
-            <i class="fa-solid fa-folder-open" style="font-size:48px; color:#cbd5e1; margin-bottom:12px; display:block;"></i>
-            <div style="font-size:16px; font-weight:700; color:#475569; margin-bottom:6px;">المجلد فارغ حالياً</div>
-            <div style="font-size:13px; color:#94a3b8;">يمكنك البدء برفع مذكرات وملفات هذا المقياس مباشرة من لوحة الرفع أعلاه</div>
+        <div style="grid-column: 1 / -1; text-align:center; padding:35px 20px; color:#64748b; border:2px dashed #cbd5e1; border-radius:16px; background:#fff;">
+            <i class="fa-regular fa-folder-open" style="font-size:42px; color:#cbd5e1; margin-bottom:10px; display:block;"></i>
+            <div style="font-size:15px; font-weight:700; color:#475569; margin-bottom:4px;">المجلد فارغ حالياً</div>
+            <div style="font-size:12.5px; color:#94a3b8;">يمكنك البدء برفع مذكرات وملفات هذا المقياس عبر لوحة الرفع أعلاه</div>
         </div>`;
     }
 
@@ -442,26 +492,26 @@ function generateFilesGridHtml(files, folderId, module, cycle) {
         return `
         <div class="fm-file-card" data-filename="${(file.name || '').toLowerCase()}" data-filetype="${meta.label.toLowerCase()}">
             <div class="fm-file-top">
-                <div class="fm-file-icon-box" style="background:${meta.bg}; color:${meta.color};">
+                <div class="fm-file-icon-box ${meta.css}">
                     <i class="fa-solid ${meta.icon}"></i>
                 </div>
                 <div class="fm-file-info">
                     <div class="fm-file-title" title="${file.name || ''}">${file.name || 'ملف بدون اسم'}</div>
                     <div class="fm-file-meta">
-                        <span style="background:${meta.bg}; color:${meta.color}; padding:1px 6px; border-radius:6px; font-weight:700; font-size:10px;">${meta.label}</span>
-                        ${sizeStr ? `<span><i class="fa-regular fa-hard-drive" style="margin-left:3px;"></i>${sizeStr}</span>` : ''}
+                        <span class="file-ext-tag">${meta.label}</span>
+                        ${sizeStr ? `<span><i class="fa-solid fa-hard-drive" style="margin-left:3px; font-size:10px;"></i>${sizeStr}</span>` : '<span><i class="fa-solid fa-cloud-arrow-down"></i> جاهز للتحميل</span>'}
                     </div>
                 </div>
             </div>
             <div class="fm-file-actions">
                 <a href="${previewUrl}" target="_blank" class="btn-fm-act btn-fm-preview" title="معاينة الملف">
-                    <i class="fa-regular fa-eye"></i> معاينة
+                    <i class="fa-solid fa-eye"></i> معاينة
                 </a>
                 <a href="${downloadUrl}" target="_blank" download class="btn-fm-act btn-fm-download" title="تحميل الملف">
                     <i class="fa-solid fa-download"></i> تحميل
                 </a>
                 <button type="button" class="btn-fm-act btn-fm-delete" onclick="deleteFile('${file.id}', '${folderId}', '${module}', ${cycle})" title="حذف الملف نهائياً">
-                    <i class="fa-solid fa-trash-can"></i>
+                    <i class="fa-solid fa-trash-can"></i> حذف
                 </button>
             </div>
         </div>`;
@@ -477,36 +527,59 @@ function openFileManager(module, cycle) {
     return;
   }
 
-  // استخدام الكاش المحلي لعرض الملفات فوراً
   const cacheKey = `files_data_${folderId}`;
-  const cached = sessionStorage.getItem(cacheKey);
+  // 1. فحص الكاش الفوري (localStorage أولاً لفتح النافذة في 0 ثانية)
+  let cached = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
   if (cached) {
     try {
       const cachedFiles = JSON.parse(cached);
       renderFileManager(folderId, cachedFiles, module, cycle);
 
-      // تحديث صامت في الخلفية
+      // تحديث صامت في الخلفية لجلب أي ملفات جديدة أو محذوفة بدون تعطيل المستخدم
       fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
         .then(r => r.json())
         .then(d => {
           if (!d.error) {
             const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
+            localStorage.setItem(cacheKey, JSON.stringify(filesList));
             sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
             sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
+            
+            // تحديث البطاقات بسلاسة إذا كانت النافذة لا تزال مفتوحة لذات المجلد
+            const grid = document.getElementById('fmFilesGrid');
+            if (grid && grid.getAttribute('data-folder-id') === folderId) {
+                grid.innerHTML = generateFilesGridHtml(filesList, folderId, module, cycle);
+                const countBadge = document.getElementById('fmFilesCountBadge');
+                if (countBadge) countBadge.innerHTML = `<i class="fa-solid fa-layer-group" style="margin-left:5px;"></i>${filesList.length} ملف`;
+            }
           }
         }).catch(() => {});
       return;
     } catch(e) {}
   }
 
-  Swal.fire({ title: 'جاري جلب الملفات...', html: '<div class="spinner"></div>', showConfirmButton: false, width: '400px', allowOutsideClick: false });
+  // 2. إذا لم يتوفر كاش سابق، نعرض مؤشر تحميل خفيف وسريع
+  Swal.fire({
+    title: 'جاري جلب الملفات...',
+    html: `
+      <div style="padding: 25px; text-align:center;">
+        <div class="spinner" style="margin: 0 auto 12px auto; width:45px; height:45px;"></div>
+        <p style="color:#1E68E8; font-weight:700; font-size:14px; margin:0;">جاري تحميل الملفات من Google Drive...</p>
+      </div>
+    `,
+    showConfirmButton: false,
+    width: '400px',
+    allowOutsideClick: false
+  });
 
   fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
   .then(res => res.json())
   .then(data => {
-    if(data.error) Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد', 'error');
-    else {
+    if(data.error) {
+        Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد على Google Drive.', 'error');
+    } else {
       const filesList = Array.isArray(data) ? data : (Array.isArray(data?.files) ? data.files : []);
+      localStorage.setItem(cacheKey, JSON.stringify(filesList));
       sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
       sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
       renderFileManager(folderId, filesList, module, cycle);
@@ -526,49 +599,50 @@ function renderFileManager(folderId, files, module, cycle) {
         <div class="fm-header-bar">
             <div class="fm-search-box">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="fmSearchInput" placeholder="بحث سريع في ملفات الدورة بالاسم أو النوع..." oninput="window.filterManagerFiles(this.value)">
+                <input type="text" id="fmSearchInput" placeholder="🔍 بحث سريع بالاسم أو النوع..." oninput="window.filterManagerFiles(this.value)">
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <span id="fmFilesCountBadge" style="background:#e0f2fe; color:#0369a1; padding:6px 14px; border-radius:20px; font-weight:700; font-size:13px;">
-                    <i class="fa-solid fa-layer-group" style="margin-left:5px;"></i>${filesList.length} ملف
+                <span id="fmFilesCountBadge" style="background:#e0f2fe; color:#0369a1; padding:5px 12px; border-radius:20px; font-weight:700; font-size:12px;">
+                    <i class="fa-solid fa-layer-group" style="margin-left:4px;"></i>${filesList.length} ملف
                 </span>
-                <a href="https://drive.google.com/drive/folders/${folderId}" target="_blank" style="background:#f1f5f9; color:#475569; padding:6px 14px; border-radius:20px; font-weight:700; font-size:13px; text-decoration:none; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
+                <a href="https://drive.google.com/drive/folders/${folderId}" target="_blank" style="background:#f1f5f9; color:#475569; padding:5px 12px; border-radius:20px; font-weight:700; font-size:12px; text-decoration:none; display:inline-flex; align-items:center; gap:5px; transition:0.2s;">
                     <i class="fa-brands fa-google-drive" style="color:#22c55e;"></i> فتح المجلد في Drive
                 </a>
             </div>
         </div>
 
-        <!-- لوحة الرفع السريعة -->
+        <!-- لوحة الرفع السريعة المدمجة -->
         <div class="fm-upload-panel">
             <input type="file" id="fileInput" style="display:none" onchange="window.handleFileManagerFileSelect(this)">
             <div class="fm-upload-controls">
-                <button type="button" class="upload-btn-real" onclick="document.getElementById('fileInput').click()" style="background:#2563eb;">
-                    <i class="fa-solid fa-folder-open"></i> <span>اختر ملفاً</span>
+                <button type="button" class="upload-btn-real" onclick="document.getElementById('fileInput').click()">
+                    <i class="fa-solid fa-folder-open"></i> <span>اختر ملفاً للرفع</span>
                 </button>
-                <div id="fileNameDisplay" style="font-size:13px; font-weight:600; color:#64748b; background:#f8fafc; padding:8px 14px; border-radius:10px; border:1px dashed #cbd5e1; max-width:380px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                    <i class="fa-solid fa-circle-info" style="margin-left:5px;"></i> لم يتم اختيار أي ملف
+                <div id="fileNameDisplay" style="font-size:12px; font-weight:600; color:#64748b; background:#f8fafc; padding:6px 12px; border-radius:8px; border:1px dashed #cbd5e1; max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    <i class="fa-solid fa-circle-info" style="margin-left:4px;"></i> لم يتم اختيار أي ملف
                 </div>
             </div>
             <button type="button" id="startUploadBtn" class="upload-btn-real" style="background:#16a34a; opacity:0.6; cursor:not-allowed;" disabled onclick="uploadFile('${folderId}', '${module}', ${cycle})">
-                <i class="fa-solid fa-cloud-arrow-up"></i> <span>بدء رفع الملف</span>
+                <i class="fa-solid fa-cloud-arrow-up"></i> <span>بدء الرفع</span>
             </button>
         </div>
 
-        <!-- شبكة عرض الملفات -->
-        <div class="fm-files-grid" id="fmFilesGrid">
+        <!-- شبكة عرض الملفات المتناسقة مع صفحة المتكونين -->
+        <div class="fm-files-grid" id="fmFilesGrid" data-folder-id="${folderId}">
             ${generateFilesGridHtml(filesList, folderId, module, cycle)}
         </div>
     </div>`;
 
     Swal.fire({
-        title: `<div style="display:flex; align-items:center; gap:10px; font-size:1.35rem; color:#0f172a;"><i class="fa-solid fa-folder-tree" style="color:#1E68E8;"></i> إدارة ملفات: ${moduleName} - <span style="color:#1E68E8;">${cycleTitle}</span></div>`,
+        title: `<div style="display:flex; align-items:center; gap:10px; font-size:1.25rem; color:#0f172a;"><i class="fa-solid fa-folder-tree" style="color:#1E68E8;"></i> إدارة ملفات: ${moduleName} - <span style="color:#1E68E8;">${cycleTitle}</span></div>`,
         html: htmlContent,
-        width: '96vw',
+        width: '920px',
         customClass: { popup: 'swal2-popup swal-fullscreen-filemanager' },
         showConfirmButton: true,
-        confirmButtonText: '<i class="fa-solid fa-xmark"></i> إغلاق النافذة',
+        confirmButtonText: 'إغلاق النافذة',
         showDenyButton: true,
-        denyButtonText: '<i class="fa-solid fa-arrow-right"></i> العودة لقائمة الدورات',
+        denyButtonText: '<i class="fa-solid fa-arrow-right"></i> قائمة الدورات',
+        denyButtonColor: '#64748b',
         scrollbarPadding: false
     }).then((res) => {
         if (res.isDenied) openCourses(module);
@@ -591,12 +665,15 @@ function deleteFile(fileId, folderId, module, cycle) {
                 title: 'جاري الحذف...',
                 html: 'يرجى الانتظار لحذف الملف من سحابة Google Drive <div class="spinner"></div>',
                 showConfirmButton: false,
-                allowOutsideClick: false
+                allowOutsideClick: false,
+                width: '400px'
             });
             fetch(`${APPS_SCRIPT_URL}?action=delete&fileId=${fileId}&folderId=${folderId}`, {method: 'POST'})
             .then(res => res.json())
             .then(data => {
                 if(data.status === 'success') { 
+                    localStorage.removeItem(`files_data_${folderId}`);
+                    localStorage.removeItem(`files_count_${folderId}`);
                     sessionStorage.removeItem(`files_data_${folderId}`);
                     sessionStorage.removeItem(`files_count_${folderId}`);
                     Swal.fire({
@@ -631,7 +708,7 @@ function uploadFile(folderId, module, cycle) {
             html: `يرجى الانتظار أثناء رفع <b>${file.name}</b> إلى Google Drive <div class="spinner"></div>`,
             showConfirmButton: false,
             allowOutsideClick: false,
-            width: '450px'
+            width: '400px'
         });
 
         const formData = new FormData();
@@ -645,6 +722,8 @@ function uploadFile(folderId, module, cycle) {
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') { 
+                localStorage.removeItem(`files_data_${folderId}`);
+                localStorage.removeItem(`files_count_${folderId}`);
                 sessionStorage.removeItem(`files_data_${folderId}`);
                 sessionStorage.removeItem(`files_count_${folderId}`);
                 Swal.fire({
