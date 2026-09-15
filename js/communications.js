@@ -558,11 +558,10 @@ function renderMessageDetails(msg) {
                     <div class="att-actions">
                         ${hasValidLink ? `
                             <a href="${previewUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="معاينة الملف"><i class="fa-solid fa-eye"></i></a>
-                            <a href="${directDownloadUrl}" download target="_blank" rel="noopener noreferrer" class="btn-att-action" title="تحميل مباشر"><i class="fa-solid fa-download"></i></a>
-                            <a href="${driveViewUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="فتح في Google Drive"><i class="fa-brands fa-google-drive"></i></a>
+                            <a href="${directDownloadUrl}" download target="_blank" rel="noopener noreferrer" class="btn-att-action" title="تحميل الملف"><i class="fa-solid fa-download"></i></a>
                         ` : `
-                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'preview')" title="معاينة من Drive"><i class="fa-solid fa-eye"></i></button>
-                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'download')" title="تحميل مباشر"><i class="fa-solid fa-download"></i></button>
+                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'preview')" title="معاينة الملف"><i class="fa-solid fa-eye"></i></button>
+                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'download')" title="تحميل الملف"><i class="fa-solid fa-download"></i></button>
                         `}
                     </div>
                 </div>
@@ -833,11 +832,95 @@ window.handleFileSelect = function(files) {
             file: file,
             name: file.name,
             size: formatBytes(file.size),
-            mime: file.type
+            mime: file.type,
+            isUploaded: false,
+            isUploading: false,
+            fileId: '',
+            url: ''
         });
     }
     renderSelectedFilesList();
 };
+
+// دالة مركزية لرفع ملف فردي إلى Google Drive
+async function uploadSingleFileToDrive(item, idx) {
+    if (item.isUploaded && item.fileId) {
+        return {
+            name: item.name,
+            size: item.size,
+            mime: item.mime,
+            fileId: item.fileId,
+            url: item.url
+        };
+    }
+
+    if (item.isPreUploaded) {
+        item.isUploaded = true;
+        return {
+            name: item.name,
+            size: item.size,
+            mime: item.mime,
+            fileId: item.fileId || '',
+            url: item.url || (item.fileId ? `https://drive.google.com/file/d/${item.fileId}/view?usp=drivesdk` : '')
+        };
+    }
+
+    const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) 
+        ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId 
+        : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
+
+    const base64Data = await readFileAsBase64(item.file);
+    const uniqueFileName = `${Date.now()}_${idx}_${item.name}`;
+
+    const formData = new FormData();
+    formData.append('action', 'upload');
+    formData.append('name', uniqueFileName);
+    formData.append('mime', item.mime || 'application/octet-stream');
+    formData.append('data', base64Data);
+    formData.append('folderId', targetFolderId);
+
+    // استخدام سكريبت Drive الفعال والموثوق
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
+    const data = await res.json();
+
+    let fileId = data.id || data.fileId || '';
+    let fileUrl = data.url || '';
+
+    // إذا نجح الرفع ولم يرجع السكريبت المعرف مباشرة، نستعلم لحظياً عن المجلد
+    if (!fileId && data.status === 'success') {
+        try {
+            const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
+            const listData = await listRes.json();
+            const filesList = Array.isArray(listData) ? listData : (Array.isArray(listData?.files) ? listData.files : []);
+            if (filesList.length > 0) {
+                const matched = filesList.find(f => f.name === uniqueFileName) || filesList.find(f => f.name === item.name) || filesList[0];
+                if (matched && matched.id) {
+                    fileId = matched.id;
+                    fileUrl = matched.url || `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
+                }
+            }
+        } catch(listErr) {
+            console.warn("تعذر الاستعلام عن ملف الدرايف:", listErr);
+        }
+    }
+
+    if (!fileUrl && fileId) {
+        fileUrl = `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
+    }
+
+    item.fileId = fileId;
+    item.url = fileUrl;
+    item.isUploaded = !!fileId;
+    item.isUploading = false;
+
+    return {
+        name: item.name,
+        size: item.size,
+        mime: item.mime,
+        fileId: fileId,
+        url: fileUrl
+    };
+}
 
 function renderSelectedFilesList() {
     const container = document.getElementById("selectedFilesList");
@@ -848,83 +931,152 @@ function renderSelectedFilesList() {
         return;
     }
 
-    let downloadAllHtml = '';
-    if (selectedFilesToUpload.length > 1) {
-        downloadAllHtml = `
-            <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-                <button type="button" class="btn-download-all-drafts" onclick="downloadAllDraftFiles()">
-                    <i class="fa-solid fa-cloud-arrow-down"></i> تحميل كافة الملفات المحددة (${selectedFilesToUpload.length})
+    const unuploadedFiles = selectedFilesToUpload.filter(f => !f.isUploaded);
+    const anyUploading = selectedFilesToUpload.some(f => f.isUploading);
+
+    let topBarHtml = '';
+    if (selectedFilesToUpload.length > 1 && unuploadedFiles.length > 0) {
+        topBarHtml = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+                <span style="font-size:12px; color:#64748b; font-weight:700;">الملفات المختارة (${selectedFilesToUpload.length}):</span>
+                <button type="button" class="btn-upload-all-drafts" onclick="uploadAllDraftFiles()" ${anyUploading ? 'disabled' : ''}>
+                    <i class="fa-solid fa-cloud-arrow-up"></i> رفع كافة الملفات إلى Google Drive (${unuploadedFiles.length})
                 </button>
+            </div>
+        `;
+    } else if (unuploadedFiles.length === 0 && selectedFilesToUpload.length > 0) {
+        topBarHtml = `
+            <div style="background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-circle-check"></i> تم رفع كافة الملفات بنجاح إلى Google Drive، يمكنك الآن الضغط على زر "إرسال المراسلة الآن".
             </div>
         `;
     }
 
-    const itemsHtml = selectedFilesToUpload.map((item, idx) => `
-        <div class="file-chip">
-            <div class="file-chip-name">
-                <i class="fa-solid fa-file" style="color:#1E68E8;"></i>
-                <span title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
-                <span style="color:#94a3b8; font-size:11px;">(${item.size})</span>
-                ${item.isPreUploaded ? '<span style="color:#0FBA50; font-size:10px; font-weight:bold;">[مُرفق سحابي]</span>' : ''}
-            </div>
-            <div class="file-chip-actions">
-                <button type="button" class="btn-download-file" onclick="downloadDraftFile(${idx})" title="تحميل أو معاينة الملف للتأكد منه قبل الإرسال">
-                    <i class="fa-solid fa-download"></i> تحميل
-                </button>
-                <button class="btn-remove-file" onclick="removeSelectedFile(${idx})" title="إزالة"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-        </div>
-    `).join('');
+    const itemsHtml = selectedFilesToUpload.map((item, idx) => {
+        let actionBtn = '';
+        if (item.isUploading) {
+            actionBtn = `<button type="button" class="btn-upload-file uploading" disabled><i class="fa-solid fa-spinner fa-spin"></i> جاري الرفع...</button>`;
+        } else if (item.isUploaded) {
+            actionBtn = `<span class="btn-upload-file uploaded"><i class="fa-solid fa-circle-check"></i> تم الرفع بنجاح</span>`;
+        } else {
+            actionBtn = `<button type="button" class="btn-upload-file" onclick="uploadDraftFile(${idx})" title="رفع هذا الملف إلى Google Drive الآن"><i class="fa-solid fa-cloud-arrow-up"></i> رفع الملف</button>`;
+        }
 
-    container.innerHTML = downloadAllHtml + itemsHtml;
+        return `
+            <div class="file-chip">
+                <div class="file-chip-name">
+                    <i class="fa-solid fa-file" style="color:#1E68E8;"></i>
+                    <span title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                    <span style="color:#94a3b8; font-size:11px;">(${item.size})</span>
+                    ${item.isPreUploaded ? '<span style="color:#0FBA50; font-size:10px; font-weight:bold;">[مُرفق سحابي]</span>' : ''}
+                </div>
+                <div class="file-chip-actions">
+                    ${actionBtn}
+                    <button class="btn-remove-file" onclick="removeSelectedFile(${idx})" title="إزالة" ${item.isUploading ? 'disabled style="opacity:0.5;"' : ''}><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = topBarHtml + itemsHtml;
 }
 
-// تحميل ملف محدد قبل إرساله للتأكد من سلامته
-window.downloadDraftFile = function(idx) {
+// رفع ملف محدد قبل إرسال المراسلة
+window.uploadDraftFile = async function(idx) {
     const item = selectedFilesToUpload[idx];
-    if (!item) return;
+    if (!item || item.isUploaded || item.isUploading) return;
 
-    if (item.file) {
-        // ملف محلي تم اختياره من الجهاز
-        const url = URL.createObjectURL(item.file);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = item.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-    } else if (item.fileId || item.url) {
-        // ملف مسجل مسبقاً في درايف
-        const dlUrl = item.fileId 
-            ? `https://drive.google.com/uc?export=download&id=${item.fileId}` 
-            : (item.url || '');
-        if (dlUrl) {
-            window.open(dlUrl, '_blank', 'noopener,noreferrer');
+    item.isUploading = true;
+    renderSelectedFilesList();
+
+    try {
+        const res = await uploadSingleFileToDrive(item, idx);
+        if (res && res.fileId) {
+            item.isUploaded = true;
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `تم رفع "${item.name}" إلى Google Drive بنجاح!`,
+                showConfirmButton: false,
+                timer: 2000
+            });
         } else {
-            Swal.fire('تنبيه', 'رابط تحميل الملف غير متوفر.', 'warning');
+            throw new Error("لم يتم إرجاع معرف الملف من Google Drive");
         }
+    } catch (err) {
+        console.error("خطأ أثناء رفع الملف:", err);
+        item.isUploaded = false;
+        Swal.fire('خطأ في الرفع', `تعذر رفع الملف "${item.name}" إلى السحابة، يرجى المحاولة مرة أخرى.`, 'error');
+    } finally {
+        item.isUploading = false;
+        renderSelectedFilesList();
     }
 };
 
-// تحميل كافة الملفات المحددة في المسودة دفعة واحدة
-window.downloadAllDraftFiles = function() {
-    if (!selectedFilesToUpload || selectedFilesToUpload.length === 0) return;
-    
+// رفع كافة الملفات المحددة في المسودة دفعة واحدة
+window.uploadAllDraftFiles = async function() {
+    const unuploaded = selectedFilesToUpload.map((item, idx) => ({ item, idx })).filter(x => !x.item.isUploaded);
+    if (unuploaded.length === 0) {
+        return Swal.fire('تنبيه', 'كافة الملفات تم رفعها بالفعل إلى Google Drive.', 'info');
+    }
+
     Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'info',
-        title: `جاري تحميل ${selectedFilesToUpload.length} ملفات...`,
-        showConfirmButton: false,
-        timer: 1500
+        title: 'جاري رفع الملفات إلى Google Drive...',
+        html: `
+            <div style="text-align:center; padding:15px;">
+                <div class="spinner" style="margin: 0 auto 15px auto;"></div>
+                <p id="bulkUploadText" style="color:#0FBA50; font-weight:bold; font-size:14px; margin:0;">
+                    جاري رفع 1 من ${unuploaded.length}...
+                </p>
+            </div>
+        `,
+        allowOutsideClick: false,
+        showConfirmButton: false
     });
 
-    selectedFilesToUpload.forEach((item, idx) => {
-        setTimeout(() => {
-            downloadDraftFile(idx);
-        }, idx * 500);
-    });
+    let successCount = 0;
+    for (let i = 0; i < unuploaded.length; i++) {
+        const { item, idx } = unuploaded[i];
+        try {
+            item.isUploading = true;
+            renderSelectedFilesList();
+
+            const textEl = document.getElementById("bulkUploadText");
+            if (textEl) textEl.innerText = `جاري رفع: ${item.name} (${i + 1}/${unuploaded.length})...`;
+
+            const res = await uploadSingleFileToDrive(item, idx);
+            if (res && res.fileId) {
+                item.isUploaded = true;
+                successCount++;
+            }
+        } catch (err) {
+            console.error("خطأ أثناء رفع الملف:", err);
+            item.isUploaded = false;
+        } finally {
+            item.isUploading = false;
+        }
+    }
+
+    Swal.close();
+    renderSelectedFilesList();
+
+    if (successCount === unuploaded.length) {
+        Swal.fire({
+            icon: 'success',
+            title: 'اكتمل الرفع بنجاح!',
+            text: `تم رفع كافة الملفات (${successCount}) إلى Google Drive بنجاح. يمكنك الآن الضغط على زر "إرسال المراسلة الآن".`,
+            confirmButtonColor: '#0FBA50',
+            confirmButtonText: 'حسناً'
+        });
+    } else {
+        Swal.fire({
+            icon: 'warning',
+            title: 'اكتمل الرفع مع بعض الملاحظات',
+            text: `تم رفع ${successCount} من أصل ${unuploaded.length} ملفات بنجاح.`,
+            confirmButtonColor: '#f59e0b'
+        });
+    }
 };
 
 window.removeSelectedFile = function(idx) {
@@ -949,7 +1101,7 @@ window.submitNewMessage = async function() {
     const btnSubmit = document.getElementById("btnSubmitMessage");
     btnSubmit.disabled = true;
 
-    const filesToUploadDirectly = selectedFilesToUpload.filter(item => !item.isPreUploaded);
+    const unuploadedFiles = selectedFilesToUpload.filter(item => !item.isUploaded);
 
     Swal.fire({
         title: 'جاري إرسال المراسلة...',
@@ -957,7 +1109,7 @@ window.submitNewMessage = async function() {
             <div style="text-align:center; padding:15px;">
                 <div class="spinner" style="margin: 0 auto 15px auto;"></div>
                 <p id="uploadStatusText" style="color:#0FBA50; font-weight:bold; font-size:14px; margin:0;">
-                    ${filesToUploadDirectly.length > 0 ? 'جاري رفع الملفات المرفقة إلى Google Drive...' : 'جاري تسجيل المراسلة في النظام...'}
+                    ${unuploadedFiles.length > 0 ? 'جاري رفع الملفات المتبقية إلى Google Drive...' : 'جاري تسجيل المراسلة في النظام...'}
                 </p>
             </div>
         `,
@@ -967,80 +1119,7 @@ window.submitNewMessage = async function() {
 
     try {
         // رفع ومعالجة الملفات المرفقة بالتوازي لتسريع العملية فورياً
-        const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) 
-            ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId 
-            : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
-
-        const uploadPromises = selectedFilesToUpload.map(async (item, idx) => {
-            if (item.isPreUploaded) {
-                return {
-                    name: item.name,
-                    size: item.size,
-                    mime: item.mime,
-                    fileId: item.fileId || '',
-                    url: item.url || (item.fileId ? `https://drive.google.com/file/d/${item.fileId}/view?usp=drivesdk` : '')
-                };
-            }
-
-            try {
-                const base64Data = await readFileAsBase64(item.file);
-                const uniqueFileName = `${Date.now()}_${idx}_${item.name}`;
-
-                const formData = new FormData();
-                formData.append('action', 'upload');
-                formData.append('name', uniqueFileName);
-                formData.append('mime', item.mime || 'application/octet-stream');
-                formData.append('data', base64Data);
-                formData.append('folderId', targetFolderId);
-
-                // استخدام سكريبت Drive الفعال والموثوق
-                const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
-                const data = await res.json();
-
-                let fileId = data.id || data.fileId || '';
-                let fileUrl = data.url || '';
-
-                // إذا نجح الرفع ولم يرجع السكريبت المعرف مباشرة، نستعلم لحظياً عن المجلد
-                if (!fileId && data.status === 'success') {
-                    try {
-                        const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
-                        const listData = await listRes.json();
-                        const filesList = Array.isArray(listData) ? listData : (Array.isArray(listData?.files) ? listData.files : []);
-                        if (filesList.length > 0) {
-                            const matched = filesList.find(f => f.name === uniqueFileName) || filesList.find(f => f.name === item.name) || filesList[0];
-                            if (matched && matched.id) {
-                                fileId = matched.id;
-                                fileUrl = matched.url || `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
-                            }
-                        }
-                    } catch(listErr) {
-                        console.warn("تعذر الاستعلام عن ملف الدرايف:", listErr);
-                    }
-                }
-
-                if (!fileUrl && fileId) {
-                    fileUrl = `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
-                }
-
-                return {
-                    name: item.name,
-                    size: item.size,
-                    mime: item.mime,
-                    fileId: fileId,
-                    url: fileUrl
-                };
-            } catch(uploadErr) {
-                console.warn("تعذر رفع الملف إلى درايف:", uploadErr);
-                return {
-                    name: item.name,
-                    size: item.size,
-                    mime: item.mime,
-                    fileId: '',
-                    url: ''
-                };
-            }
-        });
-
+        const uploadPromises = selectedFilesToUpload.map((item, idx) => uploadSingleFileToDrive(item, idx));
         const uploadedFilesMetadata = await Promise.all(uploadPromises);
 
         // تجهيز وثيقة الرسالة في Firestore

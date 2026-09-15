@@ -87,10 +87,10 @@ function populateCenterFilterOptions() {
     const sel = document.getElementById("feedFilterCenter");
     if (!sel || !SITE_SETTINGS || !SITE_SETTINGS.UI_NAMES || !SITE_SETTINGS.UI_NAMES.centers) return;
     const currentVal = sel.value;
-    let html = '<option value="ALL">🏫 جميع المراكز</option>';
+    let html = '<option value="ALL">جميع المراكز (الكل)</option>';
     const centers = SITE_SETTINGS.UI_NAMES.centers;
     for (let k in centers) {
-        html += `<option value="${escapeHtml(centers[k])}">${escapeHtml(centers[k])}</option>`;
+        html += `<option value="${escapeHtml(centers[k])}">مركز: ${escapeHtml(centers[k])}</option>`;
     }
     sel.innerHTML = html;
     if (currentVal && currentVal !== "ALL") sel.value = currentVal;

@@ -114,13 +114,13 @@
 
     /* المحتوى الرئيسي */
     .container {
-      max-width: 1200px;
-      width: 100%;
-      margin: 25px auto;
+      max-width: 1480px;
+      width: 96%;
+      margin: 22px auto;
       padding: 0 15px;
       flex: 1;
       display: grid;
-      grid-template-columns: 480px 1fr;
+      grid-template-columns: 400px 1fr;
       gap: 25px;
       align-items: start;
     }
@@ -499,9 +499,150 @@
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+    /* شريط التصفية والبحث في سجل الإشعارات */
+    .feed-filters-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      width: 100%;
+      flex-wrap: nowrap;
+    }
+    .filter-item-center {
+      flex: 0 0 200px;
+      min-width: 170px;
+    }
+    .filter-item-audience {
+      flex: 0 0 170px;
+      min-width: 150px;
+    }
+    .filter-item-date {
+      flex: 0 0 160px;
+      min-width: 145px;
+    }
+    .filter-item-search {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .filter-control {
+      width: 100%;
+      height: 42px;
+      padding: 6px 12px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      font-family: 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      background-color: #ffffff;
+      outline: none;
+      transition: all 0.2s ease;
+      direction: rtl;
+      text-align: right;
+      box-sizing: border-box;
+      line-height: 26px;
+    }
+    .filter-control:focus {
+      border-color: #0FBA50;
+      box-shadow: 0 0 0 3px rgba(15, 186, 80, 0.15);
+      background-color: #fff;
+    }
+    select.filter-control {
+      cursor: pointer;
+      padding-left: 28px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: left 10px center;
+    }
+    select.filter-control option {
+      font-family: 'Cairo', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 10px;
+      color: #1e293b;
+      background: #ffffff;
+      direction: rtl;
+      text-align: right;
+    }
+
+    .date-filter-wrapper {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+    }
+    .date-filter-wrapper input[type="date"] {
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+    }
+    .btn-clear-date {
+      position: absolute;
+      left: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+      border-radius: 6px;
+      width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+      transition: 0.2s;
+      z-index: 2;
+    }
+    .btn-clear-date:hover {
+      background: #ef4444;
+      color: #fff;
+    }
+
+    .search-filter-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .search-filter-wrapper input {
+      padding-right: 36px;
+    }
+    .search-filter-icon {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 13px;
+      pointer-events: none;
+    }
+
+    @media (max-width: 1180px) {
+      .container { grid-template-columns: 360px 1fr; }
+      .feed-filters-bar { flex-wrap: wrap; }
+      .filter-item-center, .filter-item-audience, .filter-item-date {
+        flex: 1 1 calc(33.333% - 8px);
+      }
+      .filter-item-search {
+        flex: 1 1 100%;
+      }
+    }
     @media (max-width: 992px) {
       .container { grid-template-columns: 1fr; }
       .composer-card { position: static; }
+      .filter-item-center, .filter-item-audience {
+        flex: 1 1 calc(50% - 6px);
+      }
+      .filter-item-date, .filter-item-search {
+        flex: 1 1 100%;
+      }
     }
   </style>
 </head>
@@ -615,27 +756,46 @@
         <span class="history-count" id="historyCountBadge">0 إشعار</span>
       </div>
 
-      <!-- شريط تصفية وبحث الإشعارات المنشورة -->
-      <div class="feed-filters-bar" style="display:flex; gap:8px; margin-bottom:12px; padding:0 2px; flex-wrap:wrap;">
-        <div style="flex:1; min-width:170px; position:relative;">
-          <input type="text" id="feedFilterSearch" class="form-control" placeholder="🔍 بحث في الإشعارات..." oninput="filterNotificationsFeed()" style="padding-right:32px; font-size:12.5px; height:38px;">
-          <i class="fa-solid fa-magnifying-glass" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px;"></i>
+      <!-- شريط تصفية وبحث الإشعارات المنشورة: المراكز ثم الفئات ثم التاريخ ثم البحث -->
+      <div class="feed-filters-bar">
+        <!-- 1. فلترة حسب المراكز -->
+        <div class="filter-item-center">
+          <select id="feedFilterCenter" class="filter-control" onchange="filterNotificationsFeed()" dir="rtl" title="فلترة حسب المركز">
+            <option value="ALL">جميع المراكز (الكل)</option>
+          </select>
         </div>
-        <select id="feedFilterAudience" class="form-control" onchange="filterNotificationsFeed()" style="width:auto; min-width:130px; font-size:12px; height:38px; cursor:pointer;">
-          <option value="ALL">كل الفئات</option>
-          <option value="all_trainees">كافة المتكونين</option>
-          <option value="center_trainees">مراكز محددة</option>
-          <option value="single_center">إشعار لمركز محدد</option>
-          <option value="level_trainees">أطوار محددة</option>
-          <option value="specific_trainees">مخصص (فردي/أساتذة)</option>
-          <option value="centers">خاص بالمراكز</option>
-          <option value="urgent">عاجل واستدعاء</option>
-        </select>
-        <select id="feedFilterCenter" class="form-control" onchange="filterNotificationsFeed()" style="width:auto; min-width:145px; font-size:12px; height:38px; cursor:pointer;" title="فلترة حسب المركز">
-          <option value="ALL">🏫 جميع المراكز</option>
-        </select>
-        <input type="date" id="feedFilterDate" class="form-control" onchange="filterNotificationsFeed()" title="تصفية بالتاريخ" style="width:auto; font-size:12px; height:38px; cursor:pointer;">
-        <button type="button" id="btnClearFeedDate" onclick="clearFeedDateFilter()" title="إلغاء فلتر التاريخ" style="display:none; background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; border-radius:8px; padding:0 10px; cursor:pointer; height:38px;"><i class="fa-solid fa-xmark"></i></button>
+
+        <!-- 2. فلترة حسب الفئات -->
+        <div class="filter-item-audience">
+          <select id="feedFilterAudience" class="filter-control" onchange="filterNotificationsFeed()" dir="rtl" title="فلترة حسب الفئة المستهدفة">
+            <option value="ALL">جميع الفئات</option>
+            <option value="all_trainees">كافة المتكونين</option>
+            <option value="center_trainees">مراكز محددة</option>
+            <option value="single_center">إشعار لمركز محدد</option>
+            <option value="level_trainees">أطوار محددة</option>
+            <option value="specific_trainees">مخصص (فردي/أساتذة)</option>
+            <option value="centers">خاص بالمراكز</option>
+            <option value="urgent">عاجل واستدعاء</option>
+          </select>
+        </div>
+
+        <!-- 3. فلترة بالتاريخ -->
+        <div class="filter-item-date">
+          <div class="date-filter-wrapper">
+            <input type="date" id="feedFilterDate" class="filter-control" onchange="filterNotificationsFeed()" title="تصفية بالتاريخ" dir="rtl">
+            <button type="button" id="btnClearFeedDate" onclick="clearFeedDateFilter()" title="إلغاء فلتر التاريخ" class="btn-clear-date" style="display:none;">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. حقل البحث -->
+        <div class="filter-item-search">
+          <div class="search-filter-wrapper">
+            <input type="text" id="feedFilterSearch" class="filter-control" placeholder="بحث في الإشعارات..." oninput="filterNotificationsFeed()" dir="rtl">
+            <i class="fa-solid fa-magnifying-glass search-filter-icon"></i>
+          </div>
+        </div>
       </div>
 
       <div class="notifications-feed" id="notificationsFeed">
