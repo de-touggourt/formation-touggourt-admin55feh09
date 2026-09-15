@@ -9484,7 +9484,7 @@ window.printInteractiveStateMap = async function() {
                 font-family: 'Cairo', sans-serif; 
                 background: #e2e8f0; 
                 color: #102a43; 
-                margin: 0; padding: 15px; 
+                margin: 0; padding: 14px; 
                 -webkit-print-color-adjust: exact !important; 
                 print-color-adjust: exact !important;
             }
@@ -9497,7 +9497,7 @@ window.printInteractiveStateMap = async function() {
                 background: white;
                 border: 3px solid #0FBA50;
                 border-radius: 16px;
-                padding: 16px 20px;
+                padding: 14px 20px;
                 display: flex;
                 flex-direction: column;
                 box-shadow: 0 10px 30px rgba(0,0,0,0.12);
@@ -9506,14 +9506,17 @@ window.printInteractiveStateMap = async function() {
 
             .header {
                 display: flex; justify-content: space-between; align-items: center;
-                border-bottom: 2px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 12px;
+                border-bottom: 2px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 10px;
             }
             .header-text { font-size: 15px; font-weight: 800; line-height: 1.4; color: #102a43; }
             .main-title { text-align: center; flex: 1; }
             .main-title h1 { font-size: 26px; color: #0FBA50; margin: 0; font-weight: 900; }
             .main-title p { font-size: 14px; color: #64748b; font-weight: bold; margin: 3px 0 0 0; }
             
-            #map {
+            /* 🌟 السر الرياضي: إجبار حاوية الخريطة على اتجاه LTR لمنع انزياح الإحداثيات 🌟 */
+            #map, .leaflet-container {
+                direction: ltr !important;
+                text-align: left !important;
                 flex: 1;
                 width: 100%;
                 border-radius: 10px;
@@ -9535,7 +9538,7 @@ window.printInteractiveStateMap = async function() {
             }
             .manual-print-btn:hover { transform: scale(1.05); background: #1557c0; }
 
-            /* تصميم علامة المركز الموحدة الأنيقة */
+            /* 🌟 تصميم علامة المركز: مركز الدائرة الخضراء يتطابق 100% مع نقطة الإحداثيات 🌟 */
             .custom-pin-wrapper {
                 background: none !important;
                 border: none !important;
@@ -9544,9 +9547,12 @@ window.printInteractiveStateMap = async function() {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                transform: translate(-50%, -50%);
+                position: absolute;
+                transform: translate(-50%, -18px); /* مركز الدائرة تماماً فوق الإحداثية */
                 width: max-content;
+                direction: rtl !important;
                 pointer-events: auto;
+                cursor: pointer;
             }
             .center-pin-circle {
                 background-color: #0FBA50 !important;
@@ -9560,11 +9566,12 @@ window.printInteractiveStateMap = async function() {
                 border: 3px solid white;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.4);
                 font-size: 16px;
+                flex-shrink: 0;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
             .center-pin-label {
-                background: rgba(255, 255, 255, 0.96) !important;
+                background: rgba(255, 255, 255, 0.98) !important;
                 color: #102a43 !important;
                 font-family: 'Cairo', sans-serif !important;
                 font-weight: 800 !important;
@@ -9573,7 +9580,7 @@ window.printInteractiveStateMap = async function() {
                 border-radius: 6px !important;
                 border: 2px solid #0FBA50 !important;
                 box-shadow: 0 3px 8px rgba(0,0,0,0.25) !important;
-                margin-top: 4px !important;
+                margin-top: 3px !important;
                 white-space: nowrap !important;
                 line-height: 1.25 !important;
                 text-align: center !important;
@@ -9581,7 +9588,7 @@ window.printInteractiveStateMap = async function() {
                 print-color-adjust: exact !important;
             }
 
-            /* تصميم بادج المسافة التفاعلي */
+            /* 🌟 تصميم شارة المسافة الأنيقة على منتصف الضلع 🌟 */
             .custom-dist-wrapper {
                 background: none !important;
                 border: none !important;
@@ -9599,8 +9606,11 @@ window.printInteractiveStateMap = async function() {
                 white-space: nowrap !important;
                 display: inline-flex !important;
                 align-items: center !important;
-                gap: 4px !important;
+                gap: 5px !important;
+                position: absolute !important;
                 transform: translate(-50%, -50%) !important;
+                direction: rtl !important;
+                z-index: 500 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
@@ -9684,7 +9694,7 @@ window.printInteractiveStateMap = async function() {
 
             const bounds = L.latLngBounds();
 
-            // 🌟 رسم المراكز: الأيقونة مع الاسم ملاصقاً لها وموحداً 🌟
+            // 🌟 رسم المراكز: الأيقونة مع الاسم ملاصقاً لها وموحداً فوق الإحداثية تماماً 🌟
             centers.forEach((center) => {
                 const point = [center.lat, center.lng];
                 bounds.extend(point);
@@ -9704,7 +9714,7 @@ window.printInteractiveStateMap = async function() {
                 L.marker(point, { icon: pinIcon }).addTo(map);
             });
 
-            // 🌟 رسم حلقة الربط المغلقة وحساب المسافات بالمتر والكيلومتر 🌟
+            // 🌟 رسم حلقة الربط المغلقة بخط ناعم وحساب المسافات الدقيقة 🌟
             if (centers.length > 1) {
                 // إغلاق الحلقة: إضافة أول مركز في نهاية المصفوفة
                 const loopPoints = [];
@@ -9713,16 +9723,16 @@ window.printInteractiveStateMap = async function() {
                 }
                 loopPoints.push([centers[0].lat, centers[0].lng]); // غلق الحلقة
 
-                // رسم خط الربط المغلق
+                // رسم خط الربط المغلق (سمك ناعم 2.2px)
                 L.polyline(loopPoints, {
                     color: '#d90429',
-                    weight: 3.5,
+                    weight: 2.2,
                     opacity: 0.9,
-                    dashArray: '8, 8',
+                    dashArray: '6, 6',
                     lineJoin: 'round'
                 }).addTo(map);
 
-                // حساب المسافات ووضع البادجات في منتصف كل ضلع
+                // حساب المسافات ووضع البادجات في منتصف كل ضلع رابط
                 for (let i = 0; i < loopPoints.length - 1; i++) {
                     const p1 = loopPoints[i];
                     const p2 = loopPoints[i + 1];
@@ -9757,7 +9767,7 @@ window.printInteractiveStateMap = async function() {
             setTimeout(() => {
                 map.invalidateSize(true);
                 if (centers.length > 0) {
-                    map.fitBounds(bounds, { padding: [50, 50] });
+                    map.fitBounds(bounds, { padding: [55, 55] });
                 }
             }, 600);
 

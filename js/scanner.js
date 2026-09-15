@@ -435,12 +435,34 @@ function initCenterDataCache() {
         });
     }).catch(e => console.warn("Cache trainees error:", e));
 
-    // جلب المؤطرين
+    // جلب المؤطرين مع إثراء البيانات في الخلفية
     db.collection("center_framers").where("center", "==", centerClean).get().then(snap => {
-        snap.forEach(doc => {
+        snap.forEach(async doc => {
             const d = doc.data();
-            const key = String(d.framerId || doc.id.split('_')[0]).trim();
-            centerFramersMap[key] = { framerId: key, ...d };
+            const key = String(d.empId || d.framerId || doc.id.split('_')[0]).trim();
+            let framerObj = { framerId: key, ...d };
+            centerFramersMap[key] = framerObj;
+
+            // إثراء بيانات مكان العمل والتخصص والرتبة للمؤطر في الخلفية
+            const core = extractCoreId(key);
+            try {
+                let baseSnap = await db.collection("employeescomplus").doc(core).get();
+                if (!baseSnap.exists) {
+                    baseSnap = await db.collection("employeescomnew").doc(core).get();
+                }
+                if (baseSnap.exists) {
+                    const b = baseSnap.data();
+                    framerObj.place = framerObj.place || b.place || b.workplace || b.establishment || b.school || '';
+                    framerObj.grade = framerObj.grade || framerObj.rank || b.grade || b.rank || '';
+                    framerObj.maty = framerObj.maty || framerObj.specialty || b.maty || b.specialty || '';
+                    if (!framerObj.photoUrl_fb && b.photoUrl_fb) {
+                        framerObj.photoUrl_fb = b.photoUrl_fb;
+                    }
+                    if (!framerObj.name && b.name) {
+                        framerObj.name = b.name;
+                    }
+                }
+            } catch(e) {}
         });
     }).catch(e => console.warn("Cache framers error:", e));
 
@@ -649,12 +671,24 @@ async function onScanSuccess(decodedText) {
     }
 }
 
+// دالة موحدة لجلب صورة المعني
+function getPersonPhotoUrl(item, scannedId) {
+    if (item.photoUrl_fb) return item.photoUrl_fb;
+    if (item.photoUrl) return item.photoUrl;
+    if (item.photo) return item.photo;
+    const core = extractCoreId(scannedId || item.empId || item.id || item.framerId);
+    if (core && employeePhotosMap[core]) return employeePhotosMap[core];
+    return '';
+}
+
 // معالجة مسح المتكون
 function handleTraineeScan(trainee, docId, timeString, scannedId) {
     const existing = todayTraineeRecords[trainee.empId] || todayTraineeRecords[scannedId];
 
-    // صورة المتكون
-    let photoUrl = trainee.photoUrl_fb ? trainee.photoUrl_fb : employeePhotosMap[extractCoreId(scannedId)];
+    // استخراج صورة المتكون
+    let photoUrl = getPersonPhotoUrl(trainee, scannedId);
+    let name = trainee.name || '-';
+    let subInfo = `${trainee.grade || trainee.rank || ''} - ${trainee.maty || trainee.specialty || ''}`;
 
     // فحص إذا كان مسجلاً مسبقاً
     if (existing && existing.time && existing.time !== '') {
@@ -663,8 +697,8 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
 
         if (isFastScanMode) {
             showQuickCard({
-                name: trainee.name || '-',
-                sub: `${trainee.grade || trainee.rank || ''} | ${trainee.maty || trainee.specialty || ''}`,
+                name: name,
+                sub: subInfo,
                 status: `مسجل مسبقاً: ${existing.status} (${existing.time})`,
                 statusClass: 'badge-warn',
                 photoUrl: photoUrl
@@ -677,12 +711,12 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
                 html: `
                     <div class="swal-welcome-card" style="text-align: center;">
                         ${renderPhotoHtml(photoUrl)}
-                        <span style="font-weight: bold; font-size: 16px;">${trainee.name || '-'}</span><br>
+                        <span style="font-weight: bold; font-size: 16px;">${name}</span><br>
                         <span style="color:#0FBA50; font-weight:bold;">الوضعية الحالية: ${existing.status} (${existing.time})</span>
                     </div>
                 `,
                 confirmButtonText: 'استمرار المسح',
-                timer: 4000,
+                timer: 3500,
                 timerProgressBar: true
             }).then(() => { isScanningPaused = false; });
         }
@@ -695,7 +729,7 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
         triggerHaptic('error');
         if (isFastScanMode) {
             showQuickCard({
-                name: trainee.name || '-',
+                name: name,
                 sub: 'تسجيل المتكونين مقفل من رئيس المركز',
                 status: 'النظام مغلق',
                 statusClass: 'badge-err',
@@ -738,8 +772,8 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
 
     if (isFastScanMode) {
         showQuickCard({
-            name: trainee.name || '-',
-            sub: `${trainee.grade || trainee.rank || ''} - ${trainee.maty || trainee.specialty || ''}`,
+            name: name,
+            sub: subInfo,
             status: `تم التسجيل: ${status} (${timeString})`,
             statusClass: badgeClass,
             photoUrl: photoUrl
@@ -749,23 +783,21 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
         Swal.fire({
             title: 'تم التسجيل بنجاح!',
             html: `
-                <div class="swal-welcome-card">
-                    <div style="text-align:center;">
-                        ${renderPhotoHtml(photoUrl)}
-                        <span class="swal-badge" style="background:${status === 'حاضر' ? '#0FBA50' : '#ff9800'};">
-                            ${status} (${timeString})
-                        </span>
-                    </div>
+                <div class="swal-welcome-card" style="text-align:center;">
+                    ${renderPhotoHtml(photoUrl)}
+                    <span class="swal-badge" style="background:${status === 'حاضر' ? '#0FBA50' : '#ff9800'};">
+                        ${status} (${timeString})
+                    </span>
                     <hr style="border-top: 1px dashed #ccc; margin: 10px 0;">
                     <b>المركز:</b> ${activeCenter}<br>
-                    <b>الاسم واللقب:</b> ${trainee.name || '-'}<br>
+                    <b>الاسم واللقب:</b> ${name}<br>
                     <b>الرتبة:</b> ${trainee.grade || trainee.rank || '-'}<br>
                     <b>التخصص:</b> ${trainee.maty || trainee.specialty || '-'}
                 </div>
             `,
             icon: 'success',
             confirmButtonText: 'مسح البطاقة التالية',
-            timer: 5000,
+            timer: 4000,
             timerProgressBar: true
         }).then(() => { isScanningPaused = false; });
     }
@@ -774,15 +806,17 @@ function handleTraineeScan(trainee, docId, timeString, scannedId) {
 // معالجة مسح المؤطر
 function handleFramerScan(framer, docId, timeString, scannedId) {
     const existing = todayFramerRecords[scannedId];
-    let photoUrl = employeePhotosMap[extractCoreId(scannedId)] || '';
+    let photoUrl = getPersonPhotoUrl(framer, scannedId);
+    let name = framer.name || framer.framerName || 'مؤطر المركز';
+    let subInfo = `مؤطر: ${framer.role || 'تأطير بيداغوجي'}`;
 
     if (existing && existing.time && existing.time !== '') {
         playScanSound('warn');
         triggerHaptic('warn');
         if (isFastScanMode) {
             showQuickCard({
-                name: framer.name || framer.framerName || 'مؤطر',
-                sub: `مؤطر المركز | ${framer.role || ''}`,
+                name: name,
+                sub: subInfo,
                 status: `مسجل مسبقاً: ${existing.status} (${existing.time})`,
                 statusClass: 'badge-warn',
                 photoUrl: photoUrl
@@ -790,8 +824,15 @@ function handleFramerScan(framer, docId, timeString, scannedId) {
         } else {
             isScanningPaused = true;
             Swal.fire({
-                icon: 'info', title: 'مؤطر مسجل مسبقاً!',
-                text: `${framer.name || 'المؤطر'} مسجل مسبقاً في توقيت: ${existing.time}`,
+                icon: 'info',
+                title: 'مؤطر مسجل مسبقاً!',
+                html: `
+                    <div class="swal-welcome-card" style="text-align:center;">
+                        ${renderPhotoHtml(photoUrl)}
+                        <b>${name}</b><br>
+                        مسجل مسبقاً في توقيت: ${existing.time}
+                    </div>
+                `,
                 confirmButtonText: 'متابعة المسح'
             }).then(() => { isScanningPaused = false; });
         }
@@ -823,8 +864,8 @@ function handleFramerScan(framer, docId, timeString, scannedId) {
 
     if (isFastScanMode) {
         showQuickCard({
-            name: framer.name || framer.framerName || 'مؤطر المركز',
-            sub: `مؤطر: ${framer.role || 'تأطير بيداغوجي'}`,
+            name: name,
+            sub: subInfo,
             status: `تم تسجيل المؤطر: حاضر (${timeString})`,
             statusClass: 'badge-present',
             photoUrl: photoUrl
@@ -834,7 +875,13 @@ function handleFramerScan(framer, docId, timeString, scannedId) {
         Swal.fire({
             icon: 'success',
             title: 'تم تسجيل المؤطر بنجاح',
-            text: `${framer.name || 'المؤطر'} - حاضر (${timeString})`,
+            html: `
+                <div class="swal-welcome-card" style="text-align:center;">
+                    ${renderPhotoHtml(photoUrl)}
+                    <b>${name}</b><br>
+                    حاضر (${timeString})
+                </div>
+            `,
             confirmButtonText: 'مسح البطاقة التالية',
             timer: 4000
         }).then(() => { isScanningPaused = false; });
@@ -851,17 +898,22 @@ function showQuickCard(item) {
 
     if (!card) return;
 
-    if (item.photoUrl) {
+    // عرض الصورة الشخصية للبطاقة الممسوحة
+    if (item.photoUrl && item.photoUrl.trim() !== '') {
         imgEl.src = item.photoUrl;
+        imgEl.onerror = function() {
+            this.onerror = null;
+            this.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
+        };
         imgEl.style.display = "block";
     } else {
         imgEl.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
         imgEl.style.display = "block";
     }
 
-    nameEl.innerText = item.name;
-    subEl.innerText = item.sub;
-    statusEl.innerText = item.status;
+    nameEl.innerText = item.name || '-';
+    subEl.innerText = item.sub || '-';
+    statusEl.innerText = item.status || '-';
     statusEl.className = `quick-card-status ${item.statusClass || 'badge-present'}`;
 
     card.classList.add("visible");
