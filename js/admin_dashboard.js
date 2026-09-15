@@ -9467,7 +9467,7 @@ window.printInteractiveStateMap = async function() {
     <head>
         <meta charset="UTF-8">
         <title>خريطة التوزيع الجغرافي للمراكز</title>
-        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
         
         <!-- مكتبة الخرائط Leaflet.js -->
@@ -9476,84 +9476,150 @@ window.printInteractiveStateMap = async function() {
         
         <style>
             /* إعدادات صفحة الطباعة (A4 أفقي) */
-            @page { size: A4 landscape; margin: 5mm; }
+            @page { size: A4 landscape; margin: 4mm; }
             
+            * { box-sizing: border-box; }
+
             body { 
                 font-family: 'Cairo', sans-serif; 
                 background: #e2e8f0; 
                 color: #102a43; 
-                margin: 0; padding: 20px; 
+                margin: 0; padding: 15px; 
                 -webkit-print-color-adjust: exact !important; 
                 print-color-adjust: exact !important;
             }
             
-            /* 🌟 السر هنا: تثبيت الأبعاد بالبيكسل لتطابق ورقة A4 على الشاشة وفي الطباعة دون تغيير 🌟 */
+            /* حاوية الصفحة بحجم ورقة A4 أفقي */
             .page-container {
-                width: 1050px; 
-                height: 720px; 
+                width: 1060px; 
+                height: 730px; 
                 margin: 0 auto;
                 background: white;
-                border: 4px solid #0FBA50;
-                border-radius: 15px;
-                padding: 20px;
-                box-sizing: border-box;
+                border: 3px solid #0FBA50;
+                border-radius: 16px;
+                padding: 16px 20px;
                 display: flex;
                 flex-direction: column;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+                position: relative;
             }
 
             .header {
                 display: flex; justify-content: space-between; align-items: center;
-                border-bottom: 3px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 15px;
+                border-bottom: 2px dashed #cbd5e1; padding-bottom: 8px; margin-bottom: 12px;
             }
-            .header-text { font-size: 16px; font-weight: 900; line-height: 1.4; }
+            .header-text { font-size: 15px; font-weight: 800; line-height: 1.4; color: #102a43; }
             .main-title { text-align: center; flex: 1; }
-            .main-title h1 { font-size: 28px; color: #0FBA50; margin: 0; }
-            .main-title p { font-size: 15px; color: #64748b; font-weight: bold; margin: 5px 0 0 0; }
+            .main-title h1 { font-size: 26px; color: #0FBA50; margin: 0; font-weight: 900; }
+            .main-title p { font-size: 14px; color: #64748b; font-weight: bold; margin: 3px 0 0 0; }
             
             #map {
                 flex: 1;
                 width: 100%;
-                border-radius: 8px;
+                border-radius: 10px;
                 border: 2px solid #cbd5e1;
                 z-index: 1;
             }
 
             .footer {
-                margin-top: 10px; text-align: center; font-weight: bold; font-size: 13px; color: #64748b;
+                margin-top: 8px; text-align: center; font-weight: bold; font-size: 12.5px; color: #64748b;
             }
 
             .manual-print-btn {
-                position: fixed; bottom: 30px; left: 30px;
+                position: fixed; bottom: 25px; left: 25px;
                 background: #1E68E8; color: white; border: none;
-                padding: 15px 25px; border-radius: 50px; font-size: 18px;
+                padding: 12px 24px; border-radius: 50px; font-size: 16px;
                 font-family: 'Cairo'; font-weight: bold; cursor: pointer;
                 box-shadow: 0 4px 15px rgba(30, 104, 232, 0.4);
-                z-index: 9999; transition: 0.3s; display: flex; align-items: center; gap: 10px;
+                z-index: 9999; transition: 0.3s; display: flex; align-items: center; gap: 8px;
             }
             .manual-print-btn:hover { transform: scale(1.05); background: #1557c0; }
+
+            /* تصميم علامة المركز الموحدة الأنيقة */
+            .custom-pin-wrapper {
+                background: none !important;
+                border: none !important;
+            }
+            .center-pin-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                transform: translate(-50%, -50%);
+                width: max-content;
+                pointer-events: auto;
+            }
+            .center-pin-circle {
+                background-color: #0FBA50 !important;
+                color: white !important;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                border: 3px solid white;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+                font-size: 16px;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .center-pin-label {
+                background: rgba(255, 255, 255, 0.96) !important;
+                color: #102a43 !important;
+                font-family: 'Cairo', sans-serif !important;
+                font-weight: 800 !important;
+                font-size: 12.5px !important;
+                padding: 3px 10px !important;
+                border-radius: 6px !important;
+                border: 2px solid #0FBA50 !important;
+                box-shadow: 0 3px 8px rgba(0,0,0,0.25) !important;
+                margin-top: 4px !important;
+                white-space: nowrap !important;
+                line-height: 1.25 !important;
+                text-align: center !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* تصميم بادج المسافة التفاعلي */
+            .custom-dist-wrapper {
+                background: none !important;
+                border: none !important;
+            }
+            .distance-badge {
+                background: #102a43 !important;
+                color: #ffffff !important;
+                font-family: 'Cairo', sans-serif !important;
+                font-size: 11px !important;
+                font-weight: 800 !important;
+                padding: 2px 8px !important;
+                border-radius: 12px !important;
+                border: 1.5px solid #ffffff !important;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
+                white-space: nowrap !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+                transform: translate(-50%, -50%) !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .distance-badge i {
+                color: #0FBA50 !important;
+                font-size: 9px !important;
+            }
             
             @media print {
                 body { padding: 0; margin: 0; background: white; }
                 .manual-print-btn { display: none !important; }
-                .leaflet-control-container { display: none !important; } /* إخفاء أزرار الزوم في الورقة */
-                .page-container { border: 2px solid #000; box-shadow: none; border-radius: 0; margin: 0; width: 100%; height: 100%; }
-                #map { border: 2px solid #000; }
-                .custom-school-icon { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                .leaflet-control-container { display: none !important; }
+                .page-container { border: 2px solid #0FBA50; box-shadow: none; margin: 0; width: 100%; height: 100%; }
+                #map { border: 1.5px solid #0FBA50; }
+                .center-pin-circle, .center-pin-label, .distance-badge {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
             }
-            
-            /* تنسيق مربع اسم المركز بالخريطة */
-            .map-tooltip { 
-                background: rgba(255,255,255,0.95) !important; 
-                border: 2px solid #0FBA50 !important; 
-                border-radius: 6px !important; 
-                box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important; 
-                font-family: 'Cairo', sans-serif !important;
-                font-size: 14px !important;
-                font-weight: bold !important;
-                color: #102a43 !important;
-            }
-            .leaflet-tooltip-bottom:before { border-bottom-color: #0FBA50 !important; }
         </style>
     </head>
     <body>
@@ -9561,8 +9627,8 @@ window.printInteractiveStateMap = async function() {
             <div class="header">
                 <div class="header-text">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
                 <div class="main-title">
-                    <h1><i class="fa-solid fa-map"></i> خريطة التوزيع الجغرافي لمراكز التكوين</h1>
-                    <p>شبكة المراكز المعتمدة ومسافات الربط (ولاية توقرت)</p>
+                    <h1><i class="fa-solid fa-map-location-dot"></i> خريطة التوزيع الجغرافي لمراكز التكوين</h1>
+                    <p>شبكة المراكز المعتمدة ومسافات الربط الحلقي (ولاية توقرت)</p>
                 </div>
                 <div class="header-text" style="text-align:left;">مديرية التربية لولاية توقرت<br>مصلحة التكوين والتفتيش</div>
             </div>
@@ -9583,64 +9649,117 @@ window.printInteractiveStateMap = async function() {
         <script>
             const centers = ${centersJson};
             
-            // 🌟 تفعيل أزرار الزوم + إجبار الخريطة على رسم الخطوط كـ Canvas للطباعة 🌟
+            // تهيئة الخريطة مع تفعيل التكبير والرسم بدقة
             const map = L.map('map', { 
                 zoomControl: true,
                 preferCanvas: true 
-            }).setView([33.1065, 6.0645], 10);
+            }).setView([33.1065, 6.0645], 11);
             
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 19
+            // 🌟 1. خريطة Google العالمية بالعربية بالكامل وبدون حظر 🌟
+            const googleRoadmap = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ar', {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: 'خرائط Google &copy;'
             }).addTo(map);
 
-            const schoolIcon = L.divIcon({
-                html: '<div style="background-color: #0FBA50 !important; color: white !important; width: 35px; height: 35px; border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.4); font-size: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact;"><i class="fa-solid fa-school"></i></div>',
-                className: 'custom-school-icon',
-                iconSize: [35, 35],
-                iconAnchor: [17, 35],
+            // 🌟 2. خريطة Google الأقمار الصناعية الهجينة بالعربية 🌟
+            const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&hl=ar', {
+                maxZoom: 20,
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                attribution: 'Google Satellite &copy;'
             });
 
-            const latlngs = [];
+            // 🌟 3. خريطة تضاريس الشوارع العالمية Esri 🌟
+            const esriStreet = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: 'Esri &copy;'
+            });
+
+            // أداة التبديل بين أنواع الخرائط في أعلى يسار الشاشة
+            L.control.layers({
+                "خريطة Google المعتمدة (عربي)": googleRoadmap,
+                "الأقمار الصناعية (Google Satellite)": googleHybrid,
+                "خريطة الشوارع العالمية (Esri)": esriStreet
+            }, null, { position: 'topleft' }).addTo(map);
+
             const bounds = L.latLngBounds();
 
+            // 🌟 رسم المراكز: الأيقونة مع الاسم ملاصقاً لها وموحداً 🌟
             centers.forEach((center) => {
                 const point = [center.lat, center.lng];
-                latlngs.push(point);
                 bounds.extend(point);
 
-                L.marker(point, {icon: schoolIcon}).addTo(map);
-                 
-                L.tooltip({
-                    permanent: true, 
-                    direction: 'bottom', 
-                    className: 'map-tooltip',
-                    offset: [0, 5]
-                })
-                .setContent(center.name)
-                .setLatLng(point)
-                .addTo(map);
+                const pinHtml = '<div class="center-pin-container">' +
+                    '<div class="center-pin-circle"><i class="fa-solid fa-school"></i></div>' +
+                    '<div class="center-pin-label">' + center.name + '</div>' +
+                '</div>';
+
+                const pinIcon = L.divIcon({
+                    html: pinHtml,
+                    className: 'custom-pin-wrapper',
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 0]
+                });
+
+                L.marker(point, { icon: pinIcon }).addTo(map);
             });
 
-            // رسم خطوط الربط بين المراكز
-            if (latlngs.length > 1) {
-                L.polyline(latlngs, {
+            // 🌟 رسم حلقة الربط المغلقة وحساب المسافات بالمتر والكيلومتر 🌟
+            if (centers.length > 1) {
+                // إغلاق الحلقة: إضافة أول مركز في نهاية المصفوفة
+                const loopPoints = [];
+                for (let i = 0; i < centers.length; i++) {
+                    loopPoints.push([centers[i].lat, centers[i].lng]);
+                }
+                loopPoints.push([centers[0].lat, centers[0].lng]); // غلق الحلقة
+
+                // رسم خط الربط المغلق
+                L.polyline(loopPoints, {
                     color: '#d90429',
-                    weight: 3,
-                    opacity: 0.8,
-                    dashArray: '10, 10',
+                    weight: 3.5,
+                    opacity: 0.9,
+                    dashArray: '8, 8',
                     lineJoin: 'round'
                 }).addTo(map);
+
+                // حساب المسافات ووضع البادجات في منتصف كل ضلع
+                for (let i = 0; i < loopPoints.length - 1; i++) {
+                    const p1 = loopPoints[i];
+                    const p2 = loopPoints[i + 1];
+
+                    // حساب المسافة الدقيقة بين النقطتين
+                    const distMeters = Math.round(map.distance(p1, p2));
+                    let distText = '';
+                    if (distMeters < 1000) {
+                        distText = distMeters + ' م';
+                    } else {
+                        distText = (distMeters / 1000).toFixed(1) + ' كم';
+                    }
+
+                    // إحداثيات منتصف القطعة المستقيمة
+                    const midLat = (p1[0] + p2[0]) / 2;
+                    const midLng = (p1[1] + p2[1]) / 2;
+
+                    const distHtml = '<div class="distance-badge"><i class="fa-solid fa-arrows-left-right"></i> ' + distText + '</div>';
+
+                    const distIcon = L.divIcon({
+                        html: distHtml,
+                        className: 'custom-dist-wrapper',
+                        iconSize: [0, 0],
+                        iconAnchor: [0, 0]
+                    });
+
+                    L.marker([midLat, midLng], { icon: distIcon, interactive: false }).addTo(map);
+                }
             }
 
-            // إعطاء الخريطة وقتها لتتأقلم ثم عمل زوم أوتوماتيكي
+            // إعطاء الخريطة وقتاً لتتأقلم ثم عمل زوم تلقائي لضم كافة المراكز
             setTimeout(() => {
                 map.invalidateSize(true);
                 if (centers.length > 0) {
                     map.fitBounds(bounds, { padding: [50, 50] });
                 }
-            }, 500);
+            }, 600);
 
         <\/script>
     </body>
@@ -9650,7 +9769,6 @@ window.printInteractiveStateMap = async function() {
     printWindow.document.close();
 };
 
-// Expose to window for inline onclick handlers
 window.openCentersMapModal = openCentersMapModal;
 window.closeCentersMapModal = closeCentersMapModal;
 window.saveAdminCenterLocation = saveAdminCenterLocation;
