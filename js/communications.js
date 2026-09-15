@@ -50,7 +50,7 @@ window.onload = function() {
 
 function initUserIdentity() {
     const empId = sessionStorage.getItem("userEmpId");
-    const role = sessionStorage.getItem("userRole");
+    const role = (sessionStorage.getItem("userRole") || "").toUpperCase();
     const inspectorCenter = sessionStorage.getItem("inspectorCenter");
     const userName = sessionStorage.getItem("userName") || "";
 
@@ -62,16 +62,18 @@ function initUserIdentity() {
             role: 'ADMIN',
             officer: userName || 'مدير النظام'
         };
-        document.getElementById("userEntityName").innerText = "الإدارة المركزية (المديرية)";
+        const badge = document.getElementById("userEntityName");
+        if (badge) badge.innerText = "الإدارة المركزية (المديرية)";
     } else {
         currentEntity = {
             type: 'CENTER',
-            name: inspectorCenter || 'مركز تككوين',
+            name: inspectorCenter || 'مركز التكوين',
             id: empId,
             role: 'INSPECTOR',
             officer: userName || 'مشرف المركز'
         };
-        document.getElementById("userEntityName").innerText = `مركز: ${currentEntity.name}`;
+        const badge = document.getElementById("userEntityName");
+        if (badge) badge.innerText = `مركز: ${currentEntity.name}`;
     }
 }
 
@@ -122,13 +124,15 @@ function getMsgReceiptStatus(m) {
     };
 }
 
-function returnToDashboard() {
-    if (currentEntity.role === "ADMIN") {
-        window.location.href = "/admin-panel";
+window.returnToDashboard = function() {
+    const role = (sessionStorage.getItem("userRole") || currentEntity.role || "").toUpperCase();
+    const empId = sessionStorage.getItem("userEmpId");
+    if (role === "ADMIN" || empId === "ADMIN_ACCESS") {
+        window.location.href = (window.location.protocol === "file:") ? "admin_dashboard.html" : "/admin-panel";
     } else {
-        window.location.href = "/inspector";
+        window.location.href = (window.location.protocol === "file:") ? "inspector_dashboard.html" : "/inspector";
     }
-}
+};
 
 // 5. جلب إعدادات الموقع ومراكز التكوين
 function loadSiteSettings() {
@@ -520,12 +524,27 @@ function renderMessageDetails(msg) {
 
     if (msg.files && Array.isArray(msg.files) && msg.files.length > 0) {
         attSection.style.display = "block";
+
+        const dlAllContainer = document.getElementById("viewDownloadAllAttachmentsContainer");
+        if (dlAllContainer) {
+            if (msg.files.length > 1) {
+                dlAllContainer.innerHTML = `
+                    <button type="button" class="btn-download-all-drafts" onclick="downloadAllMessageAttachments('${msg.id}')" style="margin:0;">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> تحميل كافة المرفقات (${msg.files.length})
+                    </button>
+                `;
+            } else {
+                dlAllContainer.innerHTML = '';
+            }
+        }
+
         attGrid.innerHTML = msg.files.map(f => {
             const typeInfo = getFileTypeInfo(f.name, f.mime);
             const fileId = f.fileId || (f.url && (f.url.match(/id=([a-zA-Z0-9_-]+)/) || f.url.match(/\/d\/([a-zA-Z0-9_-]+)/))?.[1]) || '';
             const previewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : (f.url || '');
-            const downloadUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk` : (f.url || '');
-            const hasValidLink = !!(previewUrl || downloadUrl);
+            const directDownloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : (f.url || '');
+            const driveViewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view?usp=sharing` : (f.url || '');
+            const hasValidLink = !!(previewUrl || directDownloadUrl);
 
             return `
                 <div class="attachment-card">
@@ -539,10 +558,11 @@ function renderMessageDetails(msg) {
                     <div class="att-actions">
                         ${hasValidLink ? `
                             <a href="${previewUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="معاينة الملف"><i class="fa-solid fa-eye"></i></a>
-                            <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="تحميل أو فتح في Drive"><i class="fa-solid fa-download"></i></a>
+                            <a href="${directDownloadUrl}" download target="_blank" rel="noopener noreferrer" class="btn-att-action" title="تحميل مباشر"><i class="fa-solid fa-download"></i></a>
+                            <a href="${driveViewUrl}" target="_blank" rel="noopener noreferrer" class="btn-att-action" title="فتح في Google Drive"><i class="fa-brands fa-google-drive"></i></a>
                         ` : `
                             <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'preview')" title="معاينة من Drive"><i class="fa-solid fa-eye"></i></button>
-                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'download')" title="تحميل من Drive"><i class="fa-solid fa-download"></i></button>
+                            <button type="button" class="btn-att-action" onclick="openOrSyncDriveFile('${escapeHtml(f.name)}', 'download')" title="تحميل مباشر"><i class="fa-solid fa-download"></i></button>
                         `}
                     </div>
                 </div>
@@ -579,6 +599,39 @@ window.openOrSyncDriveFile = async function(fileName, mode) {
     } catch(e) {
         Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال بـ Google Drive.', 'error');
     }
+};
+
+// تحميل كافة مرفقات المراسلة دفعة واحدة
+window.downloadAllMessageAttachments = function(msgId) {
+    const msg = allMessages.find(m => m.id === msgId);
+    if (!msg || !Array.isArray(msg.files) || msg.files.length === 0) return;
+
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: `جاري بدء تحميل ${msg.files.length} مرفقات...`,
+        showConfirmButton: false,
+        timer: 2000
+    });
+
+    msg.files.forEach((f, idx) => {
+        setTimeout(() => {
+            const fileId = f.fileId || (f.url && (f.url.match(/id=([a-zA-Z0-9_-]+)/) || f.url.match(/\/d\/([a-zA-Z0-9_-]+)/))?.[1]) || '';
+            const downloadUrl = fileId 
+                ? `https://drive.google.com/uc?export=download&id=${fileId}` 
+                : (f.url || '');
+            if (downloadUrl) {
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.target = '_blank';
+                a.download = f.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        }, idx * 600);
+    });
 };
 
 // 10. الإجراءات المتقدمة (مفضلة، أرشفة، إعادة توجيه، رد، حذف)
@@ -795,18 +848,84 @@ function renderSelectedFilesList() {
         return;
     }
 
-    container.innerHTML = selectedFilesToUpload.map((item, idx) => `
+    let downloadAllHtml = '';
+    if (selectedFilesToUpload.length > 1) {
+        downloadAllHtml = `
+            <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+                <button type="button" class="btn-download-all-drafts" onclick="downloadAllDraftFiles()">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> تحميل كافة الملفات المحددة (${selectedFilesToUpload.length})
+                </button>
+            </div>
+        `;
+    }
+
+    const itemsHtml = selectedFilesToUpload.map((item, idx) => `
         <div class="file-chip">
             <div class="file-chip-name">
                 <i class="fa-solid fa-file" style="color:#1E68E8;"></i>
-                <span>${escapeHtml(item.name)}</span>
+                <span title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
                 <span style="color:#94a3b8; font-size:11px;">(${item.size})</span>
                 ${item.isPreUploaded ? '<span style="color:#0FBA50; font-size:10px; font-weight:bold;">[مُرفق سحابي]</span>' : ''}
             </div>
-            <button class="btn-remove-file" onclick="removeSelectedFile(${idx})" title="إزالة"><i class="fa-solid fa-trash-can"></i></button>
+            <div class="file-chip-actions">
+                <button type="button" class="btn-download-file" onclick="downloadDraftFile(${idx})" title="تحميل أو معاينة الملف للتأكد منه قبل الإرسال">
+                    <i class="fa-solid fa-download"></i> تحميل
+                </button>
+                <button class="btn-remove-file" onclick="removeSelectedFile(${idx})" title="إزالة"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
         </div>
     `).join('');
+
+    container.innerHTML = downloadAllHtml + itemsHtml;
 }
+
+// تحميل ملف محدد قبل إرساله للتأكد من سلامته
+window.downloadDraftFile = function(idx) {
+    const item = selectedFilesToUpload[idx];
+    if (!item) return;
+
+    if (item.file) {
+        // ملف محلي تم اختياره من الجهاز
+        const url = URL.createObjectURL(item.file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = item.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } else if (item.fileId || item.url) {
+        // ملف مسجل مسبقاً في درايف
+        const dlUrl = item.fileId 
+            ? `https://drive.google.com/uc?export=download&id=${item.fileId}` 
+            : (item.url || '');
+        if (dlUrl) {
+            window.open(dlUrl, '_blank', 'noopener,noreferrer');
+        } else {
+            Swal.fire('تنبيه', 'رابط تحميل الملف غير متوفر.', 'warning');
+        }
+    }
+};
+
+// تحميل كافة الملفات المحددة في المسودة دفعة واحدة
+window.downloadAllDraftFiles = function() {
+    if (!selectedFilesToUpload || selectedFilesToUpload.length === 0) return;
+    
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: `جاري تحميل ${selectedFilesToUpload.length} ملفات...`,
+        showConfirmButton: false,
+        timer: 1500
+    });
+
+    selectedFilesToUpload.forEach((item, idx) => {
+        setTimeout(() => {
+            downloadDraftFile(idx);
+        }, idx * 500);
+    });
+};
 
 window.removeSelectedFile = function(idx) {
     selectedFilesToUpload.splice(idx, 1);

@@ -707,12 +707,59 @@
       font-weight: 700;
       color: #1e293b;
     }
+    .file-chip-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-download-file {
+      color: #1E68E8;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 3px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: 'Cairo';
+      font-weight: 700;
+      transition: 0.2s;
+    }
+    .btn-download-file:hover {
+      background: #1E68E8;
+      color: #fff;
+    }
+    .btn-download-all-drafts {
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'Cairo';
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: 0.2s;
+    }
+    .btn-download-all-drafts:hover {
+      background: #0FBA50;
+      color: #fff;
+    }
     .btn-remove-file {
       color: #ef4444;
       background: none;
       border: none;
       cursor: pointer;
       font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
     }
 
     .modal-footer {
@@ -873,8 +920,11 @@
         </div>
 
         <div class="msg-attachments-section" id="viewAttachmentsSection" style="display:none;">
-          <div class="msg-attachments-title">
-            <i class="fa-solid fa-paperclip" style="color:#0FBA50;"></i> الملفات والمستندات المرفقة:
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+            <div class="msg-attachments-title" style="margin-bottom:0;">
+              <i class="fa-solid fa-paperclip" style="color:#0FBA50;"></i> الملفات والمستندات المرفقة:
+            </div>
+            <div id="viewDownloadAllAttachmentsContainer"></div>
           </div>
           <div class="attachments-grid" id="viewAttachmentsGrid">
             <!-- كروت الملفات -->

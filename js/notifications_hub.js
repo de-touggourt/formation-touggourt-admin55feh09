@@ -38,6 +38,7 @@ let currentEntity = {
 let SITE_SETTINGS = null;
 let allNotifications = [];
 let selectedImageFile = null;
+let selectedImageDataUrl = "";
 let selectedTraineeData = null;
 
 window.onload = function() {
@@ -72,12 +73,27 @@ function initIdentity() {
     }
 }
 
-function returnToDashboard() {
-    if (currentEntity.role === "ADMIN") {
-        window.location.href = "/admin-panel";
+window.returnToDashboard = function() {
+    const role = (sessionStorage.getItem("userRole") || currentEntity.role || "").toUpperCase();
+    const empId = sessionStorage.getItem("userEmpId");
+    if (role === "ADMIN" || empId === "ADMIN_ACCESS") {
+        window.location.href = (window.location.protocol === "file:") ? "admin_dashboard.html" : "/admin-panel";
     } else {
-        window.location.href = "/inspector";
+        window.location.href = (window.location.protocol === "file:") ? "inspector_dashboard.html" : "/inspector";
     }
+};
+
+function populateCenterFilterOptions() {
+    const sel = document.getElementById("feedFilterCenter");
+    if (!sel || !SITE_SETTINGS || !SITE_SETTINGS.UI_NAMES || !SITE_SETTINGS.UI_NAMES.centers) return;
+    const currentVal = sel.value;
+    let html = '<option value="ALL">🏫 جميع المراكز</option>';
+    const centers = SITE_SETTINGS.UI_NAMES.centers;
+    for (let k in centers) {
+        html += `<option value="${escapeHtml(centers[k])}">${escapeHtml(centers[k])}</option>`;
+    }
+    sel.innerHTML = html;
+    if (currentVal && currentVal !== "ALL") sel.value = currentVal;
 }
 
 // 4. تحميل إعدادات الموقع وبناء خيارات الاستهداف
@@ -87,10 +103,12 @@ function loadSiteSettings() {
             SITE_SETTINGS = doc.data();
         }
         setupAudienceOptions();
+        populateCenterFilterOptions();
         listenToNotifications();
     }, (err) => {
         console.warn("تعذر جلب الإعدادات:", err);
         setupAudienceOptions();
+        populateCenterFilterOptions();
         listenToNotifications();
     });
 }
@@ -448,22 +466,55 @@ window.searchTraineeForNotification = async function() {
     }
 };
 
+// دالة ضغط الصورة وتحويلها إلى Data URL عالي الجودة لعرضها فورياً دون قيود أذونات
+function compressImageToDataUrl(file, maxWidth = 1200, quality = 0.82) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const compressed = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressed);
+            };
+            img.onerror = () => resolve(e.target.result);
+            img.src = e.target.result;
+        };
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+    });
+}
+
 // 6. اختيار ومعاينة الصورة
-window.handleImageSelect = function(files) {
+window.handleImageSelect = async function(files) {
     if (!files || files.length === 0) return;
     const file = files[0];
     selectedImageFile = file;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        document.getElementById("imagePreview").src = e.target.result;
-        document.getElementById("imagePreviewContainer").style.display = "block";
-    };
-    reader.readAsDataURL(file);
+    const dataUrl = await compressImageToDataUrl(file, 1200, 0.82);
+    selectedImageDataUrl = dataUrl;
+
+    const preview = document.getElementById("imagePreview");
+    const container = document.getElementById("imagePreviewContainer");
+    if (preview && container) {
+        preview.src = dataUrl;
+        container.style.display = "block";
+    }
 };
 
 window.removeSelectedImage = function() {
     selectedImageFile = null;
+    selectedImageDataUrl = "";
     document.getElementById("imagePreview").src = "";
     document.getElementById("imagePreviewContainer").style.display = "none";
     document.getElementById("notifImageInput").value = "";
@@ -516,7 +567,7 @@ window.submitNotification = async function() {
             <div style="text-align:center; padding:15px;">
                 <div class="spinner" style="margin:0 auto 15px auto;"></div>
                 <p id="notifStatusTxt" style="color:#0FBA50; font-weight:bold; font-size:14px; margin:0;">
-                    ${selectedImageFile ? 'جاري رفع الصورة المرفقة إلى Google Drive...' : 'جاري تسجيل وتعميم الإشعار...'}
+                    ${selectedImageFile ? 'جاري معالجة الصورة المرفقة ونشر الإشعار...' : 'جاري تسجيل وتعميم الإشعار...'}
                 </p>
             </div>
         `,
@@ -525,55 +576,30 @@ window.submitNotification = async function() {
     });
 
     try {
-        let uploadedImageUrl = "";
+        let uploadedImageUrl = selectedImageDataUrl || "";
         let uploadedImageFileId = "";
 
-        // رفع الصورة المرفقة إلى Google Drive
+        // رفع الصورة المرفقة إلى Google Drive كنسخة احتياطية
         if (selectedImageFile) {
             try {
-                const base64 = await readFileAsBase64(selectedImageFile);
+                const base64 = selectedImageDataUrl ? selectedImageDataUrl.split(',')[1] : await readFileAsBase64(selectedImageFile);
                 const targetFolderId = (SITE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId) ? SITE_SETTINGS.DRIVE_SETTINGS.rootFolderId : "13USbQnFLbCiI-fxvDc1pNjg0EEDSZ90t";
                 const fileName = `notif_${Date.now()}_${selectedImageFile.name}`;
 
                 const formData = new FormData();
                 formData.append('action', 'upload');
                 formData.append('name', fileName);
-                formData.append('mime', selectedImageFile.type || 'image/jpeg');
+                formData.append('mime', 'image/jpeg');
                 formData.append('data', base64);
                 formData.append('folderId', targetFolderId);
 
                 const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
                 const d = await res.json();
-
-                let genuineImgId = d.id || '';
-                let genuineImgUrl = d.url || '';
-
-                // إذا لم يرجع السكربت الـ id مباشرة، نقوم بالاستعلام عن الملفات في المجلد
-                if (!genuineImgId) {
-                    try {
-                        const listRes = await fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${targetFolderId}`);
-                        const listData = await listRes.json();
-                        const filesList = Array.isArray(listData) ? listData : (Array.isArray(listData?.files) ? listData.files : []);
-                        if (filesList.length > 0) {
-                            const matched = filesList.find(f => f.name === fileName) || filesList[0];
-                            if (matched && matched.id) {
-                                genuineImgId = matched.id;
-                                genuineImgUrl = matched.url || `https://drive.google.com/file/d/${matched.id}/view?usp=drivesdk`;
-                            }
-                        }
-                    } catch(listErr) {
-                        console.warn("تعذر جلب معرّف الصورة من درايف:", listErr);
-                    }
-                }
-
-                if (genuineImgId) {
-                    uploadedImageFileId = genuineImgId;
-                    uploadedImageUrl = `https://drive.google.com/thumbnail?id=${genuineImgId}&sz=w1200`;
-                } else if (genuineImgUrl) {
-                    uploadedImageUrl = genuineImgUrl;
+                if (d && d.id) {
+                    uploadedImageFileId = d.id;
                 }
             } catch(imgErr) {
-                console.warn("تعذر رفع الصورة لدرايف، سيتم النشر بدونها:", imgErr);
+                console.warn("تنبيه رفع درايف، تم الاعتماد على الصورة المدمجة المباشرة:", imgErr);
             }
         }
 
@@ -646,6 +672,7 @@ function listenToNotifications() {
 window.filterNotificationsFeed = function() {
     const q = (document.getElementById("feedFilterSearch")?.value || "").trim().toLowerCase();
     const aud = document.getElementById("feedFilterAudience")?.value || "ALL";
+    const centerFilter = document.getElementById("feedFilterCenter")?.value || "ALL";
     const dateVal = document.getElementById("feedFilterDate")?.value || "";
     const btnClearDate = document.getElementById("btnClearFeedDate");
     
@@ -660,7 +687,18 @@ window.filterNotificationsFeed = function() {
         list = list.filter(n => 
             n.senderCenter === currentEntity.center ||
             n.targetCenter === currentEntity.center ||
-            n.targetAudience === "all_centers"
+            n.targetAudience === "all_centers" ||
+            n.targetAudience === "all_trainees"
+        );
+    }
+
+    // فلترة حسب المركز الواحد
+    if (centerFilter !== "ALL") {
+        list = list.filter(n => 
+            n.targetCenter === centerFilter ||
+            n.senderCenter === centerFilter ||
+            n.targetAudience === "all_centers" ||
+            n.targetAudience === "all_trainees"
         );
     }
 
@@ -680,6 +718,8 @@ window.filterNotificationsFeed = function() {
     if (aud !== "ALL") {
         if (aud === "centers") {
             list = list.filter(n => n.targetAudience === "all_centers" || n.targetAudience === "single_center");
+        } else if (aud === "single_center") {
+            list = list.filter(n => n.targetAudience === "single_center" || n.targetAudience === "center_trainees");
         } else if (aud === "specific_trainees") {
             list = list.filter(n => n.targetAudience === "specific_trainees" || n.targetAudience === "single_trainee");
         } else if (aud === "urgent") {
@@ -755,8 +795,12 @@ function renderNotificationsFeed(list) {
             else if (n.imageUrl.includes('/d/')) fId = n.imageUrl.split('/d/')[1].split(/[=/]/)[0];
         }
 
-        const thumbSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w300` : (n.imageUrl || '');
-        const fallbackSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s400` : '';
+        let thumbSrc = n.imageUrl || '';
+        let fallbackSrc = '';
+        if (!thumbSrc.startsWith('data:image/') && fId) {
+            thumbSrc = `https://drive.google.com/thumbnail?id=${fId}&sz=w300`;
+            fallbackSrc = `https://lh3.googleusercontent.com/d/${fId}=s400`;
+        }
 
         const imgThumb = hasImg ? `
             <div class="feed-img-thumb" onclick="previewImageZoom('${n.imageUrl}', '${fId}')" title="تكبير الصورة">
@@ -809,8 +853,12 @@ window.previewImageZoom = function(url, fileId) {
         if (url.includes('id=')) fId = url.split('id=')[1].split('&')[0];
         else if (url.includes('/d/')) fId = url.split('/d/')[1].split(/[=/]/)[0];
     }
-    const zoomSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1600` : url;
-    const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1600` : '';
+    let zoomSrc = url || '';
+    let fbSrc = '';
+    if (!zoomSrc.startsWith('data:image/') && fId) {
+        zoomSrc = `https://drive.google.com/thumbnail?id=${fId}&sz=w1600`;
+        fbSrc = `https://lh3.googleusercontent.com/d/${fId}=s1600`;
+    }
 
     Swal.fire({
         html: `
@@ -845,8 +893,12 @@ window.previewNotificationItem = function(id) {
             if (notif.imageUrl.includes('id=')) fId = notif.imageUrl.split('id=')[1].split('&')[0];
             else if (notif.imageUrl.includes('/d/')) fId = notif.imageUrl.split('/d/')[1].split(/[=/]/)[0];
         }
-        const fullSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1200` : notif.imageUrl;
-        const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1200` : '';
+        let fullSrc = notif.imageUrl || '';
+        let fbSrc = '';
+        if (!fullSrc.startsWith('data:image/') && fId) {
+            fullSrc = `https://drive.google.com/thumbnail?id=${fId}&sz=w1200`;
+            fbSrc = `https://lh3.googleusercontent.com/d/${fId}=s1200`;
+        }
         imageHtml = `
             <div style="margin:15px 0; text-align:center;">
                 <img src="${fullSrc}" alt="الصورة المرفقة" referrerpolicy="no-referrer" onerror="if(!this.dataset.retried && '${fbSrc}'){this.dataset.retried=1; this.src='${fbSrc}';}" style="max-width:100%; max-height:350px; border-radius:12px; border:1px solid #e2e8f0; cursor:pointer;" onclick="previewImageZoom('${fullSrc}', '${fId}')">

@@ -832,8 +832,12 @@ function showNotificationModal(notif) {
             if (notif.imageUrl.includes('id=')) fId = notif.imageUrl.split('id=')[1].split('&')[0];
             else if (notif.imageUrl.includes('/d/')) fId = notif.imageUrl.split('/d/')[1].split(/[=/]/)[0];
         }
-        const fullSrc = fId ? `https://drive.google.com/thumbnail?id=${fId}&sz=w1200` : notif.imageUrl;
-        const fbSrc = fId ? `https://lh3.googleusercontent.com/d/${fId}=s1200` : '';
+        let fullSrc = notif.imageUrl || '';
+        let fbSrc = '';
+        if (!fullSrc.startsWith('data:image/') && fId) {
+            fullSrc = `https://drive.google.com/thumbnail?id=${fId}&sz=w1200`;
+            fbSrc = `https://lh3.googleusercontent.com/d/${fId}=s1200`;
+        }
 
         imageHtml = `
             <div style="margin:15px 0; text-align:center;">

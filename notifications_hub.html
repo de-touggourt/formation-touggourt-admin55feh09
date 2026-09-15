@@ -625,10 +625,14 @@
           <option value="ALL">كل الفئات</option>
           <option value="all_trainees">كافة المتكونين</option>
           <option value="center_trainees">مراكز محددة</option>
+          <option value="single_center">إشعار لمركز محدد</option>
           <option value="level_trainees">أطوار محددة</option>
           <option value="specific_trainees">مخصص (فردي/أساتذة)</option>
           <option value="centers">خاص بالمراكز</option>
           <option value="urgent">عاجل واستدعاء</option>
+        </select>
+        <select id="feedFilterCenter" class="form-control" onchange="filterNotificationsFeed()" style="width:auto; min-width:145px; font-size:12px; height:38px; cursor:pointer;" title="فلترة حسب المركز">
+          <option value="ALL">🏫 جميع المراكز</option>
         </select>
         <input type="date" id="feedFilterDate" class="form-control" onchange="filterNotificationsFeed()" title="تصفية بالتاريخ" style="width:auto; font-size:12px; height:38px; cursor:pointer;">
         <button type="button" id="btnClearFeedDate" onclick="clearFeedDateFilter()" title="إلغاء فلتر التاريخ" style="display:none; background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; border-radius:8px; padding:0 10px; cursor:pointer; height:38px;"><i class="fa-solid fa-xmark"></i></button>
