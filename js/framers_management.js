@@ -3105,6 +3105,47 @@ const photoContent = photoUrl
 };
 
 // ================= نظام الرابط السري الموحد للماسح =================
+window.openDirectScanner = async function() {
+    Swal.fire({
+        title: 'جاري فتح الماسح الضوئي...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
+        if (!centerClean) {
+            Swal.fire('تنبيه', 'لم يتم العثور على اسم المركز. يرجى تسجيل الدخول مجدداً.', 'warning');
+            return;
+        }
+
+        const snapshot = await db.collection('scanner_tokens').where('center', '==', centerClean).get();
+        let currentToken = '';
+        if (!snapshot.empty) {
+            currentToken = snapshot.docs[0].id;
+        } else {
+            currentToken = generateRandomToken(15);
+            await db.collection('scanner_tokens').doc(currentToken).set({
+                center: centerClean,
+                maxDevices: 1,
+                registeredDevices: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        Swal.close();
+        let isLocal = window.location.protocol === 'file:';
+        let currentPath = window.location.href;
+        let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
+        let toolTarget = isLocal ? 'scanner.html' : 'scanner-tool';
+        let fullUrl = `${baseUrl}/${toolTarget}?token=${currentToken}`;
+        window.open(fullUrl, '_blank');
+    } catch (e) {
+        console.error("Direct scanner error:", e);
+        Swal.fire('خطأ', 'تعذر فتح الماسح: ' + (e.message || ''), 'error');
+    }
+};
+
 window.generateScannerLink = async function() {
     Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     

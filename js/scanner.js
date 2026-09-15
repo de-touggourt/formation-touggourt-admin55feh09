@@ -1,7 +1,4 @@
-// التحقق الأمني من الصلاحيات
-if (typeof SecurityGuard !== 'undefined') {
-    SecurityGuard.verifySession("INSPECTOR");
-}
+// حماية الماسح تعتمد كلياً على الرمز السري (Token)، وتحديد الأجهزة (Device Lock)، والنطاق الجغرافي (GPS)
 
 const firebaseConfig = {
   apiKey: "AIzaSyBNBrVpBK8p_WWNwNhSH-mZ6NXOyr2TLhI",
@@ -281,13 +278,31 @@ window.onload = async function() {
 
     // 1. استخراج الرمز السري من الرابط
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
+    let token = urlParams.get('token');
 
     if (!token) {
+        // فحص ذكي: إذا كان المستخدم مسجل دخول كمفتش على نفس المتصفح، جلب الرمز تلقائياً
+        const loggedCenter = sessionStorage.getItem('inspectorCenter');
+        if (loggedCenter && loggedCenter.trim()) {
+            try {
+                const centerClean = loggedCenter.trim();
+                const snap = await db.collection('scanner_tokens').where('center', '==', centerClean).get();
+                if (!snap.empty) {
+                    const fallbackToken = snap.docs[0].id;
+                    window.location.replace(`${window.location.pathname}?token=${fallbackToken}`);
+                    return;
+                }
+            } catch(e) {
+                console.warn("Fallback token retrieval failed:", e);
+            }
+        }
+
         Swal.fire({
-            icon: 'error', title: 'رابط غير صالح',
-            text: 'الرابط غير كامل وينقصه الرمز السري.',
-            allowOutsideClick: false, showConfirmButton: false
+            icon: 'error', 
+            title: 'رابط غير صالح أو غير مكتمل',
+            text: 'الرابط المفتوح لا يحتوي على رمز التحقق السري (Token). يرجى فتح الماسح عبر زر "فتح ماسح الباركود" من لوحة المفتش.',
+            allowOutsideClick: false, 
+            showConfirmButton: false
         });
         return; 
     }
