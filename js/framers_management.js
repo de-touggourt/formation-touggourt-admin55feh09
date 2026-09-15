@@ -2767,28 +2767,38 @@ function changeFramerSystemMode(mode) {
 }
 
 async function loadFramerAttendanceData() {
-    currentFramerAttDate = document.getElementById('framerAttDate').value;
-    const docId = `${INSPECTOR_CENTER}_${currentFramerAttDate}`;
+    const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
+    currentFramerAttDate = document.getElementById('framerAttDate') ? document.getElementById('framerAttDate').value : getTodayDate();
+    const docId = `${centerClean}_${currentFramerAttDate}`;
     
-    if (framerAttListener) framerAttListener();
+    if (framerAttListener) {
+        try { framerAttListener(); } catch(e) {}
+        framerAttListener = null;
+    }
 
     framerAttListener = db.collection('framers_attendance_daily').doc(docId).onSnapshot((doc) => {
-        if (doc.exists) {
+        if (doc && doc.exists) {
             const data = doc.data();
             framerAttRecords = data.records || {};
             
             let currentMode = data.systemMode || "closed";
             const btnOpen = document.getElementById('btnSysOpen');
             const btnClosed = document.getElementById('btnSysClosed');
-            btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
-            btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
-            if (currentMode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
-            else { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+            if (btnOpen && btnClosed) {
+                btnOpen.style.background = "#f0f4f8"; btnOpen.style.color = "#102a43";
+                btnClosed.style.background = "#f0f4f8"; btnClosed.style.color = "#102a43";
+                if (currentMode === 'open') { btnOpen.style.background = "#0FBA50"; btnOpen.style.color = "white"; }
+                else { btnClosed.style.background = "#d90429"; btnClosed.style.color = "white"; }
+            }
 
         } else {
             framerAttRecords = {};
             changeFramerSystemMode('closed');
         }
+        renderFramerAttendanceTable();
+    }, (error) => {
+        console.error("خطأ في جلب حضور المؤطرين:", error);
+        framerAttRecords = framerAttRecords || {};
         renderFramerAttendanceTable();
     });
 }
@@ -3099,8 +3109,14 @@ window.generateScannerLink = async function() {
     Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     
     try {
+        const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
+        if (!centerClean) {
+            Swal.fire('تنبيه', 'لم يتم العثور على اسم المركز. يرجى تسجيل الدخول مجدداً.', 'warning');
+            return;
+        }
+
         // البحث عن رابط (Token) فعال لهذا المركز
-        const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
+        const snapshot = await db.collection('scanner_tokens').where('center', '==', centerClean).get();
         let currentToken = '';
         let oldDocId = null;
 
@@ -3111,7 +3127,7 @@ window.generateScannerLink = async function() {
             // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
             currentToken = generateRandomToken(15);
             await db.collection('scanner_tokens').doc(currentToken).set({
-                center: INSPECTOR_CENTER,
+                center: centerClean,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             oldDocId = currentToken;
@@ -3120,8 +3136,8 @@ window.generateScannerLink = async function() {
         window.showLinkModal(currentToken, oldDocId);
 
     } catch (e) {
-        console.error(e);
-        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+        console.error("Scanner link error:", e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط: ' + (e.message || ''), 'error');
     }
 };
 
@@ -3135,7 +3151,9 @@ function generateRandomToken(length) {
 window.showLinkModal = function(token, oldDocId) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner-tool?token=${token}`; 
+    let isLocal = window.location.protocol === 'file:';
+    let toolTarget = isLocal ? 'scanner.html' : 'scanner-tool';
+    let fullLink = `${baseUrl}/${toolTarget}?token=${token}`; 
 
     // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
@@ -3247,15 +3265,16 @@ window.regenerateToken = function(oldDocId) {
         if (result.isConfirmed) {
             Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
+                const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
                 // إبطال الرابط القديم بحذفه
                 if (oldDocId) {
-                    await db.collection('scanner_tokens').doc(oldDocId).delete();
+                    await db.collection('scanner_tokens').doc(oldDocId).delete().catch(err => console.warn(err));
                 }
                 
                 // إنشاء رابط جديد
                 let currentToken = generateRandomToken(15);
                 await db.collection('scanner_tokens').doc(currentToken).set({
-                    center: INSPECTOR_CENTER,
+                    center: centerClean,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
 
@@ -3263,8 +3282,8 @@ window.regenerateToken = function(oldDocId) {
                 Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
 
             } catch (e) {
-                console.error(e);
-                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
+                console.error("Token regeneration error:", e);
+                Swal.fire('خطأ', 'فشل في تغيير الرابط: ' + (e.message || ''), 'error');
             }
         } else {
             window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة في حالة الإلغاء

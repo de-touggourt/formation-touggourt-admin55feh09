@@ -1562,24 +1562,34 @@ function changeSystemMode(mode) {
 
 let attendanceListener = null; // متغير لحفظ المستمع اللحظي
 
-// ================= جلب بيانات الحضور لحظياً (Real-Time) =================
+// // ================= جلب بيانات الحضور لحظياً (Real-Time) =================
 async function loadAttendanceData() {
-    currentAttDate = document.getElementById('attDate').value;
-    const docId = `${INSPECTOR_CENTER}_${currentAttDate}`;
+    const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
+    currentAttDate = document.getElementById('attDate') ? document.getElementById('attDate').value : getTodayDate();
+    const docId = `${centerClean}_${currentAttDate}`;
     
     const recordedSelect = document.getElementById('attRecordedDaysSelect');
     if (recordedSelect && recordedSelect.querySelector(`option[value="${currentAttDate}"]`)) {
         recordedSelect.value = currentAttDate;
     }
 
-    document.getElementById('attTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السجل...</td></tr>';
+    document.getElementById('attTableBody').innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:#102a43;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السجل...</td></tr>';
 
     // إيقاف أي استماع سابق إذا قمنا بتغيير التاريخ
-    if (attendanceListener) { attendanceListener(); }
+    if (attendanceListener) { 
+        try { attendanceListener(); } catch(e) {}
+        attendanceListener = null;
+    }
+
+    if (!centerClean) {
+        console.warn("لم يتم العثور على اسم المركز لجلب الحضور");
+        renderAttendanceTable();
+        return;
+    }
 
     // إنشاء اتصال لحظي (onSnapshot) بدلاً من (get)
     attendanceListener = db.collection('attendance_daily').doc(docId).onSnapshot((doc) => {
-        if (doc.exists) {
+        if (doc && doc.exists) {
             const data = doc.data();
             attendanceRecords = data.records || {};
             
@@ -1591,7 +1601,13 @@ async function loadAttendanceData() {
         }
         renderAttendanceTable(); // إعادة بناء الجدول فوراً عند أي مسح جديد
     }, (error) => {
-        console.error("خطأ في المزامنة اللحظية:", error);
+        console.error("خطأ في المزامنة اللحظية للحضور:", error);
+        attendanceRecords = attendanceRecords || {};
+        renderAttendanceTable();
+        const tbody = document.getElementById('attTableBody');
+        if (tbody && (!centerData || centerData.length === 0)) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#d90429; padding:20px;"><i class="fa-solid fa-circle-exclamation"></i> تعذر الاتصال بالسجل اللحظي (${error.message || 'يرجى مراجعة الصلاحيات'}).</td></tr>`;
+        }
     });
 }
 
@@ -1752,6 +1768,14 @@ function renderAttendanceTable() {
         `;
         tbody.appendChild(tr);
     });
+
+    if (itemsToRender.length === 0) {
+        if (!centerData || centerData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:25px; color:#64748b;"><i class="fa-solid fa-spinner fa-spin"></i> بانتظار تحميل قائمة أساتذة المركز...</td></tr>';
+        } else {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:25px; color:#64748b;"><i class="fa-solid fa-circle-info"></i> لا توجد نتائج تطابق معايير البحث أو الفلاتر المحددة.</td></tr>';
+        }
+    }
 
     document.getElementById('st-total').innerText = total;
     document.getElementById('st-present').innerText = `${present} (${((present/total)*100 || 0).toFixed(1)}%)`;
@@ -3532,8 +3556,14 @@ window.generateScannerLink = async function() {
     Swal.fire({ title: 'جاري جلب الرابط الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     
     try {
+        const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
+        if (!centerClean) {
+            Swal.fire('تنبيه', 'لم يتم العثور على اسم المركز. يرجى تسجيل الدخول مجدداً.', 'warning');
+            return;
+        }
+
         // البحث عن رابط (Token) فعال لهذا المركز
-        const snapshot = await db.collection('scanner_tokens').where('center', '==', INSPECTOR_CENTER).get();
+        const snapshot = await db.collection('scanner_tokens').where('center', '==', centerClean).get();
         let currentToken = '';
         let oldDocId = null;
 
@@ -3544,7 +3574,7 @@ window.generateScannerLink = async function() {
             // إذا لم يكن هناك رابط مسبق، ننشئ واحداً جديداً
             currentToken = generateRandomToken(15);
             await db.collection('scanner_tokens').doc(currentToken).set({
-                center: INSPECTOR_CENTER,
+                center: centerClean,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             oldDocId = currentToken;
@@ -3553,8 +3583,8 @@ window.generateScannerLink = async function() {
         window.showLinkModal(currentToken, oldDocId);
 
     } catch (e) {
-        console.error(e);
-        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط.', 'error');
+        console.error("Scanner link error:", e);
+        Swal.fire('خطأ', 'حدث مشكلة في جلب الرابط: ' + (e.message || ''), 'error');
     }
 };
 
@@ -3568,7 +3598,9 @@ function generateRandomToken(length) {
 window.showLinkModal = function(token, oldDocId) {
     let currentPath = window.location.href;
     let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/'));
-    let fullLink = `${baseUrl}/scanner-tool?token=${token}`; 
+    let isLocal = window.location.protocol === 'file:';
+    let toolTarget = isLocal ? 'scanner.html' : 'scanner-tool';
+    let fullLink = `${baseUrl}/${toolTarget}?token=${token}`; 
 
     // جلب الصورة بدقة عالية (400x400) لكي لا تفقد جودتها عند التكبير
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(fullLink)}`;
@@ -3659,6 +3691,7 @@ window.showLinkModal = function(token, oldDocId) {
 
 window.copyScannerLink = function() {
     let copyText = document.getElementById("scannerLinkInput");
+    if (!copyText) return;
     copyText.select();
     copyText.setSelectionRange(0, 99999); 
     navigator.clipboard.writeText(copyText.value).then(() => {
@@ -3680,15 +3713,14 @@ window.regenerateToken = function(oldDocId) {
         if (result.isConfirmed) {
             Swal.fire({ title: 'جاري الإنشاء...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                // إبطال الرابط القديم بحذفه
+                const centerClean = (typeof INSPECTOR_CENTER !== 'undefined' && INSPECTOR_CENTER) ? INSPECTOR_CENTER.trim() : (sessionStorage.getItem('inspectorCenter') || '').trim();
                 if (oldDocId) {
-                    await db.collection('scanner_tokens').doc(oldDocId).delete();
+                    await db.collection('scanner_tokens').doc(oldDocId).delete().catch(err => console.warn(err));
                 }
                 
-                // إنشاء رابط جديد
                 let currentToken = generateRandomToken(15);
                 await db.collection('scanner_tokens').doc(currentToken).set({
-                    center: INSPECTOR_CENTER,
+                    center: centerClean,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
 
@@ -3696,11 +3728,11 @@ window.regenerateToken = function(oldDocId) {
                 Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'تم إنشاء رابط جديد!', showConfirmButton: false, timer: 2000});
 
             } catch (e) {
-                console.error(e);
-                Swal.fire('خطأ', 'فشل في تغيير الرابط.', 'error');
+                console.error("Token regeneration error:", e);
+                Swal.fire('خطأ', 'فشل في تغيير الرابط: ' + (e.message || ''), 'error');
             }
         } else {
-            window.showLinkModal(oldDocId, oldDocId); // إرجاع النافذة في حالة الإلغاء
+            window.showLinkModal(oldDocId, oldDocId);
         }
     });
 };
@@ -3719,15 +3751,12 @@ window.removeBrokenImage = async function(docId, cardType = 'info') {
         if (result.isConfirmed) {
             Swal.fire({ title: 'جاري التحديث اللحظي...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
-                // 1. تحديد رقم الموظف الصحيح
                 let item = centerData.find(d => d.docId === docId);
                 let actualEmpId = item ? item.empId : docId;
 
-                // 2. مسح الرابط التالف من فايربيز
                 await db.collection("employeescomnew").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
                 await db.collection("employeescomplus").doc(actualEmpId).update({ photoUrl_fb: null }).catch(()=>{});
                 
-                // 3. تحديث المصفوفة المحلية للمتكونين وتحديث الجدول فوراً في مكانه
                 if (item) item.photoUrl_fb = null;
                 
                 if (typeof allData !== 'undefined') {
@@ -3737,10 +3766,8 @@ window.removeBrokenImage = async function(docId, cardType = 'info') {
 
                 Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'تم استرجاع الصورة بنجاح', showConfirmButton: false, timer: 1500 });
                 
-                // 4. إعادة رسم الجدول دون تغيير الصفحة الحالية
                 if (typeof applyFilters === 'function') applyFilters(true);
                 
-                // 5. إعادة فتح البطاقة وعرض صورة درايف مباشرة
                 setTimeout(() => {
                     if (typeof viewInfo === 'function') viewInfo(docId);
                 }, 400);
