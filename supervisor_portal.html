@@ -460,12 +460,28 @@
       </div>
     </div>
 
-    <!-- قسم تفاصيل التكليف والمقاييس المتاحة للرفع -->
-    <div class="section-card">
-      <h2 class="section-title">
-        <i class="fa-solid fa-folder-open"></i> 
-        المقاييس المسندة ورفع الملفات البيداغوجية
-      </h2>
+    <!-- إشعار قبل اختيار المركز -->
+    <div id="noCenterSelectedNotice" class="section-card" style="text-align: center; padding: 45px 20px; background: #fff; border: 2px dashed #93c5fd; border-radius: 20px;">
+      <div style="width: 70px; height: 70px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+        <i class="fa-solid fa-map-pin" style="font-size: 32px; color: #1E68E8;"></i>
+      </div>
+      <h3 style="margin: 0 0 8px 0; font-size: 20px; color: #0f172a; font-weight: 900;">اختر مركز التكوين للبدء</h3>
+      <p style="margin: 0 auto; max-width: 500px; font-size: 14px; color: #64748b; font-weight: 700; line-height: 1.6;">
+        يرجى النقر على المركز المكلف به من القائمة أعلاه لاختيار الرتبة والتخصص، لتظهر لك المقاييس المسندة والدورات المفتوحة للرفع.
+      </p>
+    </div>
+
+    <!-- قسم تفاصيل التكليف والمقاييس المتاحة للرفع (يظهر فقط بعد اختيار المركز والرتبة والتخصص) -->
+    <div class="section-card" id="modulesSectionCard" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <h2 class="section-title" style="margin: 0; border-bottom: none; padding-bottom: 0;">
+          <i class="fa-solid fa-folder-open"></i> 
+          المقاييس المسندة ورفع الملفات البيداغوجية
+        </h2>
+        <button type="button" onclick="openRankSpecModal()" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; border-radius:10px; padding:6px 14px; font-weight:800; font-family:'Cairo'; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
+          <i class="fa-solid fa-arrows-rotate"></i> تغيير الرتبة / التخصص
+        </button>
+      </div>
 
       <!-- تفاصيل المركز المختار -->
       <div class="assignment-details" id="assignmentDetailsBox">
@@ -474,15 +490,15 @@
           <span class="detail-val" id="detCenterName">-</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">التخصصات المكلف بها:</span>
-          <span class="detail-val" id="detSpecs">-</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">الرتب والأطوار المستهدفة:</span>
+          <span class="detail-label">الرتبة المحددة:</span>
           <span class="detail-val" id="detRanks">-</span>
         </div>
         <div class="detail-item">
-          <span class="detail-label">الأفواج المشرف عليها:</span>
+          <span class="detail-label">التخصص المحدد:</span>
+          <span class="detail-val" id="detSpecs">-</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">الأفواج المسندة:</span>
           <span class="detail-val" id="detGroups">-</span>
         </div>
       </div>

@@ -902,27 +902,36 @@ window.renderShiftsTable = function() {
 };
 
 // ================= الإضافة والتعديل =================
-function getCenterSpecialties() {
-    let specs = new Set();
-    // نعتمد على centerData التي تجلب بيانات employeescomnew
+function getCenterRanks() {
+    let ranks = new Set();
     centerData.forEach(item => {
-        // في بيانات المتكونين التخصص مخزن في item.maty أو item.specialty
+        let r = item.grade || item.rank;
+        if (r && r !== '-' && r.trim() !== '') ranks.add(r.trim());
+    });
+    return Array.from(ranks).sort();
+}
+
+function getCenterSpecialties(selectedRanks = null) {
+    let specs = new Set();
+    centerData.forEach(item => {
+        let r = item.grade || item.rank;
         let sp = item.specialty || item.maty;
-        if (sp && sp !== '-' && sp.trim() !== '') specs.add(sp.trim());
+        if (!selectedRanks || selectedRanks.length === 0 || selectedRanks.includes(r)) {
+            if (sp && sp !== '-' && sp.trim() !== '') specs.add(sp.trim());
+        }
     });
     return Array.from(specs).sort();
 }
 
-function getCenterGroups(selectedSpec = null) {
+function getCenterGroups(selectedSpec = null, selectedRanks = null) {
     let groups = new Set();
     centerData.forEach(item => {
+        let r = item.grade || item.rank;
         let sp = item.specialty || item.maty;
         let grp = item.group || item.fawj;
-        
-        if (grp && grp !== '-' && grp.trim() !== '') {
-            // إذا تم تمرير تخصص، نجلب أفواج هذا التخصص فقط، وإلا نجلب كل الأفواج
+        if (!selectedRanks || selectedRanks.length === 0 || selectedRanks.includes(r)) {
             if (!selectedSpec || sp === selectedSpec) {
-                groups.add(grp.trim());
+                if (grp && grp !== '-' && grp.trim() !== '') groups.add(grp.trim());
             }
         }
     });
@@ -976,6 +985,14 @@ window.showAddFramerForm = function(empId, baseData) {
     let rolesHtml = '<option value="" disabled selected>اختر الوظيفة...</option>';
     FRAMER_ROLES.forEach(r => rolesHtml += `<option value="${r}">${r}</option>`);
 
+    const allRanks = getCenterRanks();
+    let ranksHtml = '';
+    if (allRanks.length === 0) {
+        ranksHtml = '<div style="color:#777; font-size:12px; grid-column:1/-1; text-align:center;">لا توجد رتب مسجلة للمتكونين بالمركز.</div>';
+    } else {
+        allRanks.forEach(r => ranksHtml += `<label class="styled-cb"><input type="checkbox" value="${r}" class="rank-cb" onchange="window.updateAddSpecs()"> <span>${r}</span></label>`);
+    }
+
     const allSpecs = getCenterSpecialties();
     let specsHtml = '';
     allSpecs.forEach(s => specsHtml += `<label class="styled-cb"><input type="checkbox" value="${s}" class="spec-cb" onchange="window.updateAddGroups()"> <span>${s}</span></label>`);
@@ -985,9 +1002,7 @@ window.showAddFramerForm = function(empId, baseData) {
 
     Swal.fire({
         title: '<i class="fa-solid fa-user-plus" style="color:#0FBA50; margin-left:8px;"></i> استكمال بيانات المؤطر',
-        // ... (كود الـ HTML والستايل يبقى كما هو تماماً دون تغيير)
-        html: document.getElementById('framer-form-container') ? document.getElementById('framer-form-container').outerHTML : /*...كود الـ HTML الخاص بك...*/ `
-            <!-- كود الـ HTML والـ CSS الخاص بك موجود هنا لم أقم بإزالته أو تعديله مطلقاً -->
+        html: `
             <style>
                 #framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
                 #framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
@@ -1059,16 +1074,24 @@ window.showAddFramerForm = function(empId, baseData) {
                 <div class="col-main" id="teacherFieldsCol" style="display:none;">
                     <div class="framer-section" style="border-color:#93c5fd; background:#f8fbff;">
                         <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
+                        
                         <div class="input-group">
-                            <label>تخصصات التأطير:</label>
-                            <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
+                            <label><i class="fa-solid fa-graduation-cap" style="color:#1E68E8;"></i> 1. الرتب المشرف عليها (حسب المتكونين بالمركز):</label>
+                            <div class="cb-grid" id="add-ranks-grid">${ranksHtml}</div>
                         </div>
+
+                        <div class="input-group">
+                            <label><i class="fa-solid fa-book-bookmark" style="color:#e67e22;"></i> 2. تخصصات التأطير:</label>
+                            <div class="cb-grid" id="add-specs-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">اختر الرتب أولاً لعرض التخصصات.</div>'}</div>
+                        </div>
+
                         <div class="input-group" id="groups-container">
-                            <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
-                            <div id="add-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;"></div>
+                            <label><i class="fa-solid fa-users" style="color:#0FBA50;"></i> 3. الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
+                            <div id="add-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:180px; overflow-y:auto; padding-right:5px;"></div>
                         </div>
+
                         <div class="input-group">
-                            <label>مقاييس التأطير:</label>
+                            <label><i class="fa-solid fa-chalkboard" style="color:#8e44ad;"></i> 4. مقاييس التأطير:</label>
                             <div class="cb-grid">${modsHtml}</div>
                         </div>
                     </div>
@@ -1078,7 +1101,6 @@ window.showAddFramerForm = function(empId, baseData) {
         width: '550px',
         showCancelButton: true, confirmButtonText: 'حفظ المؤطر', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
         didOpen: () => {
-            // 🌟 الإصلاح الجذري: إزالة أي حالة تحميل سابقة وإجبار الأزرار على العودة للوضع الطبيعي 🌟
             Swal.hideLoading();
             Swal.enableButtons();
 
@@ -1101,8 +1123,27 @@ window.showAddFramerForm = function(empId, baseData) {
                 }
             };
 
-            // بقية الدوال كالسابق...
+            window.updateAddSpecs = () => {
+                const selectedRanks = Array.from(document.querySelectorAll('.rank-cb:checked')).map(cb => cb.value);
+                const specsGrid = document.getElementById('add-specs-grid');
+                const prevSpecs = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
+                const filteredSpecs = getCenterSpecialties(selectedRanks.length > 0 ? selectedRanks : null);
+                
+                let html = '';
+                if (filteredSpecs.length === 0) {
+                    html = '<div style="color:#777; font-size:12px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للرتب المحددة.</div>';
+                } else {
+                    filteredSpecs.forEach(s => {
+                        let checked = prevSpecs.includes(s) ? 'checked' : '';
+                        html += `<label class="styled-cb"><input type="checkbox" value="${s}" class="spec-cb" onchange="window.updateAddGroups()" ${checked}> <span>${s}</span></label>`;
+                    });
+                }
+                specsGrid.innerHTML = html;
+                window.updateAddGroups();
+            };
+
             window.updateAddGroups = () => {
+                const selectedRanks = Array.from(document.querySelectorAll('.rank-cb:checked')).map(cb => cb.value);
                 const selectedSpecs = Array.from(document.querySelectorAll('.spec-cb:checked')).map(cb => cb.value);
                 const groupsGrid = document.getElementById('add-groups-grid');
                 let currentCheckedBoxes = document.querySelectorAll('.grp-cb:checked');
@@ -1112,7 +1153,7 @@ window.showAddFramerForm = function(empId, baseData) {
                     grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
                 } else {
                     selectedSpecs.forEach(spec => {
-                        let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
+                        let specGroups = getCenterGroups(spec, selectedRanks.length > 0 ? selectedRanks : null).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
                         let safeSpec = spec.replace(/\s+/g, '');
                         grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
                                         <h4 style="margin:0 0 10px 0; color:#1E68E8; font-size:13px; border-bottom:1px dashed #cce5ff; padding-bottom:5px;">
@@ -1157,11 +1198,10 @@ window.showAddFramerForm = function(empId, baseData) {
                 }
             };
 
-            window.updateAddGroups();
+            window.updateAddSpecs();
             window.toggleTeacherFields(); 
         },
         preConfirm: async () => { 
-            // 🌟 التصحيح هنا: حذف كلمة add- من المعرفات (IDs) لتطابق الـ HTML 🌟
             let rawPhone = document.getElementById('fr-phone').value.trim().replace(/\s+/g, '');
             let formattedPhone = rawPhone.length === 10 ? rawPhone.replace(/(.{2})(?=.)/g, '$1 ') : rawPhone;
             
@@ -1169,9 +1209,10 @@ window.showAddFramerForm = function(empId, baseData) {
             const cle = document.getElementById('fr-cle').value.trim();
             const role = document.getElementById('fr-role').value;
             
-            let framingSpecs = []; let framingModules = []; let framingGroups = [];
+            let framingRanks = []; let framingSpecs = []; let framingModules = []; let framingGroups = [];
 
             if(role === 'أستاذ مؤطر') {
+                document.querySelectorAll('.rank-cb:checked').forEach(cb => framingRanks.push(cb.value));
                 document.querySelectorAll('.spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
                 document.querySelectorAll('.mod-cb:checked').forEach(cb => framingModules.push(cb.value));
                 
@@ -1185,6 +1226,7 @@ window.showAddFramerForm = function(empId, baseData) {
                     }
                 });
 
+                if (framingRanks.length === 0) { Swal.showValidationMessage('يرجى تحديد رتبة واحدة على الأقل يشرف عليها الأستاذ!'); return false; }
                 if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
                 if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
                 if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
@@ -1239,15 +1281,19 @@ window.showAddFramerForm = function(empId, baseData) {
                 phone: formattedPhone, 
                 ccp: ccp, 
                 ccpKey: cle, 
-                // 🌟 التصحيح هنا أيضاً للـ Checkbox الخاصة بالدورات 🌟
                 s1: document.getElementById('fr-s1').checked, 
                 s2: document.getElementById('fr-s2').checked, 
                 s3: document.getElementById('fr-s3').checked,
                 shifts: [], 
                 isProtected: false, 
+                framingRanks,
+                supervisedRanks: framingRanks,
                 framingSpecs, 
+                specs: framingSpecs,
                 framingModules, 
-                framingGroups
+                modules: framingModules,
+                framingGroups,
+                groups: framingGroups
             };
         }
     }).then(async (res) => {
@@ -1276,7 +1322,6 @@ window.editFramer = function(docId) {
         return;
     }
 
-   
     const isProtectedRole = f.isProtected;
 	
     let rolesHtml = '';
@@ -1286,18 +1331,24 @@ window.editFramer = function(docId) {
         FRAMER_ROLES.forEach(r => rolesHtml += `<option value="${r}" ${f.role === r ? 'selected' : ''}>${r}</option>`);
     }
 
-    // تجهيز التخصصات
-    const allSpecs = getCenterSpecialties();
-    let specsHtml = '';
-    allSpecs.forEach(s => {
-        let checked = (f.framingSpecs || []).includes(s) ? 'checked' : '';
-        specsHtml += `<label class="styled-cb"><input type="checkbox" value="${s}" class="edit-spec-cb" onchange="window.updateEditGroups()" ${checked}> <span>${s}</span></label>`;
-    });
+    // 1. تجهيز الرتب المسجلة للمتكونين بالمركز
+    const allRanks = getCenterRanks();
+    const savedRanks = f.framingRanks || f.supervisedRanks || [];
+    let ranksHtml = '';
+    if (allRanks.length === 0) {
+        ranksHtml = '<div style="color:#777; font-size:12px; grid-column:1/-1; text-align:center;">لا توجد رتب مسجلة للمتكونين بالمركز.</div>';
+    } else {
+        allRanks.forEach(r => {
+            let checked = savedRanks.includes(r) ? 'checked' : '';
+            ranksHtml += `<label class="styled-cb"><input type="checkbox" value="${r}" class="edit-rank-cb" onchange="window.updateEditSpecs()" ${checked}> <span>${r}</span></label>`;
+        });
+    }
 
-    // تجهيز المقاييس
+    // 2. تجهيز المقاييس
     let modsHtml = '';
+    const savedMods = f.framingModules || f.modules || [];
     MODULES_LIST.forEach(m => {
-        let checked = (f.framingModules || []).includes(m) ? 'checked' : '';
+        let checked = savedMods.includes(m) ? 'checked' : '';
         modsHtml += `<label class="styled-cb"><input type="checkbox" value="${m}" class="edit-mod-cb" ${checked}> <span>${m}</span></label>`;
     });
 
@@ -1305,7 +1356,6 @@ window.editFramer = function(docId) {
         title: '<i class="fa-solid fa-user-pen" style="color:#e67e22; margin-left:8px;"></i> بطاقة تعديل بيانات المؤطر',
         html: `
             <style>
-                /* التصميم الديناميكي الجديد (يتمدد حسب الوظيفة) */
                 #edit-framer-form-container { display: grid; grid-template-columns: 1fr; gap: 20px; text-align: right; font-family: 'Cairo'; align-items: start; transition: 0.3s ease-in-out; }
                 #edit-framer-form-container.is-teacher { grid-template-columns: 1fr 1fr; }
                 @media(max-width: 768px) { #edit-framer-form-container.is-teacher { grid-template-columns: 1fr; } }
@@ -1381,40 +1431,38 @@ window.editFramer = function(docId) {
                         <div class="framer-section-title"><i class="fa-solid fa-chalkboard-user" style="color:#1E68E8;"></i> المهام البيداغوجية (للمتكونين)</div>
                         
                         <div class="input-group">
-                            <label>تخصصات التأطير:</label>
-                            <div class="cb-grid">${specsHtml || '<div style="color:#777; font-size:13px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للمتكونين بالمركز.</div>'}</div>
-                        </div>
-
-                        <div class="input-group" id="groups-container">
-                            <label>الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
-                            <div id="edit-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:200px; overflow-y:auto; padding-right:5px;">
-                            </div>
+                            <label><i class="fa-solid fa-graduation-cap" style="color:#1E68E8;"></i> 1. الرتب المشرف عليها (حسب المتكونين بالمركز):</label>
+                            <div class="cb-grid" id="edit-ranks-grid">${ranksHtml}</div>
                         </div>
 
                         <div class="input-group">
-                            <label>مقاييس التأطير:</label>
+                            <label><i class="fa-solid fa-book-bookmark" style="color:#e67e22;"></i> 2. تخصصات التأطير:</label>
+                            <div class="cb-grid" id="edit-specs-grid"></div>
+                        </div>
+
+                        <div class="input-group" id="groups-container">
+                            <label><i class="fa-solid fa-users" style="color:#0FBA50;"></i> 3. الأفواج المستهدفة: <span style="font-size:11px; color:#777; font-weight:normal;">(مقسمة حسب التخصص)</span></label>
+                            <div id="edit-groups-grid" style="display:flex; flex-direction:column; gap:10px; max-height:180px; overflow-y:auto; padding-right:5px;"></div>
+                        </div>
+
+                        <div class="input-group">
+                            <label><i class="fa-solid fa-chalkboard" style="color:#8e44ad;"></i> 4. مقاييس التأطير:</label>
                             <div class="cb-grid">${modsHtml}</div>
                         </div>
                     </div>
                 </div>
             </div>
         `,
-        // 🌟 1. تحديد عرض النافذة ديناميكياً 🌟
         width: f.role === 'أستاذ مؤطر' ? '950px' : '550px', 
         showCancelButton: true, confirmButtonText: 'حفظ التعديلات', cancelButtonText: 'إلغاء', confirmButtonColor: '#e67e22',
         didOpen: () => {
-		
             Swal.hideLoading();
             Swal.enableButtons();
-            
-            // 🌟 2. إضافة تأثير التمدد الديناميكي 🌟
             Swal.getPopup().style.transition = 'width 0.4s ease-in-out';
 			
             window.toggleEditTeacherFields = () => {
                 const roleEl = document.getElementById('edit-fr-role');
                 const role = isProtectedRole ? f.role : roleEl.value;
-                
-                // 🌟 3. تكبير وتصغير النافذة بانسجام عند تغيير الوظيفة 🌟
                 const container = document.getElementById('edit-framer-form-container');
                 const teacherCol = document.getElementById('editTeacherFieldsCol');
                 const popup = Swal.getPopup();
@@ -1430,12 +1478,34 @@ window.editFramer = function(docId) {
                 }
             };
 
-            // الدالة المطورة لفصل الأفواج حسب التخصص
+            window.updateEditSpecs = () => {
+                const selectedRanks = Array.from(document.querySelectorAll('.edit-rank-cb:checked')).map(cb => cb.value);
+                const specsGrid = document.getElementById('edit-specs-grid');
+                let currentCheckedBoxes = Array.from(document.querySelectorAll('.edit-spec-cb:checked')).map(cb => cb.value);
+                let savedSpecs = f.framingSpecs || f.specs || [];
+                let prevSpecs = currentCheckedBoxes.length > 0 ? currentCheckedBoxes : savedSpecs;
+                
+                const filteredSpecs = getCenterSpecialties(selectedRanks.length > 0 ? selectedRanks : null);
+
+                let html = '';
+                if (filteredSpecs.length === 0) {
+                    html = '<div style="color:#777; font-size:12px; grid-column:1/-1; text-align:center;">لا توجد تخصصات مسجلة للرتب المحددة.</div>';
+                } else {
+                    filteredSpecs.forEach(s => {
+                        let checked = prevSpecs.includes(s) ? 'checked' : '';
+                        html += `<label class="styled-cb"><input type="checkbox" value="${s}" class="edit-spec-cb" onchange="window.updateEditGroups()" ${checked}> <span>${s}</span></label>`;
+                    });
+                }
+                specsGrid.innerHTML = html;
+                window.updateEditGroups();
+            };
+
             window.updateEditGroups = () => {
+                const selectedRanks = Array.from(document.querySelectorAll('.edit-rank-cb:checked')).map(cb => cb.value);
                 const selectedSpecs = Array.from(document.querySelectorAll('.edit-spec-cb:checked')).map(cb => cb.value);
                 const groupsGrid = document.getElementById('edit-groups-grid');
                 
-                let prevChecked = f.framingGroups || []; 
+                let prevChecked = f.framingGroups || f.groups || []; 
                 let currentCheckedBoxes = document.querySelectorAll('.edit-grp-cb:checked');
                 if(currentCheckedBoxes.length > 0) {
                     prevChecked = Array.from(currentCheckedBoxes).map(cb => cb.value);
@@ -1447,7 +1517,7 @@ window.editFramer = function(docId) {
                     grpHtml = '<div style="color:#777; font-size:13px; text-align:center; padding: 15px; background:#fff; border:1px solid #cce5ff; border-radius:8px;">يرجى تحديد تخصص واحد على الأقل لظهور الأفواج الخاصة به.</div>';
                 } else {
                     selectedSpecs.forEach(spec => {
-                        let specGroups = getCenterGroups(spec).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
+                        let specGroups = getCenterGroups(spec, selectedRanks.length > 0 ? selectedRanks : null).sort((a, b) => a.localeCompare(b, 'ar', { numeric: true }));
                         let safeSpec = spec.replace(/\s+/g, '');
                         
                         grpHtml += `<div style="background:#fff; border:1px solid #cce5ff; border-radius:8px; padding:10px;">
@@ -1496,7 +1566,7 @@ window.editFramer = function(docId) {
                 }
             };
 
-            window.updateEditGroups();
+            window.updateEditSpecs();
         },
         preConfirm: () => {
             let rawPhone = document.getElementById('edit-fr-phone').value.trim().replace(/\s+/g, '');
@@ -1512,11 +1582,13 @@ window.editFramer = function(docId) {
             const s2 = document.getElementById('edit-fr-s2').checked;
             const s3 = document.getElementById('edit-fr-s3').checked;
 
+            let framingRanks = [];
             let framingSpecs = [];
             let framingModules = [];
             let framingGroups = [];
 
             if(role === 'أستاذ مؤطر') {
+                document.querySelectorAll('.edit-rank-cb:checked').forEach(cb => framingRanks.push(cb.value));
                 document.querySelectorAll('.edit-spec-cb:checked').forEach(cb => framingSpecs.push(cb.value));
                 document.querySelectorAll('.edit-mod-cb:checked').forEach(cb => framingModules.push(cb.value));
                 
@@ -1530,6 +1602,7 @@ window.editFramer = function(docId) {
                     }
                 });
 
+                if (framingRanks.length === 0) { Swal.showValidationMessage('يرجى تحديد رتبة واحدة على الأقل يشرف عليها الأستاذ!'); return false; }
                 if (framingSpecs.length === 0) { Swal.showValidationMessage('يرجى تحديد تخصص تأطير واحد على الأقل!'); return false; }
                 if (framingGroups.length === 0) { Swal.showValidationMessage('يرجى تحديد فوج واحد على الأقل للتخصص المختار!'); return false; }
                 if (framingModules.length === 0) { Swal.showValidationMessage('يرجى تحديد مقياس تأطير واحد على الأقل!'); return false; }
@@ -1559,7 +1632,15 @@ window.editFramer = function(docId) {
             
             return { 
                 phone: formattedPhone,
-                ccp, ccpKey: cle, role, s1, s2, s3, framingSpecs, framingModules, framingGroups 
+                ccp, ccpKey: cle, role, s1, s2, s3,
+                framingRanks,
+                supervisedRanks: framingRanks,
+                framingSpecs,
+                specs: framingSpecs,
+                framingModules,
+                modules: framingModules,
+                framingGroups,
+                groups: framingGroups
             };
         }
 
@@ -1571,7 +1652,10 @@ window.editFramer = function(docId) {
                 await db.collection("center_framers").doc(docId).update(res.value);
                 f.phone = res.value.phone; f.ccp = res.value.ccp; f.ccpKey = res.value.ccpKey; f.role = res.value.role;
                 f.s1 = res.value.s1; f.s2 = res.value.s2; f.s3 = res.value.s3;
-                f.framingSpecs = res.value.framingSpecs; f.framingModules = res.value.framingModules; f.framingGroups = res.value.framingGroups;
+                f.framingRanks = res.value.framingRanks; f.supervisedRanks = res.value.supervisedRanks;
+                f.framingSpecs = res.value.framingSpecs; f.specs = res.value.specs;
+                f.framingModules = res.value.framingModules; f.modules = res.value.modules;
+                f.framingGroups = res.value.framingGroups; f.groups = res.value.groups;
                 
                 window.filterFramersTable();
                 if(isShiftMode) window.renderShiftsTable();
@@ -1678,6 +1762,17 @@ window.viewFramer = function(docId) {
                 <span style="display:block; font-size:11.5px; color:#64748b; font-weight:bold; margin-bottom:2px;">الرتبة</span>
                 <span style="display:block; font-size:15px; color:#1e293b; font-weight:900;">${b.grade || b.rank || '-'}</span>
             </div>
+            ${f.role === 'أستاذ مؤطر' ? `
+            <div style="background: #f0fdf4; border:1px solid #86efac; padding: 12px; border-radius: 12px; grid-column: span 2; margin-top: 5px;">
+                <div style="font-size:12px; font-weight:bold; color:#16a34a; margin-bottom:6px;"><i class="fa-solid fa-chalkboard-user"></i> المهام البيداغوجية المسندة:</div>
+                <div style="font-size:12px; color:#1e293b; line-height:1.7;">
+                    <div><b>الرتب المشرف عليها:</b> ${(f.framingRanks || f.supervisedRanks || []).join('، ') || 'غير محدد'}</div>
+                    <div><b>التخصصات:</b> ${(f.framingSpecs || f.specs || []).join('، ') || 'غير محدد'}</div>
+                    <div><b>الأفواج:</b> ${(f.framingGroups || f.groups || []).map(g => g.includes('::') ? g.split('::')[1] : g).join('، ') || 'غير محدد'}</div>
+                    <div><b>المقاييس:</b> ${(f.framingModules || f.modules || []).join('، ') || 'غير محدد'}</div>
+                </div>
+            </div>
+            ` : ''}
         </div>
     </div>
     `;

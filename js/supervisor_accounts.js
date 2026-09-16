@@ -122,8 +122,14 @@ async function loadSupervisorsData() {
                   let d = doc.data();
                   if (!d.empId || doc.id.startsWith("settings_")) return null;
 
+                  // قراءة التخصصات والمقاييس والأفواج والرتب من كلا الصيغتين لضمان التوافق
+                  let specs = d.framingSpecs || d.specs || [];
+                  let modules = d.framingModules || d.modules || [];
+                  let groups = d.framingGroups || d.groups || [];
+                  let supervisedRanks = d.framingRanks || d.supervisedRanks || (d.rank && d.rank !== '-' ? [d.rank] : []);
+
                   // تصفية الأساتذة المؤطرين (أو من يحمل مهام تأطير بيداغوجي)
-                  let isTeacher = (d.role === "أستاذ مؤطر" || d.role === "أستاذ(ة) مكون(ة)" || (d.modules && d.modules.length > 0) || (d.specs && d.specs.length > 0));
+                  let isTeacher = (d.role === "أستاذ مؤطر" || d.role === "أستاذ(ة) مكون(ة)" || modules.length > 0 || specs.length > 0);
                   
                   let base = await fetchEmployeeBaseData(d.empId);
                   return {
@@ -135,10 +141,13 @@ async function loadSupervisorsData() {
                       rank: (base && (base.grade || base.rank)) ? (base.grade || base.rank) : (d.rank || "-"),
                       workplace: (base && (base.place || base.workplace)) ? (base.place || base.workplace) : (d.workplace || "-"),
                       phone: d.phone || (base ? base.phone : "-"),
-                      specs: d.specs || [],
-                      modules: d.modules || [],
-                      groups: d.groups || [],
-                      supervisedRanks: d.supervisedRanks || (d.rank ? [d.rank] : []),
+                      specs: specs,
+                      modules: modules,
+                      groups: groups,
+                      supervisedRanks: supervisedRanks,
+                      s1: (typeof d.s1 !== 'undefined') ? !!d.s1 : true,
+                      s2: (typeof d.s2 !== 'undefined') ? !!d.s2 : false,
+                      s3: (typeof d.s3 !== 'undefined') ? !!d.s3 : false,
                       baseInfo: base,
                       center: INSPECTOR_CENTER
                   };
@@ -385,9 +394,16 @@ window.approveSupervisorAccount = async function(empId) {
                     workplace: sup.workplace,
                     phone: sup.phone || "",
                     specs: sup.specs || [],
+                    framingSpecs: sup.specs || [],
                     modules: sup.modules || [],
+                    framingModules: sup.modules || [],
                     groups: sup.groups || [],
+                    framingGroups: sup.groups || [],
                     supervisedRanks: sup.supervisedRanks || [],
+                    framingRanks: sup.supervisedRanks || [],
+                    s1: (typeof sup.s1 !== 'undefined') ? sup.s1 : true,
+                    s2: (typeof sup.s2 !== 'undefined') ? sup.s2 : false,
+                    s3: (typeof sup.s3 !== 'undefined') ? sup.s3 : false,
                     role: sup.role || "أستاذ مؤطر",
                     status: "active",
                     approvedAt: firebase.firestore.FieldValue.serverTimestamp(),

@@ -23,6 +23,49 @@ if (!firebase.apps.length) {
 const db = firebase.firestore();
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_eNgM1R-fILJq00iye9-3eeFCFjKBkMcej4VOq53gG5gshOsulAH7b-X0_JkHHrkyJw/exec";
+
+// قاموس الربط بين المسميات العربية والمفاتيح البرمجية الإنجليزية المعتمدة في قاعدة البيانات
+const MODULE_KEY_MAP = {
+    // المفاتيح الإنجليزية
+    "didactique": "didactique",
+    "tasyire": "tasyire",
+    "takwime": "takwime",
+    "informatique": "informatique",
+    "nidame": "nidame",
+    "akhlakiyate": "akhlakiyate",
+    "handasa": "handasa",
+    "wasata": "wasata",
+    "tachri": "tachri",
+    "psycho": "psycho",
+    "fasad": "fasad",
+
+    // المسميات العربية الشائعة
+    "تعليمية المادة": "didactique",
+    "تعليمية مادة التخصص": "didactique",
+    "تعليمية مادة التخصص وطرق التدريس": "didactique",
+    "تقنيات تسيير القسم": "tasyire",
+    "التقويم والمعالجة": "takwime",
+    "التقويم والمعالجة البيداغوجية": "takwime",
+    "التقييم والمعالجة البيداغوجية": "takwime",
+    "الإعلام الآلي": "informatique",
+    "تكنولوجيا الإعلام والاتصال": "informatique",
+    "الإعلام الآلي وتكنولوجيا الإعلام و الاتصال": "informatique",
+    "النظام التربوي": "nidame",
+    "النظام التربوي الجزائري": "nidame",
+    "النظام التربوي الجزائري والمناهج التعليمية": "nidame",
+    "أخلاقيات المهنة": "akhlakiyate",
+    "أخلاقيات وأدبيات المهنة": "akhlakiyate",
+    "هندسة التكوين": "handasa",
+    "هندسة التكوين والبيداغوجيا": "handasa",
+    "الوساطة المدرسية": "wasata",
+    "التشريع المدرسي": "tachri",
+    "علوم التربية": "psycho",
+    "علم النفس التربوي": "psycho",
+    "علوم التربية وعلم النفس": "psycho",
+    "الشفافية والوقاية من الفساد": "fasad",
+    "الوقاية من الفساد": "fasad"
+};
+
 const DEFAULT_MODULES = [
     "تعليمية المادة", 
     "التشريع المدرسي", 
@@ -37,7 +80,10 @@ const DEFAULT_MODULES = [
 let SITE_SETTINGS = null;
 let supervisorAccounts = [];
 let currentActiveCenterDoc = null;
+let currentSelectedRank = "";
+let currentSelectedSpec = "";
 let currentFolderId = null;
+let currentModalFiles = [];
 
 // تشغيل النظام عند تحميل الصفحة
 window.onload = async function() {
@@ -49,7 +95,7 @@ window.onload = async function() {
         db.collection("site_settings").doc("main").onSnapshot((docSnap) => {
             if (docSnap.exists) {
                 SITE_SETTINGS = docSnap.data();
-                if (currentActiveCenterDoc) {
+                if (currentActiveCenterDoc && currentSelectedRank && currentSelectedSpec) {
                     renderModulesGrid();
                 }
             }
@@ -60,7 +106,25 @@ window.onload = async function() {
             .where("empId", "==", String(userEmpId))
             .get();
 
-        if (accountsSnap.empty) {
+        // جلب بيانات التكليف من center_framers لضمان التحديث اللحظي للرتب والأفواج والتخصصات
+        let framersSnap = null;
+        try {
+            framersSnap = await db.collection("center_framers")
+                .where("empId", "==", String(userEmpId))
+                .get();
+        } catch(e) {
+            console.warn("تعذر فحص center_framers احتياطياً:", e);
+        }
+
+        let framersByCenter = {};
+        if (framersSnap && !framersSnap.empty) {
+            framersSnap.forEach(d => {
+                const fd = d.data();
+                if (fd.center) framersByCenter[fd.center.trim()] = fd;
+            });
+        }
+
+        if (accountsSnap.empty && Object.keys(framersByCenter).length === 0) {
             Swal.fire({
                 icon: 'error',
                 title: 'لا يوجد حساب معتمد',
@@ -76,15 +140,36 @@ window.onload = async function() {
         accountsSnap.forEach(doc => {
             const data = doc.data();
             if (data.status === "active") {
-                activeList.push({ docId: doc.id, ...data });
+                const cName = (data.center || "").trim();
+                const fData = framersByCenter[cName] || {};
+
+                // دمج الحقول من الجدولين لضمان أعلى دقة
+                let specs = (data.specs && data.specs.length > 0) ? data.specs : (data.framingSpecs || fData.framingSpecs || fData.specs || []);
+                let modules = (data.modules && data.modules.length > 0) ? data.modules : (data.framingModules || fData.framingModules || fData.modules || []);
+                let groups = (data.groups && data.groups.length > 0) ? data.groups : (data.framingGroups || fData.framingGroups || fData.groups || []);
+                let supervisedRanks = (data.supervisedRanks && data.supervisedRanks.length > 0) ? data.supervisedRanks : (data.framingRanks || fData.framingRanks || fData.supervisedRanks || (data.rank ? [data.rank] : []));
+
+                let s1 = (typeof data.s1 !== 'undefined') ? !!data.s1 : ((typeof fData.s1 !== 'undefined') ? !!fData.s1 : true);
+                let s2 = (typeof data.s2 !== 'undefined') ? !!data.s2 : ((typeof fData.s2 !== 'undefined') ? !!fData.s2 : false);
+                let s3 = (typeof data.s3 !== 'undefined') ? !!data.s3 : ((typeof fData.s3 !== 'undefined') ? !!fData.s3 : false);
+
+                activeList.push({ 
+                    docId: doc.id, 
+                    ...data,
+                    specs,
+                    modules,
+                    groups,
+                    supervisedRanks,
+                    s1, s2, s3
+                });
             }
         });
 
         if (activeList.length === 0) {
             Swal.fire({
                 icon: 'warning',
-                title: 'الحساب معطل',
-                text: 'تم تعليق أو تعطيل حسابك في هذا الفضاء من طرف إدارة المركز. يرجى مراجعة إدارة المركز.',
+                title: 'الحساب غير مفعل',
+                text: 'حسابك في فضاء التأطير قيد المراجعة والاعتماد أو معطل من طرف إدارة المركز.',
                 confirmButtonText: 'حسناً'
             }).then(() => {
                 logoutSupervisor();
@@ -97,11 +182,8 @@ window.onload = async function() {
         // تعيين الملف الشخصي للأستاذ
         setupProfileHeader(activeList[0]);
 
-        // رسم مراكز التكليف
+        // رسم بطاقات المراكز المعتمدة فقط (دون عرض المقاييس حتى يتم اختيار المركز)
         renderCentersGrid();
-
-        // اختيار أول مركز تلقائياً
-        selectCenter(activeList[0].docId);
 
         if (loader) loader.style.display = "none";
 
@@ -127,6 +209,7 @@ function setupProfileHeader(supData) {
     }
 }
 
+// رسم قائمة المراكز المكلف بها الأستاذ
 function renderCentersGrid() {
     const container = document.getElementById("centersContainer");
     if (!container) return;
@@ -144,6 +227,9 @@ function renderCentersGrid() {
                         <i class="fa-solid fa-circle-check"></i> تكليف معتمد ونشط
                     </div>
                 </div>
+                <div style="font-size: 13px; color: #1E68E8; font-weight: 800;">
+                    اختيار <i class="fa-solid fa-chevron-left" style="margin-right: 4px;"></i>
+                </div>
             </div>
         `;
     });
@@ -151,6 +237,7 @@ function renderCentersGrid() {
     container.innerHTML = html;
 }
 
+// عند النقر على أي مركز: فتح نافذة اختيار الرتبة والتخصص
 window.selectCenter = function(docId) {
     const found = supervisorAccounts.find(x => x.docId === docId);
     if (!found) return;
@@ -162,55 +249,199 @@ window.selectCenter = function(docId) {
     const activeCard = document.getElementById(`card_${docId}`);
     if (activeCard) activeCard.classList.add("active");
 
-    // تحديث بيانات التكليف بالمركز
-    document.getElementById("detCenterName").innerText = found.center;
-    
-    const specsStr = (found.specs && found.specs.length > 0) ? found.specs.join("، ") : "جميع التخصصات المعتمدة";
-    document.getElementById("detSpecs").innerText = specsStr;
+    // فتح نافذة اختيار الرتبة والتخصص
+    openRankSpecModal();
+};
 
-    const ranksStr = (found.supervisedRanks && found.supervisedRanks.length > 0) ? found.supervisedRanks.join("، ") : (found.rank || "غير محدد");
-    document.getElementById("detRanks").innerText = ranksStr;
+// نافذة اختيار الرتبة والتخصص للمركز المختار
+window.openRankSpecModal = function() {
+    if (!currentActiveCenterDoc) return;
 
-    const groupsStr = (found.groups && found.groups.length > 0) ? found.groups.map(g => g.includes("::") ? g.split("::")[1] : g).join("، ") : "كل الأفواج";
-    document.getElementById("detGroups").innerText = groupsStr;
+    let ranks = currentActiveCenterDoc.supervisedRanks || currentActiveCenterDoc.framingRanks || [];
+    if (ranks.length === 0 && currentActiveCenterDoc.rank && currentActiveCenterDoc.rank !== '-') {
+        ranks = [currentActiveCenterDoc.rank];
+    }
+    if (ranks.length === 0) ranks = ["التعليم العام"];
+
+    let specs = currentActiveCenterDoc.specs || currentActiveCenterDoc.framingSpecs || [];
+    if (specs.length === 0) specs = ["جميع التخصصات"];
+
+    let defaultRank = (currentSelectedRank && ranks.includes(currentSelectedRank)) ? currentSelectedRank : ranks[0];
+    let defaultSpec = (currentSelectedSpec && specs.includes(currentSelectedSpec)) ? currentSelectedSpec : specs[0];
+
+    let ranksOptions = ranks.map(r => `<option value="${r}" ${r === defaultRank ? 'selected' : ''}>${r}</option>`).join('');
+    let specsOptions = specs.map(s => `<option value="${s}" ${s === defaultSpec ? 'selected' : ''}>${s}</option>`).join('');
+
+    Swal.fire({
+        title: '<div style="font-size:19px; font-weight:900; color:#102a43;"><i class="fa-solid fa-graduation-cap" style="color:#1E68E8; margin-left:8px;"></i> تحديد الرتبة والتخصص للتأطير</div>',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; padding:10px 5px;">
+                <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:12px; margin-bottom:18px;">
+                    <div style="font-size:12px; font-weight:800; color:#1e40af; margin-bottom:4px;"><i class="fa-solid fa-school"></i> مركز التكوين:</div>
+                    <div style="font-size:15px; font-weight:900; color:#0f172a;">${currentActiveCenterDoc.center}</div>
+                </div>
+
+                <div style="margin-bottom:15px;">
+                    <label style="display:block; font-size:13px; font-weight:800; color:#334155; margin-bottom:6px;">
+                        <i class="fa-solid fa-user-graduate" style="color:#1E68E8;"></i> اختر الرتبة المسندة لك:
+                    </label>
+                    <select id="modalSelRank" style="width:100%; padding:10px 14px; border:2px solid #cbd5e1; border-radius:10px; font-family:'Cairo'; font-size:14px; font-weight:700; outline:none; background:#fff;">
+                        ${ranksOptions}
+                    </select>
+                </div>
+
+                <div style="margin-bottom:15px;">
+                    <label style="display:block; font-size:13px; font-weight:800; color:#334155; margin-bottom:6px;">
+                        <i class="fa-solid fa-book-bookmark" style="color:#e67e22;"></i> اختر التخصص المسند لك:
+                    </label>
+                    <select id="modalSelSpec" style="width:100%; padding:10px 14px; border:2px solid #cbd5e1; border-radius:10px; font-family:'Cairo'; font-size:14px; font-weight:700; outline:none; background:#fff;" onchange="window.updateModalGroupsPreview()">
+                        ${specsOptions}
+                    </select>
+                </div>
+
+                <div id="modalGroupsPreviewBox" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; font-size:12.5px; color:#475569;">
+                    <!-- معاينة الأفواج التابعة للتخصص -->
+                </div>
+            </div>
+        `,
+        width: '520px',
+        showCancelButton: true,
+        confirmButtonColor: '#1E68E8',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="fa-solid fa-check"></i> تأكيد واستعراض المقاييس',
+        cancelButtonText: 'إلغاء',
+        didOpen: () => {
+            window.updateModalGroupsPreview = () => {
+                const specVal = document.getElementById("modalSelSpec") ? document.getElementById("modalSelSpec").value : "";
+                const previewBox = document.getElementById("modalGroupsPreviewBox");
+                if (!previewBox) return;
+
+                let allGroups = currentActiveCenterDoc.groups || currentActiveCenterDoc.framingGroups || [];
+                let matchingGroups = allGroups.filter(g => g.startsWith(specVal + "::") || !g.includes("::"));
+                let grpNames = matchingGroups.map(g => g.includes("::") ? g.split("::")[1] : g);
+
+                if (grpNames.length > 0) {
+                    previewBox.innerHTML = `<b><i class="fa-solid fa-users" style="color:#0FBA50;"></i> الأفواج المسندة لهذا التخصص:</b> <span style="color:#0f172a; font-weight:800;">${grpNames.join("، ")}</span>`;
+                } else {
+                    previewBox.innerHTML = `<b><i class="fa-solid fa-users" style="color:#0FBA50;"></i> الأفواج المسندة:</b> <span style="color:#0f172a; font-weight:800;">جميع أفواج المركز</span>`;
+                }
+            };
+            window.updateModalGroupsPreview();
+        },
+        preConfirm: () => {
+            const r = document.getElementById("modalSelRank").value;
+            const s = document.getElementById("modalSelSpec").value;
+            if (!r || !s) {
+                Swal.showValidationMessage("يرجى اختيار الرتبة والتخصص!");
+                return false;
+            }
+            return { rank: r, spec: s };
+        }
+    }).then((res) => {
+        if (res.isConfirmed && res.value) {
+            currentSelectedRank = res.value.rank;
+            currentSelectedSpec = res.value.spec;
+            applySelectionAndRenderModules();
+        }
+    });
+};
+
+function applySelectionAndRenderModules() {
+    if (!currentActiveCenterDoc) return;
+
+    // إخفاء إشعار الانتظار وإظهار بطاقة المقاييس
+    const noticeEl = document.getElementById("noCenterSelectedNotice");
+    if (noticeEl) noticeEl.style.display = "none";
+
+    const modulesCard = document.getElementById("modulesSectionCard");
+    if (modulesCard) {
+        modulesCard.style.display = "block";
+        modulesCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // تحديث بيانات التكليف بالمركز في الهيدر التفصيلي
+    document.getElementById("detCenterName").innerText = currentActiveCenterDoc.center;
+    document.getElementById("detRanks").innerText = currentSelectedRank || "غير محدد";
+    document.getElementById("detSpecs").innerText = currentSelectedSpec || "غير محدد";
+
+    // تصفية الأفواج المناسبة للتخصص المختار
+    let allGroups = currentActiveCenterDoc.groups || currentActiveCenterDoc.framingGroups || [];
+    let matchingGroups = allGroups.filter(g => g.startsWith(currentSelectedSpec + "::") || !g.includes("::"));
+    let grpNames = matchingGroups.map(g => g.includes("::") ? g.split("::")[1] : g);
+    document.getElementById("detGroups").innerText = grpNames.length > 0 ? grpNames.join("، ") : "كل الأفواج";
 
     // رسم المقاييس المتاحة للرفع
     renderModulesGrid();
-};
+}
 
+// فحص هل الدورة مفتوحة مركزياً في site_settings
 function isCycleOpen(module, cycle) {
     if (!SITE_SETTINGS) return false;
+
+    // 1. فحص هل الدورة العامة مفتوحة
     const isGlobalOpen = SITE_SETTINGS.GLOBAL_CYCLE_STATUS 
         ? ((typeof SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] !== 'undefined') ? SITE_SETTINGS.GLOBAL_CYCLE_STATUS[cycle] : SITE_SETTINGS.GLOBAL_CYCLE_STATUS[String(cycle)])
         : true;
     if (isGlobalOpen === false) return false;
 
-    if (SITE_SETTINGS.MODULE_CYCLE_STATUS && SITE_SETTINGS.MODULE_CYCLE_STATUS[module]) {
-        const mStatus = (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined')
-            ? SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle]
-            : SITE_SETTINGS.MODULE_CYCLE_STATUS[module][String(cycle)];
+    // 2. فحص حالة المقياس بالاسم العربي أو بالمفتاح الإنجليزي
+    const modKey = MODULE_KEY_MAP[module] || module;
+    if (SITE_SETTINGS.MODULE_CYCLE_STATUS) {
+        let mStatus = undefined;
+        if (SITE_SETTINGS.MODULE_CYCLE_STATUS[modKey]) {
+            mStatus = (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[modKey][cycle] !== 'undefined')
+                ? SITE_SETTINGS.MODULE_CYCLE_STATUS[modKey][cycle]
+                : SITE_SETTINGS.MODULE_CYCLE_STATUS[modKey][String(cycle)];
+        } else if (SITE_SETTINGS.MODULE_CYCLE_STATUS[module]) {
+            mStatus = (typeof SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle] !== 'undefined')
+                ? SITE_SETTINGS.MODULE_CYCLE_STATUS[module][cycle]
+                : SITE_SETTINGS.MODULE_CYCLE_STATUS[module][String(cycle)];
+        }
         if (typeof mStatus !== 'undefined') {
             return !!mStatus;
         }
     }
+
     return !!isGlobalOpen;
 }
 
+// رسم بطاقات المقاييس المسندة مع الدورات
 function renderModulesGrid() {
     const container = document.getElementById("modulesContainer");
     if (!container || !currentActiveCenterDoc) return;
 
     // المقاييس المسندة للأستاذ
-    let assignedModules = currentActiveCenterDoc.modules || [];
+    let assignedModules = currentActiveCenterDoc.modules || currentActiveCenterDoc.framingModules || [];
     if (assignedModules.length === 0) {
         assignedModules = DEFAULT_MODULES;
     }
 
     let html = "";
     assignedModules.forEach(mod => {
-        const c1Open = isCycleOpen(mod, 1);
-        const c2Open = isCycleOpen(mod, 2);
-        const c3Open = isCycleOpen(mod, 3);
+        // فحص الشرط الثنائي لكل دورة:
+        // 1. هل المقياس والدورة مفتوحان في النظام المركزي
+        // 2. هل الأستاذ مكلف بهذه الدورة (s1, s2, s3)
+        const s1Allowed = !!currentActiveCenterDoc.s1;
+        const s2Allowed = !!currentActiveCenterDoc.s2;
+        const s3Allowed = !!currentActiveCenterDoc.s3;
+
+        const c1CentralOpen = isCycleOpen(mod, 1);
+        const c2CentralOpen = isCycleOpen(mod, 2);
+        const c3CentralOpen = isCycleOpen(mod, 3);
+
+        const c1Active = s1Allowed && c1CentralOpen;
+        const c2Active = s2Allowed && c2CentralOpen;
+        const c3Active = s3Allowed && c3CentralOpen;
+
+        const getBadgeInfo = (isAllowed, isCentral) => {
+            if (!isAllowed) return { text: 'غير مسند لك', cls: 'pill-closed' };
+            if (!isCentral) return { text: 'مغلقة مركزياً', cls: 'pill-closed' };
+            return { text: 'مفتوحة للرفع', cls: 'pill-open' };
+        };
+
+        const b1 = getBadgeInfo(s1Allowed, c1CentralOpen);
+        const b2 = getBadgeInfo(s2Allowed, c2CentralOpen);
+        const b3 = getBadgeInfo(s3Allowed, c3CentralOpen);
 
         html += `
             <div class="module-card">
@@ -223,19 +454,19 @@ function renderModulesGrid() {
                     </div>
 
                     <div class="cycles-list">
-                        <div class="cycle-row-btn ${c1Open ? '' : 'closed'}" onclick="${c1Open ? `openSupervisorFileManager('${mod}', 1)` : ''}">
+                        <div class="cycle-row-btn ${c1Active ? '' : 'closed'}" onclick="${c1Active ? `openSupervisorFileManager('${mod}', 1)` : `notifyCycleClosed('${b1.text}')`}">
                             <span><i class="fa-solid fa-calendar-day" style="margin-left:6px;"></i> الدورة التكوينية الأولى</span>
-                            <span class="cycle-status-pill ${c1Open ? 'pill-open' : 'pill-closed'}">${c1Open ? 'مفتوحة للرفع' : 'مغلقة'}</span>
+                            <span class="cycle-status-pill ${b1.cls}">${b1.text}</span>
                         </div>
 
-                        <div class="cycle-row-btn ${c2Open ? '' : 'closed'}" onclick="${c2Open ? `openSupervisorFileManager('${mod}', 2)` : ''}">
+                        <div class="cycle-row-btn ${c2Active ? '' : 'closed'}" onclick="${c2Active ? `openSupervisorFileManager('${mod}', 2)` : `notifyCycleClosed('${b2.text}')`}">
                             <span><i class="fa-solid fa-calendar-day" style="margin-left:6px;"></i> الدورة التكوينية الثانية</span>
-                            <span class="cycle-status-pill ${c2Open ? 'pill-open' : 'pill-closed'}">${c2Open ? 'مفتوحة للرفع' : 'مغلقة'}</span>
+                            <span class="cycle-status-pill ${b2.cls}">${b2.text}</span>
                         </div>
 
-                        <div class="cycle-row-btn ${c3Open ? '' : 'closed'}" onclick="${c3Open ? `openSupervisorFileManager('${mod}', 3)` : ''}">
+                        <div class="cycle-row-btn ${c3Active ? '' : 'closed'}" onclick="${c3Active ? `openSupervisorFileManager('${mod}', 3)` : `notifyCycleClosed('${b3.text}')`}">
                             <span><i class="fa-solid fa-calendar-day" style="margin-left:6px;"></i> الدورة التكوينية الثالثة</span>
-                            <span class="cycle-status-pill ${c3Open ? 'pill-open' : 'pill-closed'}">${c3Open ? 'مفتوحة للرفع' : 'مغلقة'}</span>
+                            <span class="cycle-status-pill ${b3.cls}">${b3.text}</span>
                         </div>
                     </div>
                 </div>
@@ -246,17 +477,27 @@ function renderModulesGrid() {
     container.innerHTML = html;
 }
 
-// دالة مساعدة لتحديد معرف مجلد جوجل درايف بدقة
+window.notifyCycleClosed = function(reason) {
+    Swal.fire({
+        icon: 'info',
+        title: 'الدورة مغلقة للرفع',
+        text: `هذه الدورة غير متاحة للرفع حالياً (${reason}).`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+};
+
+// دالة ذكية لتحديد معرف مجلد Google Drive بدقة تامة اعتماداً على المركز، الطور، التخصص، والمقياس
 function resolveDriveFolder(module, cycle) {
     if (!SITE_SETTINGS || !SITE_SETTINGS.dbLinks || !currentActiveCenterDoc) return null;
 
     const centerName = currentActiveCenterDoc.center;
     let cId = null;
 
-    // 1. البحث عن مفتاح المركز
+    // 1. البحث عن مفتاح المركز في UI_NAMES.centers
     if (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
         for (let k in SITE_SETTINGS.UI_NAMES.centers) {
-            if (SITE_SETTINGS.UI_NAMES.centers[k] === centerName) {
+            if (SITE_SETTINGS.UI_NAMES.centers[k] && SITE_SETTINGS.UI_NAMES.centers[k].trim() === centerName.trim()) {
                 cId = k;
                 break;
             }
@@ -264,51 +505,85 @@ function resolveDriveFolder(module, cycle) {
     }
     if (!cId && SITE_SETTINGS.dbLinks[centerName]) cId = centerName;
     if (!cId) {
-        // افتراض أول مركز متاح
+        for (let k in SITE_SETTINGS.UI_NAMES?.centers || {}) {
+            let name = SITE_SETTINGS.UI_NAMES.centers[k];
+            if (name && (name.includes(centerName) || centerName.includes(name))) {
+                cId = k;
+                break;
+            }
+        }
+    }
+    if (!cId && Object.keys(SITE_SETTINGS.dbLinks).length > 0) {
         cId = Object.keys(SITE_SETTINGS.dbLinks)[0];
     }
 
     if (!cId || !SITE_SETTINGS.dbLinks[cId]) return null;
 
-    // 2. البحث عن الطور / الرتبة
+    // 2. كشف الطور والمستوى التعليمي من الرتبة المحددة
+    let rankToUse = currentSelectedRank || (currentActiveCenterDoc.supervisedRanks && currentActiveCenterDoc.supervisedRanks[0]) || currentActiveCenterDoc.rank || "";
     let lvl = 'middle';
-    const ranks = currentActiveCenterDoc.supervisedRanks || [currentActiveCenterDoc.rank || ''];
-    const rankStr = ranks.join(' ');
-    if (rankStr.includes('ثانوي')) lvl = 'secondary';
-    else if (rankStr.includes('ابتدائي')) lvl = 'primary';
-    else if (rankStr.includes('متوسط')) lvl = 'middle';
+    if (rankToUse.includes('ثانوي')) lvl = 'secondary';
+    else if (rankToUse.includes('ابتدائي')) lvl = 'primary';
+    else if (rankToUse.includes('متوسط')) lvl = 'middle';
     else {
-        // أول طور متاح في هذا المركز
         lvl = Object.keys(SITE_SETTINGS.dbLinks[cId])[0] || 'middle';
     }
 
     if (!SITE_SETTINGS.dbLinks[cId][lvl]) {
-        lvl = Object.keys(SITE_SETTINGS.dbLinks[cId])[0];
+        lvl = Object.keys(SITE_SETTINGS.dbLinks[cId])[0] || 'middle';
     }
 
-    if (!SITE_SETTINGS.dbLinks[cId] || !SITE_SETTINGS.dbLinks[cId][lvl]) return null;
-
-    // 3. البحث عن التخصص
+    // 3. كشف التخصص من التخصص المحدد
+    let specToUse = currentSelectedSpec || (currentActiveCenterDoc.specs && currentActiveCenterDoc.specs[0]) || "";
     let spc = 'others';
-    const specs = currentActiveCenterDoc.specs || [];
-    const specStr = specs.join(' ');
-    if (specStr.includes('عرب')) spc = 'arabic';
-    else if (specStr.includes('فرنس')) spc = 'french';
-    else if (specStr.includes('إنجليز') || specStr.includes('انجليز')) spc = 'english';
-    else if (specStr.includes('رياض') || specStr.includes('بدني')) spc = 'sport';
+    if (specToUse.includes('عرب')) spc = 'arabic';
+    else if (specToUse.includes('فرنس')) spc = 'french';
+    else if (specToUse.includes('إنجليز') || specToUse.includes('انجليز')) spc = 'english';
+    else if (specToUse.includes('رياض') || specToUse.includes('بدني')) spc = 'sport';
     else {
+        spc = Object.keys(SITE_SETTINGS.dbLinks[cId][lvl] || {})[0] || 'others';
+    }
+
+    if (SITE_SETTINGS.dbLinks[cId][lvl] && !SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
         spc = Object.keys(SITE_SETTINGS.dbLinks[cId][lvl])[0] || 'others';
     }
 
-    if (!SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
-        spc = Object.keys(SITE_SETTINGS.dbLinks[cId][lvl])[0];
+    // 4. ترجمة اسم المقياس إلى المفتاح الإنجليزي المستخدم في dbLinks
+    const modKey = MODULE_KEY_MAP[module] || module;
+
+    // البحث المباشر في الرابط المحدد
+    if (SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
+        const linksObj = SITE_SETTINGS.dbLinks[cId][lvl][spc];
+        if (linksObj[modKey] && linksObj[modKey][cycle]) {
+            const rawUrl = linksObj[modKey][cycle];
+            const match = rawUrl.match(/folders\/([a-zA-Z0-9-_]+)/);
+            if (match) return match[1];
+        }
+        // في حال كان اسم المقياس مخزناً باللغة العربية
+        if (linksObj[module] && linksObj[module][cycle]) {
+            const rawUrl = linksObj[module][cycle];
+            const match = rawUrl.match(/folders\/([a-zA-Z0-9-_]+)/);
+            if (match) return match[1];
+        }
     }
 
-    const linksObj = SITE_SETTINGS.dbLinks[cId][lvl][spc];
-    if (linksObj && linksObj[module] && linksObj[module][cycle]) {
-        const rawUrl = linksObj[module][cycle];
-        const match = rawUrl.match(/folders\/([a-zA-Z0-9-_]+)/);
-        return match ? match[1] : null;
+    // 5. بحث احتياطي ذكي في باقي أطوار وتخصصات هذا المركز
+    if (SITE_SETTINGS.dbLinks[cId]) {
+        for (let l in SITE_SETTINGS.dbLinks[cId]) {
+            for (let s in SITE_SETTINGS.dbLinks[cId][l]) {
+                const targetObj = SITE_SETTINGS.dbLinks[cId][l][s];
+                if (targetObj && targetObj[modKey] && targetObj[modKey][cycle]) {
+                    const rawUrl = targetObj[modKey][cycle];
+                    const match = rawUrl.match(/folders\/([a-zA-Z0-9-_]+)/);
+                    if (match) return match[1];
+                }
+                if (targetObj && targetObj[module] && targetObj[module][cycle]) {
+                    const rawUrl = targetObj[module][cycle];
+                    const match = rawUrl.match(/folders\/([a-zA-Z0-9-_]+)/);
+                    if (match) return match[1];
+                }
+            }
+        }
     }
 
     return null;
@@ -322,7 +597,7 @@ window.openSupervisorFileManager = function(module, cycle) {
         Swal.fire({
             icon: 'info',
             title: 'المسار غير متوفر',
-            text: 'لم يتم تعيين رابط مجلد Google Drive لهذا المقياس من طرف إدارة التكوين حتى الآن.'
+            text: `لم يتم تعيين رابط مجلد Google Drive لمقياس "${module}" بهذه الدورة من طرف إدارة التكوين حتى الآن.`
         });
         return;
     }
@@ -333,6 +608,7 @@ window.openSupervisorFileManager = function(module, cycle) {
     if (cached) {
         try {
             const filesList = JSON.parse(cached);
+            currentModalFiles = filesList;
             renderFmModal(folderId, filesList, module, cycle);
             
             // تحديث صامت في الخلفية
@@ -341,6 +617,7 @@ window.openSupervisorFileManager = function(module, cycle) {
                 .then(d => {
                     if (!d.error) {
                         const fresh = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
+                        currentModalFiles = fresh;
                         localStorage.setItem(cacheKey, JSON.stringify(fresh));
                         sessionStorage.setItem(cacheKey, JSON.stringify(fresh));
                     }
@@ -364,6 +641,7 @@ window.openSupervisorFileManager = function(module, cycle) {
                 Swal.fire('خطأ', 'تعذر جلب ملفات المجلد، يرجى مراجعة الصلاحيات.', 'error');
             } else {
                 const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
+                currentModalFiles = filesList;
                 localStorage.setItem(cacheKey, JSON.stringify(filesList));
                 sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
                 renderFmModal(folderId, filesList, module, cycle);
@@ -377,40 +655,20 @@ function renderFmModal(folderId, filesList, module, cycle) {
     const cycleNames = { 1: "الدورة الأولى", 2: "الدورة الثانية", 3: "الدورة الثالثة" };
     const cycleName = cycleNames[cycle] || `الدورة ${cycle}`;
 
-    let filesHtml = "";
-    if (!filesList || filesList.length === 0) {
-        filesHtml = `
-            <div style="grid-column: 1 / -1; text-align:center; padding:30px; color:#64748b; background:#f8fafc; border:2px dashed #cbd5e1; border-radius:14px;">
-                <i class="fa-regular fa-folder-open" style="font-size:36px; margin-bottom:8px; display:block; color:#94a3b8;"></i>
-                <div style="font-weight:700; font-size:14px;">لا توجد ملفات مرفوعة حالياً في هذه الدورة</div>
-                <div style="font-size:12px; color:#94a3b8; margin-top:4px;">يمكنك البدء برفع مذكراتك وعروضك التقديمية عبر زر الرفع أدناه</div>
-            </div>
-        `;
-    } else {
-        filesHtml = filesList.map(f => {
-            const previewUrl = `https://drive.google.com/file/d/${f.id}/preview`;
-            const downloadUrl = `https://drive.google.com/uc?export=download&id=${f.id}`;
-            return `
-                <div class="fm-file-card">
-                    <div class="fm-file-top">
-                        <i class="fa-solid fa-file-lines fm-file-icon"></i>
-                        <div class="fm-file-info">
-                            <div class="fm-file-title" title="${f.name}">${f.name}</div>
-                            <div class="fm-file-meta"><i class="fa-solid fa-cloud-check"></i> متوفر على Drive</div>
-                        </div>
-                    </div>
-                    <div class="fm-file-actions">
-                        <a href="${previewUrl}" target="_blank" class="btn-fm-act btn-fm-preview"><i class="fa-solid fa-eye"></i> معاينة</a>
-                        <a href="${downloadUrl}" target="_blank" class="btn-fm-act btn-fm-download"><i class="fa-solid fa-download"></i> تحميل</a>
-                        <button type="button" class="btn-fm-act btn-fm-delete" onclick="deleteSupervisorFile('${f.id}', '${folderId}', '${module}', ${cycle})"><i class="fa-solid fa-trash"></i> حذف</button>
-                    </div>
-                </div>
-            `;
-        }).join("");
-    }
+    let filesHtml = buildFilesCardsHtml(filesList, folderId, module, cycle);
 
     const modalHtml = `
         <div class="file-manager-container">
+            <div class="fm-header-bar">
+                <div class="fm-search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" placeholder="بحث في ملفات المجلد..." oninput="filterModalFiles(this.value, '${folderId}', '${module}', ${cycle})">
+                </div>
+                <div style="font-size: 13px; font-weight: 800; color: #475569;">
+                    <i class="fa-solid fa-graduation-cap" style="color:#1E68E8;"></i> ${currentSelectedRank} | ${currentSelectedSpec}
+                </div>
+            </div>
+
             <div class="fm-upload-panel">
                 <input type="file" id="supFileInput" style="display:none;" onchange="handleSupFileChosen(this)">
                 <div style="display:flex; align-items:center; gap:10px; flex:1;">
@@ -425,9 +683,9 @@ function renderFmModal(folderId, filesList, module, cycle) {
             </div>
 
             <div style="font-size:13px; font-weight:800; color:#1e293b; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-                <span><i class="fa-solid fa-list-check" style="color:#1E68E8;"></i> قائمة الملفات المتاحة (${filesList ? filesList.length : 0})</span>
-                <a href="https://drive.google.com/drive/folders/${folderId}" target="_blank" style="font-size:12px; color:#1E68E8; text-decoration:none;">
-                    <i class="fa-brands fa-google-drive"></i> فتح في Drive
+                <span id="fmFilesCountLabel"><i class="fa-solid fa-list-check" style="color:#1E68E8;"></i> قائمة الملفات المتاحة (${filesList ? filesList.length : 0})</span>
+                <a href="https://drive.google.com/drive/folders/${folderId}" target="_blank" style="font-size:12px; color:#1E68E8; text-decoration:none; font-weight: bold;">
+                    <i class="fa-brands fa-google-drive"></i> فتح المجلد في Drive
                 </a>
             </div>
 
@@ -438,14 +696,64 @@ function renderFmModal(folderId, filesList, module, cycle) {
     `;
 
     Swal.fire({
-        title: `<div style="font-size:18px; font-weight:900; color:#0f172a;"><i class="fa-solid fa-cloud-arrow-up" style="color:#1E68E8; margin-left:8px;"></i> إدارة ملفات: ${module} - <span style="color:#1E68E8;">${cycleName}</span></div>`,
+        title: `<div style="font-size:18px; font-weight:900; color:#0f172a;"><i class="fa-solid fa-cloud-arrow-up" style="color:#1E68E8; margin-left:8px;"></i> ملفات مقياس: ${module} - <span style="color:#1E68E8;">${cycleName}</span></div>`,
         html: modalHtml,
-        width: '850px',
+        width: '860px',
         showConfirmButton: true,
         confirmButtonText: 'إغلاق النافذة',
         confirmButtonColor: '#102a43'
     });
 }
+
+function buildFilesCardsHtml(filesList, folderId, module, cycle) {
+    if (!filesList || filesList.length === 0) {
+        return `
+            <div style="grid-column: 1 / -1; text-align:center; padding:35px; color:#64748b; background:#f8fafc; border:2px dashed #cbd5e1; border-radius:14px;">
+                <i class="fa-regular fa-folder-open" style="font-size:38px; margin-bottom:8px; display:block; color:#94a3b8;"></i>
+                <div style="font-weight:800; font-size:14px; color:#1e293b;">لا توجد ملفات مرفوعة حالياً في هذه الدورة</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:5px;">يمكنك البدء برفع مذكراتك وعروضك التقديمية عبر زر الرفع أعلاه</div>
+            </div>
+        `;
+    }
+
+    return filesList.map(f => {
+        const previewUrl = `https://drive.google.com/file/d/${f.id}/preview`;
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${f.id}`;
+        return `
+            <div class="fm-file-card">
+                <div class="fm-file-top">
+                    <i class="fa-solid fa-file-lines fm-file-icon"></i>
+                    <div class="fm-file-info">
+                        <div class="fm-file-title" title="${f.name}">${f.name}</div>
+                        <div class="fm-file-meta"><i class="fa-solid fa-cloud-check" style="color:#16a34a;"></i> متوفر على Drive</div>
+                    </div>
+                </div>
+                <div class="fm-file-actions">
+                    <a href="${previewUrl}" target="_blank" class="btn-fm-act btn-fm-preview"><i class="fa-solid fa-eye"></i> معاينة</a>
+                    <a href="${downloadUrl}" target="_blank" class="btn-fm-act btn-fm-download"><i class="fa-solid fa-download"></i> تحميل</a>
+                    <button type="button" class="btn-fm-act btn-fm-delete" onclick="deleteSupervisorFile('${f.id}', '${folderId}', '${module}', ${cycle})"><i class="fa-solid fa-trash"></i> حذف</button>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+window.filterModalFiles = function(query, folderId, module, cycle) {
+    const grid = document.getElementById("supFilesGrid");
+    const countLabel = document.getElementById("fmFilesCountLabel");
+    if (!grid) return;
+
+    let filtered = currentModalFiles || [];
+    if (query && query.trim() !== '') {
+        const q = query.trim().toLowerCase();
+        filtered = filtered.filter(f => (f.name || '').toLowerCase().includes(q));
+    }
+
+    grid.innerHTML = buildFilesCardsHtml(filtered, folderId, module, cycle);
+    if (countLabel) {
+        countLabel.innerHTML = `<i class="fa-solid fa-list-check" style="color:#1E68E8;"></i> قائمة الملفات المتاحة (${filtered.length})`;
+    }
+};
 
 window.handleSupFileChosen = function(input) {
     const label = document.getElementById("supFileChosenName");
