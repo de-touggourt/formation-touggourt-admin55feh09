@@ -4074,18 +4074,18 @@ let allRoles = ["المسؤول الإداري", "المسؤول البيداغ�
                 return false; 
             }
 
-            // 🌟 2. منع تكرار رقم الهاتف (مع استثناء الموظف الحالي باستخدام d.docId !== docId)
+            // 🌟 2. منع تكرار رقم الهاتف (مع استثناء الموظف الحالي في كل مراكزه)
             if (rawPhone.length > 0) {
-                let phoneExists = adminFramersData.some(d => d.docId !== docId && d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                let phoneExists = adminFramersData.some(d => d.docId !== docId && d.empId !== f.empId && extractCoreId(d.empId) !== extractCoreId(f.empId) && d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
                 if (phoneExists) {
                     Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر!');
                     return false;
                 }
             }
 
-            // 🌟 3. منع تكرار رقم الحساب الجاري CCP (مع استثناء الموظف الحالي)
+            // 🌟 3. منع تكرار رقم الحساب الجاري CCP (مع استثناء الموظف الحالي في كل مراكزه)
             if (ccp.length > 0) {
-                let ccpExists = adminFramersData.some(d => d.docId !== docId && d.ccp && d.ccp === ccp);
+                let ccpExists = adminFramersData.some(d => d.docId !== docId && d.empId !== f.empId && extractCoreId(d.empId) !== extractCoreId(f.empId) && d.ccp && d.ccp === ccp);
                 if (ccpExists) {
                     Swal.showValidationMessage('رقم الحساب الجاري (CCP) هذا مستخدم بالفعل من قبل مؤطر آخر!');
                     return false;
@@ -4176,18 +4176,20 @@ window.adminPromptAddFramer = function() {
         if (res.isConfirmed) {
             const empId = res.value;
             
-            // 🌟 1. التحقق الفوري: هل الموظف مسجل مسبقاً كمؤطر في أي مركز؟
+            // 🌟 1. التحقق الفوري: استثناء وظيفة "أستاذ مؤطر" والسماح بتكراره في أكثر من مركز
             let safeId = empId.toUpperCase().replace(/\D/g, "").replace(/^0+/, "");
             if (safeId === "") safeId = empId;
 
-            let existingFramer = adminFramersData.find(f => f.empId === empId || extractCoreId(f.empId) === safeId);
+            let existingFramers = adminFramersData.filter(f => f.empId === empId || extractCoreId(f.empId) === safeId);
             
-            if (existingFramer) {
-                // إيقاف العملية فوراً وعرض رسالة التحذير مع اسم المركز
+            // منع التكرار فقط للوظائف الإدارية والقيادية غير "أستاذ مؤطر"
+            let blockingFramer = existingFramers.find(f => f.role !== "أستاذ مؤطر");
+            if (blockingFramer) {
+                // إيقاف العملية وعرض رسالة التحذير مع اسم المركز
                 return Swal.fire({
                     icon: 'warning',
                     title: 'مسجل مسبقاً',
-                    html: `هذا الموظف مسجل بالفعل كمؤطر في مركز:<br><b style="color:#1E68E8; font-size:16px;">${existingFramer.center}</b><br>بوظيفة: <b style="color:#d90429;">${existingFramer.role}</b>`,
+                    html: `هذا الموظف مسجل بالفعل في مركز:<br><b style="color:#1E68E8; font-size:16px;">${blockingFramer.center}</b><br>بوظيفة: <b style="color:#d90429;">${blockingFramer.role}</b><br>ولا يمكن تكرار تعيينه في أكثر من مركز.`,
                     confirmButtonText: 'حسناً',
                     confirmButtonColor: '#102a43'
                 }).then(() => window.adminPromptAddFramer()); // إعادة فتح نافذة البحث
@@ -4304,6 +4306,19 @@ window.adminPromptAddFramer = function() {
                     // تحقق من الحقول الأساسية
                     if (!center) { Swal.showValidationMessage('الرجاء اختيار المركز!'); return false; }
                     if (!role) { Swal.showValidationMessage('الرجاء اختيار الوظيفة!'); return false; }
+
+                    // منع تكرار نفس الموظف في نفس المركز
+                    let alreadyInThisCenter = adminFramersData.some(d => (d.empId === empId || extractCoreId(d.empId) === safeId) && d.center === center);
+                    if (alreadyInThisCenter) {
+                        Swal.showValidationMessage(`الموظف مسجل بالفعل كمؤطر في مركز "${center}"!`);
+                        return false;
+                    }
+
+                    // إذا كان الموظف مسجلاً في مركز آخر، يُسمح بتكراره فقط إذا كانت وظيفته السابقة والجديدة "أستاذ مؤطر"
+                    if (existingFramers && existingFramers.length > 0 && role !== "أستاذ مؤطر") {
+                        Swal.showValidationMessage(`الموظف مسجل كأستاذ مؤطر في مركز آخر، ولا يمكن تعيينه إلا بوظيفة "أستاذ مؤطر"!`);
+                        return false;
+                    }
                     
                     // 🌟 1. التحقق من صيغة الهاتف
                     if (rawPhone.length > 0 && !/^(05|06|07)[0-9]{8}$/.test(rawPhone)) { 
@@ -4311,18 +4326,18 @@ window.adminPromptAddFramer = function() {
                         return false; 
                     }
 
-                    // 🌟 2. منع تكرار رقم الهاتف
+                    // 🌟 2. منع تكرار رقم الهاتف (مع استثناء نفس الموظف عند تعيينه في مركز ثانٍ)
                     if (rawPhone.length > 0) {
-                        let phoneExists = adminFramersData.some(d => d.phone && d.phone.replace(/\s+/g, '') === rawPhone);
+                        let phoneExists = adminFramersData.some(d => d.phone && d.phone.replace(/\s+/g, '') === rawPhone && d.empId !== empId && extractCoreId(d.empId) !== safeId);
                         if (phoneExists) {
                             Swal.showValidationMessage('رقم الهاتف هذا مستخدم بالفعل من قبل مؤطر آخر!');
                             return false;
                         }
                     }
 
-                    // 🌟 3. منع تكرار رقم الحساب الجاري CCP
+                    // 🌟 3. منع تكرار رقم الحساب الجاري CCP (مع استثناء نفس الموظف عند تعيينه في مركز ثانٍ)
                     if (ccp.length > 0) {
-                        let ccpExists = adminFramersData.some(d => d.ccp && d.ccp === ccp);
+                        let ccpExists = adminFramersData.some(d => d.ccp && d.ccp === ccp && d.empId !== empId && extractCoreId(d.empId) !== safeId);
                         if (ccpExists) {
                             Swal.showValidationMessage('رقم الحساب الجاري (CCP) هذا مستخدم بالفعل من قبل مؤطر آخر!');
                             return false;
