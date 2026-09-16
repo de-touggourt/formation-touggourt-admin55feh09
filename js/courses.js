@@ -179,10 +179,11 @@ window.onload = async function() {
                     
                     // تعيين اسم الطور
                     let levelText = "";
+                    const levelName = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvl]) || lvl;
                     if (lvl === 'primary') levelText = "أساتذة التعليم الابتدائي";
                     else if (lvl === 'middle') levelText = "أساتذة التعليم المتوسط";
                     else if (lvl === 'secondary') levelText = "أساتذة التعليم الثانوي";
-                    else levelText = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvl]) || lvl;
+                    else levelText = "أساتذة " + levelName;
 
                     // تعيين اسم التخصص
                     let specText = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[spc]) || spc;
@@ -239,25 +240,85 @@ window.onload = async function() {
     }
 };
 
+const KNOWN_SPECS_COMMON = {
+    'arabic': { name: 'اللغة العربية', keywords: ['عرب', 'أدب'] },
+    'french': { name: 'اللغة الفرنسية', keywords: ['فرنس'] },
+    'english': { name: 'اللغة الإنجليزية', keywords: ['إنجليز', 'انجليز'] },
+    'sport': { name: 'التربية البدنية والرياضية', keywords: ['بدن', 'رياضة', 'بدنية'] },
+    'math': { name: 'الرياضيات', keywords: ['رياضيات', 'حساب'] },
+    'physics': { name: 'العلوم الفيزيائية والتكنولوجيا', keywords: ['فيزياء', 'فيزيائ'] },
+    'science': { name: 'علوم الطبيعة والحياة', keywords: ['طبيعة', 'علوم'] },
+    'history_geo': { name: 'التاريخ والجغرافيا', keywords: ['تاريخ', 'جغرافيا'] },
+    'islamic': { name: 'العلوم الإسلامية', keywords: ['إسلام', 'اسلام', 'شريعة'] },
+    'philosophy': { name: 'الفلسفة', keywords: ['فلسف'] },
+    'art': { name: 'التربية التشكيلية والرسم', keywords: ['رسم', 'تشكيل'] },
+    'music': { name: 'التربية الموسيقية', keywords: ['موسيق'] },
+    'civil_eng': { name: 'الهندسة المدنية', keywords: ['مدني'] },
+    'electrical_eng': { name: 'الهندسة الكهربائية', keywords: ['كهربا'] },
+    'mechanical_eng': { name: 'الهندسة الميكانيكية', keywords: ['ميكانيك'] },
+    'process_eng': { name: 'هندسة الطرائق', keywords: ['طرائق'] },
+    'informatics': { name: 'الإعلام الآلي', keywords: ['إعلام آلي', 'اعلام آلي', 'حاسوب'] },
+    'amazigh': { name: 'اللغة الأمازيغية', keywords: ['أمازيغ', 'امازيغ'] },
+    'economy': { name: 'تسيير واقتصاد', keywords: ['تسيير', 'اقتصاد', 'محاسبة'] },
+    'others': { name: 'باقي التخصصات', keywords: [] }
+};
+
 // ================= دالة كشف الطور والتخصص بدقة =================
 function detectUserLevelAndSpec(user) {
     if (!user) return { levelKey: null, specKey: null };
     
-    // الطور
     const rankStr = (user.grade || user.rank || "").toLowerCase();
-    let levelKey = null;
-    if (rankStr.includes("ابتدائي")) levelKey = "primary";
-    else if (rankStr.includes("متوسط")) levelKey = "middle";
-    else if (rankStr.includes("ثانوي")) levelKey = "secondary";
-    
-    // التخصص
     const matyStr = (user.maty || user.specialty || "").trim().toLowerCase();
-    let specKey = "others";
-    if (matyStr.includes("عرب")) specKey = "arabic";
-    else if (matyStr.includes("فرنس")) specKey = "french";
-    else if (matyStr.includes("إنجليز") || matyStr.includes("انجليز")) specKey = "english";
-    else if (matyStr.includes("بدن") || matyStr.includes("رياض")) specKey = "sport";
-    else if (matyStr) specKey = "others";
+    
+    // 1. الطور - مطابقة ديناميكية مع أسماء الأطوار من SITE_SETTINGS
+    let levelKey = null;
+    const levels = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels) || {};
+    for (let key in levels) {
+        const levelName = levels[key].toLowerCase();
+        const keywords = levelName.replace(/الطور|\s/g, '').trim();
+        if (keywords && (rankStr.includes(keywords) || keywords.includes(rankStr.replace(/أستاذ|التعليم|\s/g, '')))) {
+            levelKey = key;
+            break;
+        }
+    }
+    if (!levelKey) {
+        if (rankStr.includes("ابتدائي")) levelKey = "primary";
+        else if (rankStr.includes("متوسط")) levelKey = "middle";
+        else if (rankStr.includes("ثانوي")) levelKey = "secondary";
+    }
+    
+    // 2. التخصص - فحص دقيق: استثناء الرياضيات أولاً قبل فحص التربية البدنية
+    let specKey = null;
+    
+    if (matyStr.includes('رياضيات') || matyStr.includes('حساب')) {
+        specKey = 'math';
+    } else if (matyStr.includes('بدن') || matyStr.includes('رياضة') || matyStr.includes('بدنية')) {
+        specKey = 'sport';
+    }
+    
+    if (!specKey) {
+        const specs = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) || {};
+        for (let key in specs) {
+            const specName = specs[key].toLowerCase();
+            const sClean = specName.replace(/^ال/, '').trim();
+            const mClean = matyStr.replace(/^ال/, '').trim();
+            if (sClean === mClean || mClean.includes(sClean) || sClean.includes(mClean)) {
+                specKey = key;
+                break;
+            }
+        }
+    }
+    
+    if (!specKey) {
+        for (let k in KNOWN_SPECS_COMMON) {
+            if (KNOWN_SPECS_COMMON[k].keywords && KNOWN_SPECS_COMMON[k].keywords.some(kw => matyStr.includes(kw))) {
+                specKey = k;
+                break;
+            }
+        }
+    }
+    
+    if (!specKey) specKey = "others";
 
     return { levelKey, specKey, rawLevel: user.grade || user.rank, rawSpec: user.maty || user.specialty };
 }

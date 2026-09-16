@@ -19,19 +19,114 @@ const db = firebase.firestore();
 let SITE_SETTINGS = null; 
 let CURRENT_TAB = 'centers';
 
-// --- الثوابت ---
-const FIXED_LEVELS = {
+// --- القيم الافتراضية الشاملة للأطوار والتخصصات ---
+const KNOWN_SPECS_REGISTRY = {
+    'arabic': { name: 'اللغة العربية', icon: 'fa-book-open', keywords: ['عرب', 'أدب'] },
+    'french': { name: 'اللغة الفرنسية', icon: 'fa-language', keywords: ['فرنس'] },
+    'english': { name: 'اللغة الإنجليزية', icon: 'fa-font', keywords: ['إنجليز', 'انجليز'] },
+    'sport': { name: 'التربية البدنية والرياضية', icon: 'fa-person-running', keywords: ['بدن', 'رياضة'] },
+    'math': { name: 'الرياضيات', icon: 'fa-calculator', keywords: ['رياضيات', 'حساب'] },
+    'physics': { name: 'العلوم الفيزيائية والتكنولوجيا', icon: 'fa-atom', keywords: ['فيزياء', 'فيزيائ'] },
+    'science': { name: 'علوم الطبيعة والحياة', icon: 'fa-dna', keywords: ['طبيعة', 'علوم'] },
+    'history_geo': { name: 'التاريخ والجغرافيا', icon: 'fa-earth-africa', keywords: ['تاريخ', 'جغرافيا'] },
+    'islamic': { name: 'العلوم الإسلامية', icon: 'fa-mosque', keywords: ['إسلام', 'اسلام', 'شريعة'] },
+    'philosophy': { name: 'الفلسفة', icon: 'fa-brain', keywords: ['فلسف'] },
+    'art': { name: 'التربية التشكيلية والرسم', icon: 'fa-palette', keywords: ['رسم', 'تشكيل'] },
+    'music': { name: 'التربية الموسيقية', icon: 'fa-music', keywords: ['موسيق'] },
+    'civil_eng': { name: 'الهندسة المدنية', icon: 'fa-trowel-bricks', keywords: ['مدني'] },
+    'electrical_eng': { name: 'الهندسة الكهربائية', icon: 'fa-bolt', keywords: ['كهربا'] },
+    'mechanical_eng': { name: 'الهندسة الميكانيكية', icon: 'fa-gear', keywords: ['ميكانيك'] },
+    'process_eng': { name: 'هندسة الطرائق', icon: 'fa-flask-vial', keywords: ['طرائق'] },
+    'informatics': { name: 'الإعلام الآلي', icon: 'fa-laptop-code', keywords: ['إعلام آلي', 'اعلام آلي', 'حاسوب'] },
+    'amazigh': { name: 'اللغة الأمازيغية', icon: 'fa-shapes', keywords: ['أمازيغ', 'امازيغ'] },
+    'economy': { name: 'تسيير واقتصاد', icon: 'fa-chart-line', keywords: ['تسيير', 'اقتصاد', 'محاسبة'] },
+    'others': { name: 'باقي التخصصات', icon: 'fa-layer-group', keywords: [] }
+};
+
+const DEFAULT_LEVELS = {
     "primary": "الطور الابتدائي",
     "middle": "الطور المتوسط",
     "secondary": "الطور الثانوي"
 };
-const FIXED_SPECS = {
-    "arabic": "اللغة العربية",
-    "french": "اللغة الفرنسية",
-    "english": "اللغة الإنجليزية",
-    "sport": "التربية البدنية والرياضة",
-    "others": "باقي التخصصات"
+
+const DEFAULT_SPECS = {};
+const DEFAULT_SPEC_ICONS = {};
+for (let k in KNOWN_SPECS_REGISTRY) {
+    DEFAULT_SPECS[k] = KNOWN_SPECS_REGISTRY[k].name;
+    DEFAULT_SPEC_ICONS[k] = KNOWN_SPECS_REGISTRY[k].icon;
+}
+
+const DEFAULT_LEVEL_ICONS = {
+    "primary": "fa-child-reaching",
+    "middle": "fa-school",
+    "secondary": "fa-user-graduate"
 };
+
+// دالة تحليل وتحديد التخصص ديناميكياً
+function resolveSpecialization(rawMaty) {
+    if (!rawMaty) return { key: 'others', name: 'باقي التخصصات', icon: 'fa-layer-group' };
+    const clean = rawMaty.trim().toLowerCase();
+    if (KNOWN_SPECS_REGISTRY[clean]) return { key: clean, ...KNOWN_SPECS_REGISTRY[clean] };
+    
+    if (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) {
+        for (let k in SITE_SETTINGS.UI_NAMES.specs) {
+            if (k === clean || SITE_SETTINGS.UI_NAMES.specs[k].trim() === rawMaty.trim()) {
+                const icon = (SITE_SETTINGS.UI_NAMES.specIcons && SITE_SETTINGS.UI_NAMES.specIcons[k]) 
+                             || (KNOWN_SPECS_REGISTRY[k] ? KNOWN_SPECS_REGISTRY[k].icon : 'fa-book');
+                return { key: k, name: SITE_SETTINGS.UI_NAMES.specs[k], icon: icon };
+            }
+        }
+    }
+    
+    if (clean.includes('رياضيات') || clean.includes('حساب')) return { key: 'math', ...KNOWN_SPECS_REGISTRY['math'] };
+    if (clean.includes('بدن') || clean.includes('رياضة') || clean.includes('بدنية')) return { key: 'sport', ...KNOWN_SPECS_REGISTRY['sport'] };
+    
+    for (let k in KNOWN_SPECS_REGISTRY) {
+        if (k === 'sport' || k === 'others') continue;
+        if (KNOWN_SPECS_REGISTRY[k].keywords && KNOWN_SPECS_REGISTRY[k].keywords.some(kw => clean.includes(kw))) {
+            return { key: k, ...KNOWN_SPECS_REGISTRY[k] };
+        }
+    }
+    
+    let safeKey = clean.replace(/[^a-zA-Z0-9_\u0621-\u064A]/g, '_');
+    return { key: safeKey, name: rawMaty.trim(), icon: 'fa-book' };
+}
+
+// دالة تحليل وتحديد الطور / الرتبة
+function resolveLevel(rawGrade) {
+    if (!rawGrade) return { key: 'primary', name: 'الطور الابتدائي', icon: 'fa-child-reaching' };
+    const clean = rawGrade.trim().toLowerCase();
+    if (clean.includes('ابتدائي') || clean.includes('ابتدائية')) return { key: 'primary', name: 'الطور الابتدائي', icon: 'fa-child-reaching' };
+    if (clean.includes('متوسط') || clean.includes('متوسطة')) return { key: 'middle', name: 'الطور المتوسط', icon: 'fa-school' };
+    if (clean.includes('ثانوي') || clean.includes('ثانوية')) return { key: 'secondary', name: 'الطور الثانوي', icon: 'fa-user-graduate' };
+    
+    let safeKey = clean.replace(/[^a-zA-Z0-9_\u0621-\u064A]/g, '_');
+    return { key: safeKey, name: rawGrade.trim(), icon: 'fa-graduation-cap' };
+}
+
+// --- دوال مساعدة للقراءة الديناميكية من SITE_SETTINGS ---
+function getLevels() {
+    return (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels) || DEFAULT_LEVELS;
+}
+function getSpecs() {
+    return (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) || DEFAULT_SPECS;
+}
+function getLevelName(key) {
+    const levels = getLevels();
+    return levels[key] || key;
+}
+function getSpecName(key) {
+    const specs = getSpecs();
+    return specs[key] || key;
+}
+function getLevelIcon(key) {
+    const icons = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levelIcons) || {};
+    return (icons[key] && icons[key].icon) || DEFAULT_LEVEL_ICONS[key] || 'fa-layer-group';
+}
+function getSpecIcon(key) {
+    const icons = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specIcons) || {};
+    return (icons[key] && icons[key].icon) || DEFAULT_SPEC_ICONS[key] || 'fa-book';
+}
 
 const MODULE_AR_NAMES = {
     "didactique": "تعليمية مادة التخصص وطرق التدريس",
@@ -85,8 +180,8 @@ async function initSiteSettings() {
             const initialData = {
                 UI_NAMES: { 
                     centers: {}, // 🌟 تركناها فارغة ليقوم المدير بإنشائها من لوحة التحكم
-                    levels: FIXED_LEVELS, 
-                    specs: FIXED_SPECS 
+                    levels: DEFAULT_LEVELS, 
+                    specs: DEFAULT_SPECS 
                 },
                 dbLinks: {},
                 GLOBAL_CYCLE_STATUS: {1: true, 2: false, 3: false},
@@ -107,8 +202,15 @@ async function initSiteSettings() {
             SITE_SETTINGS = initialData;
         } else {
             SITE_SETTINGS = docSnap.data();
-            SITE_SETTINGS.UI_NAMES.levels = FIXED_LEVELS;
-            SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
+            if (!SITE_SETTINGS.UI_NAMES) SITE_SETTINGS.UI_NAMES = {};
+            if (!SITE_SETTINGS.UI_NAMES.levels) SITE_SETTINGS.UI_NAMES.levels = {};
+            if (!SITE_SETTINGS.UI_NAMES.specs) SITE_SETTINGS.UI_NAMES.specs = {};
+            for (let k in DEFAULT_LEVELS) {
+                if (!SITE_SETTINGS.UI_NAMES.levels[k]) SITE_SETTINGS.UI_NAMES.levels[k] = DEFAULT_LEVELS[k];
+            }
+            for (let k in DEFAULT_SPECS) {
+                if (!SITE_SETTINGS.UI_NAMES.specs[k]) SITE_SETTINGS.UI_NAMES.specs[k] = DEFAULT_SPECS[k];
+            }
         }
 
         // الاستماع للتغييرات اللحظية من السحابة
@@ -137,8 +239,14 @@ async function initSiteSettings() {
                 }
                 
                 if (SITE_SETTINGS.UI_NAMES) {
-                    SITE_SETTINGS.UI_NAMES.levels = FIXED_LEVELS;
-                    SITE_SETTINGS.UI_NAMES.specs = FIXED_SPECS;
+                    if (!SITE_SETTINGS.UI_NAMES.levels) SITE_SETTINGS.UI_NAMES.levels = {};
+                    if (!SITE_SETTINGS.UI_NAMES.specs) SITE_SETTINGS.UI_NAMES.specs = {};
+                    for (let k in DEFAULT_LEVELS) {
+                        if (!SITE_SETTINGS.UI_NAMES.levels[k]) SITE_SETTINGS.UI_NAMES.levels[k] = DEFAULT_LEVELS[k];
+                    }
+                    for (let k in DEFAULT_SPECS) {
+                        if (!SITE_SETTINGS.UI_NAMES.specs[k]) SITE_SETTINGS.UI_NAMES.specs[k] = DEFAULT_SPECS[k];
+                    }
                 }
 
                 populateCentersDropdownsDynamic(); 
@@ -246,6 +354,7 @@ function refreshCurrentTab() {
 	if (CURRENT_TAB === 'images') renderImagesTab();
 	if (CURRENT_TAB === 'drive') renderDriveTab();
 	if (CURRENT_TAB === 'database') renderDatabaseTab();
+	if (CURRENT_TAB === 'levels_specs') renderLevelsSpecsTab();
 }
 
 // =========================================================================
@@ -506,13 +615,13 @@ function renderCentersTab() {
         for(let lvlKey in centerLinks) {
             let specsHtml = '';
             for(let specKey in centerLinks[lvlKey]) {
-                specsHtml += `<span class="badge"><i class="fa-solid fa-book-open"></i> ${FIXED_SPECS[specKey] || specKey}</span>`;
+                specsHtml += `<span class="badge"><i class="fa-solid fa-book-open"></i> ${getSpecName(specKey)}</span>`;
             }
             if(specsHtml === '') specsHtml = '<span style="font-size:12px; color:#94a3b8;">لا يوجد تخصصات</span>';
             
             hierarchyHtml += `
             <div class="level-block">
-                <div class="level-title"><i class="fa-solid fa-layer-group"></i> ${FIXED_LEVELS[lvlKey] || lvlKey}</div>
+                <div class="level-title"><i class="fa-solid fa-layer-group"></i> ${getLevelName(lvlKey)}</div>
                 <div class="specs-list">${specsHtml}</div>
             </div>`;
         }
@@ -525,6 +634,7 @@ let perms = SITE_SETTINGS.CENTER_PERMISSIONS[key] || { canAddFramer: true, canDe
 html += `
 <div class="center-box">
     <div style="position:absolute; top:15px; left:15px; display:flex; gap:6px;">
+        <button onclick="syncCenterWithTraineesDB('${key}')" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="مزامنة التخصصات والرتب آلياً مع متكوني هذا المركز"><i class="fa-solid fa-rotate"></i></button>
         <button onclick="openEditCenterModal('${key}')" style="background:#eff6ff; color:#1E68E8; border:1px solid #bfdbfe; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="تعديل المركز"><i class="fa-solid fa-pen"></i></button>
         <button onclick="deleteCenter('${key}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:32px; height:32px; border-radius:6px; cursor:pointer; transition:0.2s;" title="حذف المركز نهائياً"><i class="fa-solid fa-trash"></i></button>
     </div>
@@ -559,18 +669,18 @@ html += `
 // نافذة إضافة المركز 
 window.openAddCenterModal = function() {
     let structHtml = '';
-    for(let lKey in FIXED_LEVELS) {
+    for(let lKey in getLevels()) {
         let sHtml = '';
-        for(let sKey in FIXED_SPECS) {
+        for(let sKey in getSpecs()) {
             sHtml += `<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; font-weight:bold; color:#475569;">
                         <input type="checkbox" class="swal-spec" data-level="${lKey}" value="${sKey}" style="width:18px; height:18px; accent-color:#0FBA50;">
-                        ${FIXED_SPECS[sKey]}
+                        ${getSpecName(sKey)}
                       </label>`;
         }
         structHtml += `
         <div style="margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; text-align:right;">
             <div style="background: #e2e8f0; padding: 12px; font-weight: bold; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-layer-group" style="color:#1E68E8;"></i> ${FIXED_LEVELS[lKey]}
+                <i class="fa-solid fa-layer-group" style="color:#1E68E8;"></i> ${getLevelName(lKey)}
             </div>
             <div style="padding: 15px; background: #f8fafc; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 ${sHtml}
@@ -582,8 +692,13 @@ window.openAddCenterModal = function() {
         title: 'إضافة مركز تكوين جديد',
         html: `
             <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
-                <input type="text" id="swal-center-name" class="crud-input" placeholder="اكتب اسم المركز الجديد هنا..." style="margin-bottom: 20px; font-weight:bold; font-size:16px;">
-                <h4 style="margin: 0 0 15px 0; color: #1e293b; font-size:15px; border-bottom:2px dashed #ccc; padding-bottom:10px;">اختر التخصصات الخاصة بكل طور:</h4>
+                <input type="text" id="swal-center-name" class="crud-input" placeholder="اكتب اسم المركز الجديد هنا..." style="margin-bottom: 15px; font-weight:bold; font-size:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:2px dashed #cbd5e1; padding-bottom:10px;">
+                    <h4 style="margin: 0; color: #1e293b; font-size:15px;">اختر التخصصات الخاصة بكل طور:</h4>
+                    <button type="button" onclick="autoDetectSpecsForCenterModal(false)" style="background:#0284c7; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-family:'Cairo'; font-size:12px; font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> استخراج التخصصات من المتكونين
+                    </button>
+                </div>
                 ${structHtml}
             </div>
         `,
@@ -596,7 +711,7 @@ window.openAddCenterModal = function() {
             let structure = {};
             let hasAtLeastOneSpec = false;
 
-            for(let lKey in FIXED_LEVELS) {
+            for(let lKey in getLevels()) {
                 let checkedSpecs = Array.from(document.querySelectorAll(`.swal-spec[data-level="${lKey}"]:checked`)).map(cb => cb.value);
                 if(checkedSpecs.length > 0) {
                     structure[lKey] = checkedSpecs;
@@ -618,20 +733,20 @@ window.openEditCenterModal = function(key) {
     const centerLinks = SITE_SETTINGS.dbLinks[key] || {};
 
     let structHtml = '';
-    for(let lKey in FIXED_LEVELS) {
+    for(let lKey in getLevels()) {
         let sHtml = '';
-        for(let sKey in FIXED_SPECS) {
+        for(let sKey in getSpecs()) {
             // التحقق مما إذا كان التخصص محدداً مسبقاً في هذا المركز
             let isChecked = (centerLinks[lKey] && centerLinks[lKey][sKey]) ? 'checked' : '';
             sHtml += `<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; font-weight:bold; color:#475569;">
                         <input type="checkbox" class="swal-spec-edit" data-level="${lKey}" value="${sKey}" ${isChecked} style="width:18px; height:18px; accent-color:#1E68E8;">
-                        ${FIXED_SPECS[sKey]}
+                        ${getSpecName(sKey)}
                       </label>`;
         }
         structHtml += `
         <div style="margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; text-align:right;">
             <div style="background: #e2e8f0; padding: 12px; font-weight: bold; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-layer-group" style="color:#1E68E8;"></i> ${FIXED_LEVELS[lKey]}
+                <i class="fa-solid fa-layer-group" style="color:#1E68E8;"></i> ${getLevelName(lKey)}
             </div>
             <div style="padding: 15px; background: #f8fafc; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 ${sHtml}
@@ -651,7 +766,12 @@ window.openEditCenterModal = function(key) {
                     <span>تنبيه: إزالة التحديد عن أي تخصص سيؤدي إلى حذف الروابط والفيديوهات المسجلة بداخله بشكل نهائي!</span>
                 </div>
 
-                <h4 style="margin: 0 0 15px 0; color: #1e293b; font-size:15px; border-bottom:2px dashed #ccc; padding-bottom:10px;">تعديل التخصصات المتوفرة:</h4>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:2px dashed #cbd5e1; padding-bottom:10px;">
+                    <h4 style="margin: 0; color: #1e293b; font-size:15px;">تعديل التخصصات المتوفرة:</h4>
+                    <button type="button" onclick="autoDetectSpecsForCenterModal(true)" style="background:#0284c7; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-family:'Cairo'; font-size:12px; font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> استخراج التخصصات من المتكونين
+                    </button>
+                </div>
                 ${structHtml}
             </div>
         `,
@@ -664,7 +784,7 @@ window.openEditCenterModal = function(key) {
             let structure = {};
             let hasAtLeastOneSpec = false;
 
-            for(let lKey in FIXED_LEVELS) {
+            for(let lKey in getLevels()) {
                 let checkedSpecs = Array.from(document.querySelectorAll(`.swal-spec-edit[data-level="${lKey}"]:checked`)).map(cb => cb.value);
                 if(checkedSpecs.length > 0) {
                     structure[lKey] = checkedSpecs;
@@ -992,7 +1112,7 @@ window.updateLevelOptions = function() {
     
     if(!center || !SITE_SETTINGS.dbLinks[center]) return;
     for(let lvl in SITE_SETTINGS.dbLinks[center]) {
-        selLvl.innerHTML += `<option value="${lvl}">${FIXED_LEVELS[lvl] || lvl}</option>`;
+        selLvl.innerHTML += `<option value="${lvl}">${getLevelName(lvl)}</option>`;
     }
 }
 
@@ -1005,7 +1125,7 @@ window.updateSpecOptions = function() {
 
     if(!center || !level || !SITE_SETTINGS.dbLinks[center][level]) return;
     for(let spc in SITE_SETTINGS.dbLinks[center][level]) {
-        selSpec.innerHTML += `<option value="${spc}">${FIXED_SPECS[spc] || spc}</option>`;
+        selSpec.innerHTML += `<option value="${spc}">${getSpecName(spc)}</option>`;
     }
 }
 
@@ -6329,10 +6449,10 @@ async function processCenterSync(centerKey) {
     
     [1, 2, 3].forEach(session => {
         for (let lvlKey in centerLinks) {
-            payloadStructure[session][lvlKey] = { name: FIXED_LEVELS[lvlKey], specs: {} };
+            payloadStructure[session][lvlKey] = { name: getLevelName(lvlKey), specs: {} };
             
             for (let specKey in centerLinks[lvlKey]) {
-                payloadStructure[session][lvlKey].specs[specKey] = { name: FIXED_SPECS[specKey], modules: [] };
+                payloadStructure[session][lvlKey].specs[specKey] = { name: getSpecName(specKey), modules: [] };
                 
                 for (let modKey in SITE_SETTINGS.MODULE_CYCLE_STATUS) {
                     // إرسال فقط المقاييس التي لا تزال موجودة في إعدادات النظام
@@ -6440,6 +6560,497 @@ window.syncAllCentersDrive = async function() {
         Swal.fire('مكتمل جزئياً', `تم مزامنة ${successCount} من أصل ${centersKeys.length} مراكز. تحقق من السجلات.`, 'warning');
     }
 }
+
+// =========================================================================
+// تبويب إدارة الأطوار التعليمية والتخصصات المعتمدة ديناميكياً
+// =========================================================================
+window.renderLevelsSpecsTab = function() {
+    const body = document.getElementById('settingsBody');
+    const levels = getLevels();
+    const specs = getSpecs();
+
+    let specsCardsHtml = '';
+    for (let sKey in specs) {
+        const sName = specs[sKey];
+        const sIcon = getSpecIcon(sKey);
+        specsCardsHtml += `
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: 0.2s;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 8px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fa-solid ${sIcon}"></i>
+                </div>
+                <div>
+                    <div style="font-weight: bold; color: #1e293b; font-size: 15px;">${sName}</div>
+                    <div style="font-size: 11px; color: #94a3b8; font-family: monospace;">معرف: ${sKey}</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <button onclick="openEditSpecModal('${sKey}')" style="background:#eff6ff; color:#1E68E8; border:1px solid #bfdbfe; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="تعديل"><i class="fa-solid fa-pen" style="font-size:12px;"></i></button>
+                <button onclick="deleteSpec('${sKey}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="حذف"><i class="fa-solid fa-trash" style="font-size:12px;"></i></button>
+            </div>
+        </div>`;
+    }
+
+    let levelsCardsHtml = '';
+    for (let lKey in levels) {
+        const lName = levels[lKey];
+        const lIcon = getLevelIcon(lKey);
+        levelsCardsHtml += `
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 8px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fa-solid ${lIcon}"></i>
+                </div>
+                <div>
+                    <div style="font-weight: bold; color: #1e293b; font-size: 15px;">${lName}</div>
+                    <div style="font-size: 11px; color: #94a3b8; font-family: monospace;">معرف: ${lKey}</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <button onclick="openEditLevelModal('${lKey}')" style="background:#eff6ff; color:#1E68E8; border:1px solid #bfdbfe; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="تعديل"><i class="fa-solid fa-pen" style="font-size:12px;"></i></button>
+                <button onclick="deleteLevel('${lKey}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="حذف"><i class="fa-solid fa-trash" style="font-size:12px;"></i></button>
+            </div>
+        </div>`;
+    }
+
+    body.innerHTML = `
+    <div class="setting-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; border-bottom: 2px dashed #e2e8f0; padding-bottom: 15px;">
+            <div>
+                <h3 style="margin:0; border:none; padding:0; color:#1e293b;"><i class="fa-solid fa-graduation-cap"></i> إدارة الأطوار التعليمية والتخصصات</h3>
+                <p style="margin:5px 0 0 0; font-size:13px; color:#64748b;">تتحكم هذه القائمة في التخصصات والرتب المتاحة لجميع مراكز التكوين وروابط الملفات والمجلدات</p>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-action" style="background:#0FBA50;" onclick="openAddSpecModal()"><i class="fa-solid fa-plus"></i> إضافة تخصص جديد</button>
+                <button class="btn-action" style="background:#1E68E8;" onclick="openAddLevelModal()"><i class="fa-solid fa-plus"></i> إضافة طور جديد</button>
+                <button class="btn-action" style="background:#0284c7;" onclick="discoverNewSpecsFromTraineesDB()"><i class="fa-solid fa-wand-magic-sparkles"></i> استيراد من قاعدة المتكونين</button>
+            </div>
+        </div>
+
+        <!-- قسم الأطوار التعليمية -->
+        <div style="margin-bottom: 30px;">
+            <div style="font-weight: bold; font-size: 16px; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-layer-group" style="color: #d97706;"></i> الأطوار التعليمية والرتب المعتمدة (${Object.keys(levels).length})
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                ${levelsCardsHtml}
+            </div>
+        </div>
+
+        <!-- قسم التخصصات -->
+        <div>
+            <div style="font-weight: bold; font-size: 16px; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-book-open" style="color: #0284c7;"></i> مواد وتخصصات التكوين المعتمدة (${Object.keys(specs).length})
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                ${specsCardsHtml}
+            </div>
+        </div>
+    </div>`;
+};
+
+// نافذة إضافة تخصص جديد
+window.openAddSpecModal = function() {
+    Swal.fire({
+        title: 'إضافة مادة / تخصص تكوين جديد',
+        html: `
+            <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">اسم التخصص باللغة العربية:</label>
+                <input type="text" id="swal_spec_name" class="crud-input" placeholder="مثال: الرياضيات، الهندسة الميكانيكية..." style="margin-bottom: 15px; font-weight:bold;" oninput="suggestSpecKey(this.value)">
+                
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">المعرف البرمجي اللاتيني (Key):</label>
+                <input type="text" id="swal_spec_key" class="crud-input" placeholder="مثال: math, physics..." dir="ltr" style="margin-bottom: 15px;">
+                
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">أيقونة FontAwesome:</label>
+                <input type="text" id="swal_spec_icon" class="crud-input" value="fa-book" placeholder="مثال: fa-calculator, fa-atom, fa-book..." dir="ltr">
+            </div>
+        `,
+        width: '500px',
+        showCancelButton: true, confirmButtonText: 'إضافة واعتماد', cancelButtonText: 'إلغاء', confirmButtonColor: '#0FBA50',
+        preConfirm: () => {
+            const name = document.getElementById('swal_spec_name').value.trim();
+            let key = document.getElementById('swal_spec_key').value.trim().toLowerCase();
+            const icon = document.getElementById('swal_spec_icon').value.trim() || 'fa-book';
+
+            if (!name) { Swal.showValidationMessage('يرجى كتابة اسم التخصص'); return false; }
+            if (!key) {
+                const resolved = resolveSpecialization(name);
+                key = resolved.key;
+            }
+            key = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+            return { key, name, icon };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const { key, name, icon } = result.value;
+            if (!SITE_SETTINGS.UI_NAMES.specs) SITE_SETTINGS.UI_NAMES.specs = {};
+            if (!SITE_SETTINGS.UI_NAMES.specIcons) SITE_SETTINGS.UI_NAMES.specIcons = {};
+
+            SITE_SETTINGS.UI_NAMES.specs[key] = name;
+            SITE_SETTINGS.UI_NAMES.specIcons[key] = { icon: icon };
+
+            await saveSettingsToFirestore(true, 'تم إضافة التخصص بنجاح');
+            renderLevelsSpecsTab();
+        }
+    });
+};
+
+window.suggestSpecKey = function(arabicName) {
+    const keyInput = document.getElementById('swal_spec_key');
+    const iconInput = document.getElementById('swal_spec_icon');
+    if (!keyInput || !arabicName) return;
+    const resolved = resolveSpecialization(arabicName);
+    if (resolved && resolved.key && resolved.key !== 'others') {
+        keyInput.value = resolved.key;
+        if (iconInput && resolved.icon) iconInput.value = resolved.icon;
+    }
+};
+
+// نافذة تعديل تخصص
+window.openEditSpecModal = function(key) {
+    const name = getSpecName(key);
+    const icon = getSpecIcon(key);
+
+    Swal.fire({
+        title: 'تعديل بيانات التخصص',
+        html: `
+            <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">اسم التخصص:</label>
+                <input type="text" id="swal_edit_spec_name" class="crud-input" value="${name}" style="margin-bottom: 15px; font-weight:bold;">
+                
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">أيقونة FontAwesome:</label>
+                <input type="text" id="swal_edit_spec_icon" class="crud-input" value="${icon}" dir="ltr">
+            </div>
+        `,
+        width: '500px',
+        showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: () => {
+            const newName = document.getElementById('swal_edit_spec_name').value.trim();
+            const newIcon = document.getElementById('swal_edit_spec_icon').value.trim() || 'fa-book';
+            if (!newName) { Swal.showValidationMessage('يرجى كتابة اسم التخصص'); return false; }
+            return { newName, newIcon };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const { newName, newIcon } = result.value;
+            SITE_SETTINGS.UI_NAMES.specs[key] = newName;
+            if (!SITE_SETTINGS.UI_NAMES.specIcons) SITE_SETTINGS.UI_NAMES.specIcons = {};
+            SITE_SETTINGS.UI_NAMES.specIcons[key] = { icon: newIcon };
+
+            await saveSettingsToFirestore(true, 'تم تعديل بيانات التخصص بنجاح');
+            renderLevelsSpecsTab();
+        }
+    });
+};
+
+// حذف تخصص
+window.deleteSpec = async function(key) {
+    const name = getSpecName(key);
+    let usedInCenters = [];
+    for (let cKey in (SITE_SETTINGS.dbLinks || {})) {
+        for (let lKey in (SITE_SETTINGS.dbLinks[cKey] || {})) {
+            if (SITE_SETTINGS.dbLinks[cKey][lKey] && SITE_SETTINGS.dbLinks[cKey][lKey][key]) {
+                usedInCenters.push(SITE_SETTINGS.UI_NAMES.centers[cKey] || cKey);
+                break;
+            }
+        }
+    }
+
+    let warningText = `هل أنت متأكد من حذف تخصص "${name}" من قائمة التخصصات؟`;
+    if (usedInCenters.length > 0) {
+        warningText += `<br><br><span style="color:#dc2626; font-weight:bold;">تنبيه: هذا التخصص مستخدم حالياً في المراكز التالية: (${usedInCenters.join('، ')})!</span>`;
+    }
+
+    Swal.fire({
+        title: 'تأكيد حذف التخصص',
+        html: warningText,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            delete SITE_SETTINGS.UI_NAMES.specs[key];
+            if (SITE_SETTINGS.UI_NAMES.specIcons) delete SITE_SETTINGS.UI_NAMES.specIcons[key];
+            await saveSettingsToFirestore(true, 'تم حذف التخصص بنجاح');
+            renderLevelsSpecsTab();
+        }
+    });
+};
+
+// نافذة إضافة طور جديد
+window.openAddLevelModal = function() {
+    Swal.fire({
+        title: 'إضافة طور تعليمي / رتبة جديدة',
+        html: `
+            <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">اسم الطور / الرتبة بالعربية:</label>
+                <input type="text" id="swal_lvl_name" class="crud-input" placeholder="مثال: الطور التحضيري، رتبة أستاذ رئيسي..." style="margin-bottom: 15px; font-weight:bold;">
+                
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">المعرف البرمجي اللاتيني (Key):</label>
+                <input type="text" id="swal_lvl_key" class="crud-input" placeholder="مثال: preschool, principal_prof..." dir="ltr" style="margin-bottom: 15px;">
+                
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">أيقونة FontAwesome:</label>
+                <input type="text" id="swal_lvl_icon" class="crud-input" value="fa-school" placeholder="مثال: fa-school, fa-user-graduate..." dir="ltr">
+            </div>
+        `,
+        width: '500px',
+        showCancelButton: true, confirmButtonText: 'إضافة واعتماد', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: () => {
+            const name = document.getElementById('swal_lvl_name').value.trim();
+            let key = document.getElementById('swal_lvl_key').value.trim().toLowerCase();
+            const icon = document.getElementById('swal_lvl_icon').value.trim() || 'fa-school';
+
+            if (!name) { Swal.showValidationMessage('يرجى كتابة اسم الطور'); return false; }
+            if (!key) key = resolveLevel(name).key;
+            key = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+            return { key, name, icon };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const { key, name, icon } = result.value;
+            if (!SITE_SETTINGS.UI_NAMES.levels) SITE_SETTINGS.UI_NAMES.levels = {};
+            if (!SITE_SETTINGS.UI_NAMES.levelIcons) SITE_SETTINGS.UI_NAMES.levelIcons = {};
+
+            SITE_SETTINGS.UI_NAMES.levels[key] = name;
+            SITE_SETTINGS.UI_NAMES.levelIcons[key] = { icon: icon };
+
+            await saveSettingsToFirestore(true, 'تم إضافة الطور بنجاح');
+            renderLevelsSpecsTab();
+        }
+    });
+};
+
+// تعديل طور
+window.openEditLevelModal = function(key) {
+    const name = getLevelName(key);
+    const icon = getLevelIcon(key);
+
+    Swal.fire({
+        title: 'تعديل بيانات الطور',
+        html: `
+            <div style="text-align: right; font-family: 'Cairo'; padding-top:10px;">
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">اسم الطور:</label>
+                <input type="text" id="swal_edit_lvl_name" class="crud-input" value="${name}" style="margin-bottom: 15px; font-weight:bold;">
+                
+                <label style="font-weight:bold; font-size:13px; color:#475569; display:block; margin-bottom:5px;">أيقونة FontAwesome:</label>
+                <input type="text" id="swal_edit_lvl_icon" class="crud-input" value="${icon}" dir="ltr">
+            </div>
+        `,
+        width: '500px',
+        showCancelButton: true, confirmButtonText: 'حفظ التعديل', cancelButtonText: 'إلغاء', confirmButtonColor: '#1E68E8',
+        preConfirm: () => {
+            const newName = document.getElementById('swal_edit_lvl_name').value.trim();
+            const newIcon = document.getElementById('swal_edit_lvl_icon').value.trim() || 'fa-school';
+            if (!newName) { Swal.showValidationMessage('يرجى كتابة اسم الطور'); return false; }
+            return { newName, newIcon };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            const { newName, newIcon } = result.value;
+            SITE_SETTINGS.UI_NAMES.levels[key] = newName;
+            if (!SITE_SETTINGS.UI_NAMES.levelIcons) SITE_SETTINGS.UI_NAMES.levelIcons = {};
+            SITE_SETTINGS.UI_NAMES.levelIcons[key] = { icon: newIcon };
+
+            await saveSettingsToFirestore(true, 'تم تعديل الطور بنجاح');
+            renderLevelsSpecsTab();
+        }
+    });
+};
+
+// حذف طور
+window.deleteLevel = async function(key) {
+    const name = getLevelName(key);
+    Swal.fire({
+        title: 'تأكيد حذف الطور',
+        text: `هل أنت متأكد من حذف طور "${name}"؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'نعم، احذف',
+        cancelButtonText: 'إلغاء'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            delete SITE_SETTINGS.UI_NAMES.levels[key];
+            if (SITE_SETTINGS.UI_NAMES.levelIcons) delete SITE_SETTINGS.UI_NAMES.levelIcons[key];
+            await saveSettingsToFirestore(true, 'تم حذف الطور بنجاح');
+            renderLevelsSpecsTab();
+        }
+    });
+};
+
+// استيراد وفحص التخصصات الجديدة من قاعدة بيانات المتكونين تلقائياً
+window.discoverNewSpecsFromTraineesDB = async function() {
+    Swal.fire({
+        title: 'جاري فحص المتكونين...',
+        text: 'استكشاف التخصصات والرتب المسجلة في قاعدة البيانات...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const snap = await db.collection("employeescomnew").get();
+        let newSpecsCount = 0;
+        let newLevelsCount = 0;
+
+        if (!SITE_SETTINGS.UI_NAMES.specs) SITE_SETTINGS.UI_NAMES.specs = {};
+        if (!SITE_SETTINGS.UI_NAMES.levels) SITE_SETTINGS.UI_NAMES.levels = {};
+        if (!SITE_SETTINGS.UI_NAMES.specIcons) SITE_SETTINGS.UI_NAMES.specIcons = {};
+        if (!SITE_SETTINGS.UI_NAMES.levelIcons) SITE_SETTINGS.UI_NAMES.levelIcons = {};
+
+        snap.forEach(doc => {
+            const tr = doc.data();
+            const rawMaty = tr.maty || tr.specialty || "";
+            const rawGrade = tr.grade || tr.rank || "";
+
+            if (rawMaty) {
+                const spcInfo = resolveSpecialization(rawMaty);
+                if (!SITE_SETTINGS.UI_NAMES.specs[spcInfo.key]) {
+                    SITE_SETTINGS.UI_NAMES.specs[spcInfo.key] = spcInfo.name;
+                    SITE_SETTINGS.UI_NAMES.specIcons[spcInfo.key] = { icon: spcInfo.icon };
+                    newSpecsCount++;
+                }
+            }
+
+            if (rawGrade) {
+                const lvlInfo = resolveLevel(rawGrade);
+                if (!SITE_SETTINGS.UI_NAMES.levels[lvlInfo.key]) {
+                    SITE_SETTINGS.UI_NAMES.levels[lvlInfo.key] = lvlInfo.name;
+                    SITE_SETTINGS.UI_NAMES.levelIcons[lvlInfo.key] = { icon: lvlInfo.icon };
+                    newLevelsCount++;
+                }
+            }
+        });
+
+        if (newSpecsCount > 0 || newLevelsCount > 0) {
+            await saveSettingsToFirestore(false);
+            Swal.fire('اكتمل الاستيراد بنجاح', `تم العثور على ${newSpecsCount} تخصصاً جديداً و ${newLevelsCount} رتبة/طور جديد وحفظها بنجاح في الإعدادات!`, 'success');
+        } else {
+            Swal.fire('النظام محدث بالكامل', 'جميع التخصصات والرتب الموجودة لدى المتكونين مسجلة ومفعلة مسبقاً في النظام.', 'info');
+        }
+
+        renderLevelsSpecsTab();
+    } catch (e) {
+        console.error(e);
+        Swal.fire('خطأ', 'تعذر استيراد البيانات من فايربيز: ' + e.message, 'error');
+    }
+};
+
+// مزامنة أطوار وتخصصات مركز معين من قاعدة بيانات المتكونين المسجلين به
+window.syncCenterWithTraineesDB = async function(centerKey) {
+    const centerName = SITE_SETTINGS.UI_NAMES.centers[centerKey];
+    if (!centerName) return;
+
+    Swal.fire({
+        title: 'مزامنة مع المتكونين',
+        html: `جاري فحص المتكونين المسجلين في <b>${centerName}</b>...`,
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const snap = await db.collection("employeescomnew").where("center", "==", centerName).get();
+        if (snap.empty) {
+            return Swal.fire('تنبيه', `لم يتم العثور على متكونين مسجلين باسم مركز "${centerName}" في قاعدة البيانات.`, 'warning');
+        }
+
+        if (!SITE_SETTINGS.dbLinks[centerKey]) SITE_SETTINGS.dbLinks[centerKey] = {};
+        let countNew = 0;
+
+        snap.forEach(doc => {
+            const tr = doc.data();
+            const rawGrade = tr.grade || tr.rank || "";
+            const rawMaty = tr.maty || tr.specialty || "";
+
+            if (rawGrade || rawMaty) {
+                const lvl = resolveLevel(rawGrade);
+                const spc = resolveSpecialization(rawMaty);
+
+                if (!SITE_SETTINGS.dbLinks[centerKey][lvl.key]) {
+                    SITE_SETTINGS.dbLinks[centerKey][lvl.key] = {};
+                }
+                if (!SITE_SETTINGS.dbLinks[centerKey][lvl.key][spc.key]) {
+                    SITE_SETTINGS.dbLinks[centerKey][lvl.key][spc.key] = { videos: [] };
+                    for (let mod in (SITE_SETTINGS.MODULE_CYCLE_STATUS || {})) {
+                        SITE_SETTINGS.dbLinks[centerKey][lvl.key][spc.key][mod] = { 1: "", 2: "", 3: "" };
+                    }
+                    countNew++;
+                }
+
+                if (!SITE_SETTINGS.UI_NAMES.levels[lvl.key]) {
+                    SITE_SETTINGS.UI_NAMES.levels[lvl.key] = lvl.name;
+                }
+                if (!SITE_SETTINGS.UI_NAMES.specs[spc.key]) {
+                    SITE_SETTINGS.UI_NAMES.specs[spc.key] = spc.name;
+                }
+            }
+        });
+
+        await saveSettingsToFirestore(false);
+
+        if (SITE_SETTINGS.DRIVE_SETTINGS && SITE_SETTINGS.DRIVE_SETTINGS.appsScriptUrl) {
+            await processCenterSync(centerKey);
+            await saveSettingsToFirestore(false);
+        }
+
+        Swal.fire('تمت المزامنة بنجاح', `تمت مزامنة بيانات مركز ${centerName} بنجاح وإضافة ${countNew} تخصصات جديدة وتجهيز مجلداتها وروابطها!`, 'success');
+        renderCentersTab();
+    } catch (err) {
+        console.error(err);
+        Swal.fire('خطأ', 'فشلت المزامنة: ' + err.message, 'error');
+    }
+};
+
+// تحديد التخصصات تلقائياً داخل نافذة إضافة أو تعديل مركز
+window.autoDetectSpecsForCenterModal = async function(isEdit) {
+    let centerName = "";
+    if (isEdit) {
+        centerName = document.getElementById('swal-edit-center-name')?.value?.trim();
+    } else {
+        centerName = document.getElementById('swal-center-name')?.value?.trim();
+    }
+
+    if (!centerName) {
+        Swal.fire('تنبيه', 'يرجى كتابة اسم المركز أولاً للبحث عن متكونيه', 'warning');
+        return;
+    }
+
+    try {
+        const snap = await db.collection("employeescomnew").where("center", "==", centerName).get();
+        if (snap.empty) {
+            Swal.fire('تنبيه', `لم يُعثر على متكونين مسجلين بمركز "${centerName}" حتى الآن في قاعدة البيانات`, 'info');
+            return;
+        }
+
+        const className = isEdit ? 'swal-spec-edit' : 'swal-spec';
+        let detectedSpecs = new Set();
+        let detectedLevels = new Set();
+
+        snap.forEach(doc => {
+            const tr = doc.data();
+            const lvl = resolveLevel(tr.grade || tr.rank);
+            const spc = resolveSpecialization(tr.maty || tr.specialty);
+            detectedLevels.add(lvl.key);
+            detectedSpecs.add(`${lvl.key}_${spc.key}`);
+        });
+
+        let matchedCount = 0;
+        document.querySelectorAll(`.${className}`).forEach(cb => {
+            const lvl = cb.getAttribute('data-level');
+            const spc = cb.value;
+            if (detectedSpecs.has(`${lvl}_${spc}`)) {
+                cb.checked = true;
+                matchedCount++;
+            }
+        });
+
+        Swal.fire('نجاح', `تم تحديد تخصصات المركز تلقائياً بناءً على ${snap.size} متكون مسجل به! (تم تفعيل ${matchedCount} تخصص)`, 'success');
+    } catch (e) {
+        console.error(e);
+        Swal.fire('خطأ', 'تعذر جلب بيانات متكوني المركز: ' + e.message, 'error');
+    }
+};
 
 // ================= نظام رقمنة المديرية (الاستعلام الشامل والذكي) =================
 let allPlusEmployees = [];

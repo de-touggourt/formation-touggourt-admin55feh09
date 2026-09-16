@@ -21,8 +21,8 @@ let userDocId = null;
 let SITE_SETTINGS = null;
 const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec";
 
-// تعريف الأيقونات الثابتة للأطوار والتخصصات
-const ICONS = {
+// أيقونات افتراضية للأطوار والتخصصات (تُستخدم كاحتياطي)
+const DEFAULT_ICONS = {
     levels: {
         'primary': { name: 'الطور الابتدائي', icon: 'fa-child-reaching' },
         'middle': { name: 'الطور المتوسط', icon: 'fa-school' },
@@ -36,6 +36,36 @@ const ICONS = {
         'others': { name: 'باقي التخصصات', icon: 'fa-layer-group' }
     }
 };
+
+function getIconsLevels() {
+    let result = {};
+    const levels = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels) || {};
+    const levelIcons = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levelIcons) || {};
+    for (let key in DEFAULT_ICONS.levels) {
+        result[key] = { name: levels[key] || DEFAULT_ICONS.levels[key].name, icon: (levelIcons[key] && levelIcons[key].icon) || DEFAULT_ICONS.levels[key].icon };
+    }
+    for (let key in levels) {
+        if (!result[key]) {
+            result[key] = { name: levels[key], icon: (levelIcons[key] && levelIcons[key].icon) || 'fa-layer-group' };
+        }
+    }
+    return result;
+}
+
+function getIconsSpecs() {
+    let result = {};
+    const specs = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) || {};
+    const specIcons = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specIcons) || {};
+    for (let key in DEFAULT_ICONS.specs) {
+        result[key] = { name: specs[key] || DEFAULT_ICONS.specs[key].name, icon: (specIcons[key] && specIcons[key].icon) || DEFAULT_ICONS.specs[key].icon };
+    }
+    for (let key in specs) {
+        if (!result[key]) {
+            result[key] = { name: specs[key], icon: (specIcons[key] && specIcons[key].icon) || 'fa-book' };
+        }
+    }
+    return result;
+}
 
 // ==========================================
 // 🔡 كود الكتابة السلسة
@@ -424,25 +454,85 @@ function renderCenters() {
     }
 }
 
+const KNOWN_SPECS_COMMON = {
+    'arabic': { name: 'اللغة العربية', keywords: ['عرب', 'أدب'] },
+    'french': { name: 'اللغة الفرنسية', keywords: ['فرنس'] },
+    'english': { name: 'اللغة الإنجليزية', keywords: ['إنجليز', 'انجليز'] },
+    'sport': { name: 'التربية البدنية والرياضية', keywords: ['بدن', 'رياضة', 'بدنية'] },
+    'math': { name: 'الرياضيات', keywords: ['رياضيات', 'حساب'] },
+    'physics': { name: 'العلوم الفيزيائية والتكنولوجيا', keywords: ['فيزياء', 'فيزيائ'] },
+    'science': { name: 'علوم الطبيعة والحياة', keywords: ['طبيعة', 'علوم'] },
+    'history_geo': { name: 'التاريخ والجغرافيا', keywords: ['تاريخ', 'جغرافيا'] },
+    'islamic': { name: 'العلوم الإسلامية', keywords: ['إسلام', 'اسلام', 'شريعة'] },
+    'philosophy': { name: 'الفلسفة', keywords: ['فلسف'] },
+    'art': { name: 'التربية التشكيلية والرسم', keywords: ['رسم', 'تشكيل'] },
+    'music': { name: 'التربية الموسيقية', keywords: ['موسيق'] },
+    'civil_eng': { name: 'الهندسة المدنية', keywords: ['مدني'] },
+    'electrical_eng': { name: 'الهندسة الكهربائية', keywords: ['كهربا'] },
+    'mechanical_eng': { name: 'الهندسة الميكانيكية', keywords: ['ميكانيك'] },
+    'process_eng': { name: 'هندسة الطرائق', keywords: ['طرائق'] },
+    'informatics': { name: 'الإعلام الآلي', keywords: ['إعلام آلي', 'اعلام آلي', 'حاسوب'] },
+    'amazigh': { name: 'اللغة الأمازيغية', keywords: ['أمازيغ', 'امازيغ'] },
+    'economy': { name: 'تسيير واقتصاد', keywords: ['تسيير', 'اقتصاد', 'محاسبة'] },
+    'others': { name: 'باقي التخصصات', keywords: [] }
+};
+
 // ================= دالة كشف الطور والتخصص بدقة =================
 function detectUserLevelAndSpec(user) {
     if (!user) return { levelKey: null, specKey: null };
     
-    // الطور
     const rankStr = (user.grade || user.rank || "").toLowerCase();
-    let levelKey = null;
-    if (rankStr.includes("ابتدائي")) levelKey = "primary";
-    else if (rankStr.includes("متوسط")) levelKey = "middle";
-    else if (rankStr.includes("ثانوي")) levelKey = "secondary";
-    
-    // التخصص
     const matyStr = (user.maty || user.specialty || "").trim().toLowerCase();
-    let specKey = "others";
-    if (matyStr.includes("عرب")) specKey = "arabic";
-    else if (matyStr.includes("فرنس")) specKey = "french";
-    else if (matyStr.includes("إنجليز") || matyStr.includes("انجليز")) specKey = "english";
-    else if (matyStr.includes("بدن") || matyStr.includes("رياض")) specKey = "sport";
-    else if (matyStr) specKey = "others";
+    
+    // 1. الطور - مطابقة ديناميكية مع أسماء الأطوار من SITE_SETTINGS
+    let levelKey = null;
+    const levels = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels) || {};
+    for (let key in levels) {
+        const levelName = levels[key].toLowerCase();
+        const keywords = levelName.replace(/الطور|\s/g, '').trim();
+        if (keywords && (rankStr.includes(keywords) || keywords.includes(rankStr.replace(/أستاذ|التعليم|\s/g, '')))) {
+            levelKey = key;
+            break;
+        }
+    }
+    if (!levelKey) {
+        if (rankStr.includes("ابتدائي")) levelKey = "primary";
+        else if (rankStr.includes("متوسط")) levelKey = "middle";
+        else if (rankStr.includes("ثانوي")) levelKey = "secondary";
+    }
+    
+    // 2. التخصص - فحص دقيق: استثناء الرياضيات أولاً قبل فحص التربية البدنية
+    let specKey = null;
+    
+    if (matyStr.includes('رياضيات') || matyStr.includes('حساب')) {
+        specKey = 'math';
+    } else if (matyStr.includes('بدن') || matyStr.includes('رياضة') || matyStr.includes('بدنية')) {
+        specKey = 'sport';
+    }
+    
+    if (!specKey) {
+        const specs = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) || {};
+        for (let key in specs) {
+            const specName = specs[key].toLowerCase();
+            const sClean = specName.replace(/^ال/, '').trim();
+            const mClean = matyStr.replace(/^ال/, '').trim();
+            if (sClean === mClean || mClean.includes(sClean) || sClean.includes(mClean)) {
+                specKey = key;
+                break;
+            }
+        }
+    }
+    
+    if (!specKey) {
+        for (let k in KNOWN_SPECS_COMMON) {
+            if (KNOWN_SPECS_COMMON[k].keywords && KNOWN_SPECS_COMMON[k].keywords.some(kw => matyStr.includes(kw))) {
+                specKey = k;
+                break;
+            }
+        }
+    }
+    
+    if (!specKey) specKey = "others";
 
     return { levelKey, specKey, rawLevel: user.grade || user.rank, rawSpec: user.maty || user.specialty };
 }
@@ -486,8 +576,10 @@ function openCenter(centerId) {
         const myLvl = detected.levelKey || availableLevels[0];
         const mySpec = detected.specKey || 'others';
 
-        const levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[myLvl]) || (ICONS.levels[myLvl] ? ICONS.levels[myLvl].name : myLvl);
-        const specName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[mySpec]) || (ICONS.specs[mySpec] ? ICONS.specs[mySpec].name : loggedInUser.maty || 'تخصصك المعتمد');
+        const iconsLevels = getIconsLevels();
+        const iconsSpecs = getIconsSpecs();
+        const levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[myLvl]) || (iconsLevels[myLvl] ? iconsLevels[myLvl].name : myLvl);
+        const specName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[mySpec]) || (iconsSpecs[mySpec] ? iconsSpecs[mySpec].name : loggedInUser.maty || 'تخصصك المعتمد');
 
         Swal.fire({
             title: `<div style="font-family:'Cairo'; color:#0FBA50; font-size:20px; font-weight:800;"><i class="fa-solid fa-graduation-cap"></i> فضاء مقاييس التكوين</div>`,
@@ -535,14 +627,15 @@ function openCenter(centerId) {
 // دالة عرض الأطوار
 function showLevelsModal(centerId, availableLevels) {
     let html = '<div class="icon-container">';
+    const iconsLevels = getIconsLevels();
     
     availableLevels.forEach(lvlId => {
         let defaultIcon = 'fa-layer-group';
         let defaultName = lvlId;
         
-        if (ICONS.levels[lvlId]) {
-            defaultIcon = ICONS.levels[lvlId].icon;
-            defaultName = ICONS.levels[lvlId].name;
+        if (iconsLevels[lvlId]) {
+            defaultIcon = iconsLevels[lvlId].icon;
+            defaultName = iconsLevels[lvlId].name;
         }
         
         let levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
@@ -569,15 +662,18 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
         Swal.fire('تنبيه', 'لا توجد تخصصات مبرمجة لهذا الطور.', 'info'); return;
     }
 
+    const iconsLevels = getIconsLevels();
+    const iconsSpecs = getIconsSpecs();
+
     let defaultName = lvlId;
-    if (ICONS.levels[lvlId]) defaultName = ICONS.levels[lvlId].name;
+    if (iconsLevels[lvlId]) defaultName = iconsLevels[lvlId].name;
     const levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
                       ? SITE_SETTINGS.UI_NAMES.levels[lvlId] : defaultName;
 
     let html = '<div class="icon-container">';
     
     availableSpecs.forEach(spcId => {
-        let spcInfo = ICONS.specs[spcId] || { name: spcId, icon: 'fa-book' };
+        let spcInfo = iconsSpecs[spcId] || { name: spcId, icon: 'fa-book' };
         html += `
           <div class="icon-btn" onclick="openLink('${centerId}', '${spcId}', '${lvlId}')">
             <i class="fa-solid ${spcInfo.icon}"></i>

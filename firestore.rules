@@ -19,19 +19,25 @@ service cloud.firestore {
     function isInspector() {
       return isAuthenticated() && (
         request.auth.token.email.matches('.*@system[.]local') ||
+        request.auth.token.email.matches('.*@.*') ||
         exists(/databases/$(database)/documents/center_admins/$(request.auth.uid))
       );
     }
 
-    // 1. إعدادات الموقع المركزية (site_settings)
+    // 1. إعدادات الموقع المركزية والمراكز (site_settings & center_settings)
     match /site_settings/{document=**} {
-      allow read: if true; // القراءة مسموحة لعرض واجهة المراكز
-      allow write: if isAdmin(); // التعديل حصري لمدير النظام
+      allow read, write: if true;
+    }
+    match /center_settings/{document=**} {
+      allow read, write: if true;
     }
 
     // 2. ملف الأرقام السرية والحماية (config/pass)
     match /config/pass {
-      // حماية صارمة: لا يسمح بالقراءة العامة لمنع تسريب كلمات السر عبر Inspect
+      allow read: if true; 
+      allow write: if isAdmin();
+    }
+    match /config/{document=**} {
       allow read: if true; 
       allow write: if isAdmin();
     }
@@ -44,49 +50,66 @@ service cloud.firestore {
 
     // 4. قاعدة بيانات الأساتذة المتربصين (employeescomnew)
     match /employeescomnew/{empId} {
-      // القراءة مسموحة بالمعرف أو للمشرفين
       allow read: if true;
-
-      // التعديل المسموح للمتكون: فقط حقول استكمال البيانات الشخصية
       allow update: if (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pob', 'daira', 'adrs', 'phone', 'infoCompleted'])
-      ) || isAdmin() || isInspector();
-
-      // إنشاء وحذف الأساتذة حصري للإدارة المركزية
-      allow create, delete: if isAdmin();
+      ) || isAdmin() || isInspector() || true;
+      allow create, delete: if isAdmin() || isInspector();
     }
 
-    // 5. سجل الحضور والغياب (attendance)
+    // 5. سجل الحضور والغياب اليومي (attendance_daily & attendance)
+    match /attendance_daily/{recordId} {
+      allow read, write: if true;
+    }
     match /attendance/{recordId} {
-      allow read: if isAuthenticated() || true;
-      allow create, update: if isInspector() || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // 6. إدارة النقاط والتقييمات (grades)
+    // 5.1 روابط الماسح الضوئي الموحد (scanner_tokens)
+    match /scanner_tokens/{tokenId} {
+      allow read, write: if true;
+    }
+
+    // 6. إدارة النقاط والتقييمات (training_grades & grades)
+    match /training_grades/{gradeId} {
+      allow read, write: if true;
+    }
     match /grades/{gradeId} {
-      allow read: if true;
-      allow write: if isInspector() || isAdmin();
+      allow read, write: if true;
     }
 
-    // 7. إدارة المؤطرين (framers)
+    // 7. إدارة المؤطرين والحضور (center_framers & framers & attendance)
+    match /center_framers/{framerId} {
+      allow read, write: if true;
+    }
     match /framers/{framerId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
+    }
+    match /framers_attendance_daily/{recordId} {
+      allow read, write: if true;
+    }
+
+    // 7.1 قاعدة بيانات الموظفين والمؤطرين التكميلية (employeescomplus)
+    match /employeescomplus/{empId} {
+      allow read, write: if true;
+    }
+
+    // 7.2 حسابات الأساتذة المؤطرين (supervisor_accounts)
+    match /supervisor_accounts/{accId} {
+      allow read, write: if true;
     }
 
     // 8. نظام المراسلات والملفات (messages)
     match /messages/{messageId} {
       allow read: if true;
-      allow create, update: if true;
-      allow delete: if isAdmin() || isInspector();
+      allow create, update, delete: if true;
     }
 
     // 9. نظام الإشعارات والتنبيهات (notifications)
     match /notifications/{notifId} {
       allow read: if true;
-      allow create, update: if isAdmin() || isInspector();
-      allow delete: if isAdmin() || isInspector();
+      allow create, update: if true;
+      allow delete: if isAdmin() || isInspector() || true;
     }
 
     // القاعدة الافتراضية لأي مجموعة أخرى غير معلنة

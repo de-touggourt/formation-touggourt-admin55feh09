@@ -57,21 +57,136 @@ const db = firebase.firestore();
 
 let SITE_SETTINGS = null;
 
-// تعريف الأيقونات الثابتة للأطوار والتخصصات
-const ICONS = {
+// أيقونات وتصنيفات شاملة للأطوار والتخصصات (ديناميكية مع قيم افتراضية موسعة)
+const KNOWN_SPECS = {
+    'arabic': { name: 'اللغة العربية', icon: 'fa-book-open', keywords: ['عرب', 'أدب'] },
+    'french': { name: 'اللغة الفرنسية', icon: 'fa-language', keywords: ['فرنس'] },
+    'english': { name: 'اللغة الإنجليزية', icon: 'fa-font', keywords: ['إنجليز', 'انجليز'] },
+    'sport': { name: 'التربية البدنية والرياضية', icon: 'fa-person-running', keywords: ['بدن', 'رياضة'] },
+    'math': { name: 'الرياضيات', icon: 'fa-calculator', keywords: ['رياضيات', 'حساب'] },
+    'physics': { name: 'العلوم الفيزيائية والتكنولوجيا', icon: 'fa-atom', keywords: ['فيزياء', 'فيزيائ'] },
+    'science': { name: 'علوم الطبيعة والحياة', icon: 'fa-dna', keywords: ['طبيعة', 'علوم'] },
+    'history_geo': { name: 'التاريخ والجغرافيا', icon: 'fa-earth-africa', keywords: ['تاريخ', 'جغرافيا'] },
+    'islamic': { name: 'العلوم الإسلامية', icon: 'fa-mosque', keywords: ['إسلام', 'اسلام', 'شريعة'] },
+    'philosophy': { name: 'الفلسفة', icon: 'fa-brain', keywords: ['فلسف'] },
+    'art': { name: 'التربية التشكيلية والرسم', icon: 'fa-palette', keywords: ['رسم', 'تشكيل'] },
+    'music': { name: 'التربية الموسيقية', icon: 'fa-music', keywords: ['موسيق'] },
+    'civil_eng': { name: 'الهندسة المدنية', icon: 'fa-trowel-bricks', keywords: ['مدني'] },
+    'electrical_eng': { name: 'الهندسة الكهربائية', icon: 'fa-bolt', keywords: ['كهربا'] },
+    'mechanical_eng': { name: 'الهندسة الميكانيكية', icon: 'fa-gear', keywords: ['ميكانيك'] },
+    'process_eng': { name: 'هندسة الطرائق', icon: 'fa-flask-vial', keywords: ['طرائق'] },
+    'informatics': { name: 'الإعلام الآلي', icon: 'fa-laptop-code', keywords: ['إعلام آلي', 'اعلام آلي', 'حاسوب'] },
+    'amazigh': { name: 'اللغة الأمازيغية', icon: 'fa-shapes', keywords: ['أمازيغ', 'امازيغ'] },
+    'economy': { name: 'تسيير واقتصاد', icon: 'fa-chart-line', keywords: ['تسيير', 'اقتصاد', 'محاسبة'] },
+    'others': { name: 'باقي التخصصات', icon: 'fa-layer-group', keywords: [] }
+};
+
+const KNOWN_LEVELS = {
+    'primary': { name: 'الطور الابتدائي', icon: 'fa-child-reaching', keywords: ['ابتدائي', 'ابتدائية'] },
+    'middle': { name: 'الطور المتوسط', icon: 'fa-school', keywords: ['متوسط', 'متوسطة'] },
+    'secondary': { name: 'الطور الثانوي', icon: 'fa-user-graduate', keywords: ['ثانوي', 'ثانوية'] }
+};
+
+const DEFAULT_ICONS = {
     levels: {
         'primary': { name: 'الطور الابتدائي', icon: 'fa-child-reaching' },
         'middle': { name: 'الطور المتوسط', icon: 'fa-school' },
         'secondary': { name: 'الطور الثانوي', icon: 'fa-user-graduate' }
     },
-    specs: {
-        'arabic': { name: 'اللغة العربية', icon: 'fa-book-open' },
-        'french': { name: 'اللغة الفرنسية', icon: 'fa-language' },
-        'english': { name: 'اللغة الإنجليزية', icon: 'fa-font' },
-        'sport': { name: 'التربية البدنية والرياضة', icon: 'fa-person-running' },
-        'others': { name: 'باقي التخصصات', icon: 'fa-layer-group' }
-    }
+    specs: {}
 };
+for (let k in KNOWN_SPECS) {
+    DEFAULT_ICONS.specs[k] = { name: KNOWN_SPECS[k].name, icon: KNOWN_SPECS[k].icon };
+}
+
+// دالة تحليل وتحديد التخصص ديناميكياً من نصوص قاعدة البيانات
+function resolveSpecialization(rawMaty) {
+    if (!rawMaty) return { key: 'others', name: 'باقي التخصصات', icon: 'fa-layer-group' };
+    const clean = rawMaty.trim().toLowerCase();
+    
+    // 1. التحقق من المفاتيح المباشرة
+    if (KNOWN_SPECS[clean]) {
+        return { key: clean, ...KNOWN_SPECS[clean] };
+    }
+    
+    // 2. التحقق من إعدادات الموقع المركزية
+    if (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) {
+        for (let k in SITE_SETTINGS.UI_NAMES.specs) {
+            if (k === clean || SITE_SETTINGS.UI_NAMES.specs[k].trim() === rawMaty.trim()) {
+                const icon = (SITE_SETTINGS.UI_NAMES.specIcons && SITE_SETTINGS.UI_NAMES.specIcons[k]) 
+                             || (KNOWN_SPECS[k] ? KNOWN_SPECS[k].icon : 'fa-book');
+                return { key: k, name: SITE_SETTINGS.UI_NAMES.specs[k], icon: icon };
+            }
+        }
+    }
+    
+    // 3. التحقق الذكي بالكلمات المفتاحية (الانتباه: الرياضيات تختلف كلياً عن الرياضة البدنية)
+    if (clean.includes('رياضيات') || clean.includes('حساب')) {
+        return { key: 'math', ...KNOWN_SPECS['math'] };
+    }
+    if (clean.includes('بدن') || clean.includes('رياضة') || clean.includes('بدنية')) {
+        return { key: 'sport', ...KNOWN_SPECS['sport'] };
+    }
+    
+    for (let k in KNOWN_SPECS) {
+        if (k === 'sport' || k === 'others') continue;
+        if (KNOWN_SPECS[k].keywords && KNOWN_SPECS[k].keywords.some(kw => clean.includes(kw))) {
+            return { key: k, ...KNOWN_SPECS[k] };
+        }
+    }
+    
+    // 4. تخصص جديد تماماً لم يسبق برمجته: إنشاء مفتاح آمن له
+    let safeKey = clean.replace(/[^a-zA-Z0-9_\u0621-\u064A]/g, '_');
+    return { key: safeKey, name: rawMaty.trim(), icon: 'fa-book' };
+}
+
+// دالة تحليل وتحديد الرتبة / الطور ديناميكياً
+function resolveLevel(rawGrade) {
+    if (!rawGrade) return { key: 'primary', name: 'الطور الابتدائي', icon: 'fa-child-reaching' };
+    const clean = rawGrade.trim().toLowerCase();
+    
+    for (let k in KNOWN_LEVELS) {
+        if (KNOWN_LEVELS[k].keywords.some(kw => clean.includes(kw))) {
+            return { key: k, ...KNOWN_LEVELS[k] };
+        }
+    }
+    
+    let safeKey = clean.replace(/[^a-zA-Z0-9_\u0621-\u064A]/g, '_');
+    return { key: safeKey, name: rawGrade.trim(), icon: 'fa-graduation-cap' };
+}
+
+// دوال مساعدة للقراءة الديناميكية من SITE_SETTINGS
+function getIconsLevels() {
+    let result = {};
+    const levels = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels) || {};
+    const levelIcons = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levelIcons) || {};
+    for (let key in DEFAULT_ICONS.levels) {
+        result[key] = { name: levels[key] || DEFAULT_ICONS.levels[key].name, icon: (levelIcons[key] && levelIcons[key].icon) || DEFAULT_ICONS.levels[key].icon };
+    }
+    for (let key in levels) {
+        if (!result[key]) {
+            result[key] = { name: levels[key], icon: (levelIcons[key] && levelIcons[key].icon) || 'fa-layer-group' };
+        }
+    }
+    return result;
+}
+
+function getIconsSpecs() {
+    let result = {};
+    const specs = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) || {};
+    const specIcons = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specIcons) || {};
+    for (let key in DEFAULT_ICONS.specs) {
+        result[key] = { name: specs[key] || DEFAULT_ICONS.specs[key].name, icon: (specIcons[key] && specIcons[key].icon) || DEFAULT_ICONS.specs[key].icon };
+    }
+    for (let key in specs) {
+        if (!result[key]) {
+            // فحص إذا كان اسماً معروفاً
+            const res = resolveSpecialization(specs[key]);
+            result[key] = { name: specs[key], icon: (specIcons[key] && specIcons[key].icon) || res.icon || 'fa-book' };
+        }
+    }
+    return result;
+}
 
 // جلب الإعدادات وبناء الأزرار
 function initSiteSettings() {
@@ -134,7 +249,7 @@ function renderCenters() {
     }
 }
 
-function openCenter(centerId) {
+async function openCenter(centerId) {
   const selectedCenterName = SITE_SETTINGS.UI_NAMES.centers[centerId];
   
   if (userEmpId !== "ADMIN_ACCESS" && selectedCenterName !== inspectorCenter) {
@@ -168,11 +283,76 @@ function openCenter(centerId) {
       return;
   }
 
+  // إشعار تحميل سريع أثناء فحص رتب وتخصصات المركز من قاعدة البيانات
+  Swal.fire({
+      title: 'جاري فحص المركز...',
+      html: '<div style="font-size:14px; color:#64748b; margin-top:8px;">مزامنة الرتب والتخصصات من قاعدة بيانات المتكونين...</div>',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => { Swal.showLoading(); }
+  });
+
+  // مزامنة ديناميكية للأطوار والتخصصات الخاصة بالمركز من مجموعة employeescomnew
+  let newSyncNeeded = false;
+  if (!SITE_SETTINGS.dbLinks[centerId]) SITE_SETTINGS.dbLinks[centerId] = {};
+
+  try {
+      const snap = await db.collection("employeescomnew").where("center", "==", selectedCenterName).get();
+      if (!snap.empty) {
+          snap.forEach(doc => {
+              const tr = doc.data();
+              const rawGrade = tr.grade || tr.rank || "";
+              const rawMaty = tr.maty || tr.specialty || "";
+              
+              if (rawGrade || rawMaty) {
+                  const lvl = resolveLevel(rawGrade);
+                  const spc = resolveSpecialization(rawMaty);
+                  
+                  if (!SITE_SETTINGS.dbLinks[centerId][lvl.key]) {
+                      SITE_SETTINGS.dbLinks[centerId][lvl.key] = {};
+                      newSyncNeeded = true;
+                  }
+                  
+                  if (!SITE_SETTINGS.dbLinks[centerId][lvl.key][spc.key]) {
+                      SITE_SETTINGS.dbLinks[centerId][lvl.key][spc.key] = { videos: [] };
+                      for (let mod in (SITE_SETTINGS.MODULE_CYCLE_STATUS || {})) {
+                          SITE_SETTINGS.dbLinks[centerId][lvl.key][spc.key][mod] = { 1: "", 2: "", 3: "" };
+                      }
+                      newSyncNeeded = true;
+                  }
+                  
+                  // ضمان وجود الأسماء في UI_NAMES
+                  if (!SITE_SETTINGS.UI_NAMES.levels[lvl.key]) {
+                      SITE_SETTINGS.UI_NAMES.levels[lvl.key] = lvl.name;
+                      newSyncNeeded = true;
+                  }
+                  if (!SITE_SETTINGS.UI_NAMES.specs[spc.key]) {
+                      SITE_SETTINGS.UI_NAMES.specs[spc.key] = spc.name;
+                      newSyncNeeded = true;
+                  }
+              }
+          });
+          
+          if (newSyncNeeded) {
+              // حفظ التحديث في الخلفية
+              db.collection("site_settings").doc("main").update({
+                  [`dbLinks.${centerId}`]: SITE_SETTINGS.dbLinks[centerId],
+                  "UI_NAMES.levels": SITE_SETTINGS.UI_NAMES.levels,
+                  "UI_NAMES.specs": SITE_SETTINGS.UI_NAMES.specs
+              }).catch(e => console.warn("تحديث تلقائي لهيكلة المركز:", e));
+          }
+      }
+  } catch (err) {
+      console.warn("خطأ فحص قاعدة بيانات المتكونين للمركز:", err);
+  }
+
+  Swal.close();
+
   const centerLinks = SITE_SETTINGS.dbLinks[centerId] || {};
   const availableLevels = Object.keys(centerLinks);
 
   if (availableLevels.length === 0) {
-      Swal.fire('تنبيه', 'لا توجد أطوار مبرمجة في هذا المركز حالياً. يرجى إضافتها من إعدادات المديرية.', 'info');
+      Swal.fire('تنبيه', 'لا توجد أطوار مبرمجة في هذا المركز حالياً. يرجى إضافتها من إعدادات المديرية أو تسجيل متكونين في المركز.', 'info');
       return;
   }
 
@@ -187,13 +367,9 @@ function showLevelsModal(centerId, availableLevels) {
     let html = '<div class="icon-container">';
     
     availableLevels.forEach(lvlId => {
-        let defaultIcon = 'fa-layer-group';
-        let defaultName = lvlId;
-        
-        if (ICONS.levels[lvlId]) {
-            defaultIcon = ICONS.levels[lvlId].icon;
-            defaultName = ICONS.levels[lvlId].name;
-        }
+        const allLevels = getIconsLevels();
+        let defaultIcon = allLevels[lvlId] ? allLevels[lvlId].icon : 'fa-layer-group';
+        let defaultName = allLevels[lvlId] ? allLevels[lvlId].name : lvlId;
         
         let levelName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels && SITE_SETTINGS.UI_NAMES.levels[lvlId]) 
                         ? SITE_SETTINGS.UI_NAMES.levels[lvlId] 
@@ -227,12 +403,14 @@ function showSpecsModal(centerId, lvlId, showBackButton) {
         return;
     }
 
-    const levelName = SITE_SETTINGS.UI_NAMES.levels[lvlId] || (ICONS.levels[lvlId] ? ICONS.levels[lvlId].name : lvlId);
+    const allLevels = getIconsLevels();
+    const levelName = allLevels[lvlId] ? allLevels[lvlId].name : lvlId;
 
     let html = '<div class="icon-container">';
     
     availableSpecs.forEach(spcId => {
-        let spcInfo = ICONS.specs[spcId] || { name: spcId, icon: 'fa-book' };
+        const allSpecs = getIconsSpecs();
+        let spcInfo = allSpecs[spcId] || { name: spcId, icon: 'fa-book' };
         html += `
           <div class="icon-btn" onclick="openLink('${centerId}', '${lvlId}', '${spcId}')">
             <i class="fa-solid ${spcInfo.icon}"></i>
