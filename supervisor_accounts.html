@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة حسابات الأساتذة المؤطرين - فضاء التكوين</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  
+  <style>
+    * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+    body { 
+      margin: 0; 
+      background: linear-gradient(135deg, #f0f4f8, #d9e2ec); 
+      color: #102a43; 
+      min-height: 100vh; 
+      display: flex; 
+      flex-direction: column; 
+    }
+    
+    /* الشريط العلوي */
+    .top-nav { 
+      background: linear-gradient(135deg, #102a43, #243b53); 
+      color: white; 
+      padding: 15px 30px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
+    }
+    .top-nav h2 { 
+      margin: 0; 
+      font-size: 20px; 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+    }
+    .top-nav h2 span { 
+      font-size: 14px; 
+      background: #e67e22; 
+      color: #fff;
+      padding: 4px 14px; 
+      border-radius: 20px; 
+      font-weight: 800;
+    }
+    
+    .nav-btn { 
+      color: white; 
+      border: none; 
+      padding: 8px 18px; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-weight: bold; 
+      transition: 0.3s; 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      font-family: 'Cairo';
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .btn-back { background: #e67e22; } 
+    .btn-back:hover { background: #d35400; transform: translateY(-1px); }
+
+    .dashboard-container { 
+      padding: 20px; 
+      flex: 1; 
+      max-width: 100%; 
+      margin: 0 auto; 
+      width: 100%; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 18px;
+    }
+
+    /* شريط الإحصائيات */
+    .stats-container { 
+      background: white; 
+      padding: 16px; 
+      border-radius: 16px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+      display: flex; 
+      gap: 12px; 
+      flex-wrap: wrap; 
+      justify-content: center; 
+    }
+    .stat-box { 
+      padding: 12px 22px; 
+      border-radius: 12px; 
+      font-weight: bold; 
+      font-size: 14px; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      min-width: 150px; 
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      color: white;
+    }
+    .stat-box span { font-size: 24px; font-weight: 900; margin-top: 4px; }
+    .stat-total { background: #102a43; }
+    .stat-active { background: #0FBA50; }
+    .stat-disabled { background: #d90429; }
+    .stat-pending { background: #64748b; }
+
+    /* الفلاتر والبحث */
+    .filters-bar { 
+      background: white; 
+      padding: 18px; 
+      border-radius: 16px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+      display: flex; 
+      gap: 15px; 
+      flex-wrap: wrap; 
+      align-items: center; 
+    }
+    .filters-bar input, .filters-bar select { 
+      padding: 10px 15px; 
+      border: 1.5px solid #cbd5e1; 
+      border-radius: 10px; 
+      font-family: 'Cairo'; 
+      outline: none; 
+      font-weight: bold; 
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    .filters-bar input:focus, .filters-bar select:focus { 
+      border-color: #1E68E8; 
+    }
+
+    /* الجدول */
+    .table-container { 
+      flex: 1; 
+      overflow-x: auto; 
+      background: white; 
+      padding: 20px; 
+      border-radius: 16px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+    }
+    .accounts-table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      min-width: 1250px; 
+    }
+    .accounts-table th { 
+      background: #102a43; 
+      color: white; 
+      padding: 14px 12px; 
+      text-align: center; 
+      position: sticky; 
+      top: 0; 
+      z-index: 10; 
+      font-size: 13.5px;
+    }
+    .accounts-table td { 
+      padding: 12px 10px; 
+      text-align: center; 
+      border-bottom: 1px solid #e2e8f0; 
+      font-size: 13px; 
+      vertical-align: middle; 
+    }
+    .accounts-table tbody tr:hover { 
+      background: #f8fafc; 
+    }
+
+    /* بطاقات الصور والملف الشخصي */
+    .profile-pic-container { 
+      width: 44px; 
+      height: 44px; 
+      border-radius: 50%; 
+      overflow: hidden; 
+      border: 2px solid #1E68E8; 
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+      background-color: #f1f5f9; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      margin: 0 auto; 
+      transition: transform 0.2s; 
+    }
+    .profile-pic-container:hover { transform: scale(1.1); }
+    .profile-pic-img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-pic-placeholder { font-size: 20px; color: #94a3b8; }
+
+    /* شارات الحالة */
+    .status-badge { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 6px; 
+      padding: 5px 12px; 
+      border-radius: 20px; 
+      font-size: 12px; 
+      font-weight: 800; 
+    }
+    .status-active { 
+      background: #dcfce7; 
+      color: #15803d; 
+      border: 1px solid #86efac; 
+    }
+    .status-disabled { 
+      background: #fee2e2; 
+      color: #b91c1c; 
+      border: 1px solid #fca5a5; 
+    }
+    .status-pending { 
+      background: #f1f5f9; 
+      color: #64748b; 
+      border: 1px solid #cbd5e1; 
+    }
+
+    /* الشارات البيانية (تخصص، مقياس، أفواج) */
+    .tag-item {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      margin: 2px;
+      border: 1px solid #bae6fd;
+    }
+    .tag-spec {
+      background: #fef3c7;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+    .tag-grp {
+      background: #ede9fe;
+      color: #5b21b6;
+      border-color: #ddd6fe;
+    }
+    .tag-rank {
+      background: #ecfdf5;
+      color: #065f46;
+      border-color: #a7f3d0;
+    }
+
+    /* الأزرار والإجراءات */
+    .btn-act { 
+      color: white; 
+      border: none; 
+      padding: 6px 12px; 
+      border-radius: 7px; 
+      cursor: pointer; 
+      font-weight: bold; 
+      font-family: 'Cairo'; 
+      transition: 0.2s; 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 5px; 
+      font-size: 12px;
+    }
+    .btn-act:hover { transform: translateY(-1px); filter: brightness(0.95); }
+    .btn-approve { background: #0FBA50; }
+    .btn-disable { background: #e67e22; }
+    .btn-enable { background: #2563eb; }
+    .btn-delete { background: #dc2626; }
+
+    /* شاشة التحميل */
+    #loader { 
+      display: flex; 
+      position: fixed; 
+      top:0; left:0; 
+      width:100%; height:100%; 
+      background:rgba(255,255,255,0.95); 
+      z-index:9999; 
+      justify-content:center; 
+      align-items:center; 
+      flex-direction:column; 
+    }
+    .spinner { 
+      border: 5px solid #f3f3f3; 
+      border-top: 5px solid #1E68E8; 
+      border-radius: 50%; 
+      width: 48px; height: 48px; 
+      animation: spin 0.8s linear infinite; 
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- شاشة التحميل -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h3 style="color: #102a43; margin-top: 15px; font-weight: 800;">جاري تحميل حسابات الأساتذة المؤطرين...</h3>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <div class="top-nav">
+    <h2>
+      <i class="fa-solid fa-user-shield"></i> 
+      إدارة حسابات الأساتذة المؤطرين 
+      <span id="headerCenterName">...</span>
+    </h2>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button class="nav-btn btn-back" onclick="window.location.href=(window.location.protocol==='file:'?'framers_management.html':'/framers')">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> رجوع لإدارة المؤطرين
+      </button>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    
+    <!-- إحصائيات الحسابات -->
+    <div class="stats-container">
+      <div class="stat-box stat-total">إجمالي الأساتذة المؤطرين<span id="st-total">0</span></div>
+      <div class="stat-box stat-active">الحسابات المعتمدة (النشطة)<span id="st-active">0</span></div>
+      <div class="stat-box stat-disabled">الحسابات المعطلة<span id="st-disabled">0</span></div>
+      <div class="stat-box stat-pending">غير معتمدة (بدون حساب)<span id="st-pending">0</span></div>
+    </div>
+
+    <!-- شريط الفلاتر والبحث -->
+    <div class="filters-bar">
+      <div style="flex: 1; min-width: 250px; position: relative;">
+        <i class="fa-solid fa-search" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+        <input type="text" id="searchInput" placeholder="بحث بالاسم، الرقم الوظيفي، التخصص، مكان العمل..." oninput="filterAccountsTable()" style="width: 100%; padding-right: 40px; margin: 0;">
+      </div>
+      
+      <select id="statusFilter" onchange="filterAccountsTable()" style="min-width: 170px;">
+        <option value="الكل">كل حالات الحسابات</option>
+        <option value="active">معتمد ونشط فقط</option>
+        <option value="disabled">معطل فقط</option>
+        <option value="pending">غير معتمد فقط</option>
+      </select>
+
+      <select id="specFilter" onchange="filterAccountsTable()" style="min-width: 170px;">
+        <option value="الكل">كل التخصصات</option>
+      </select>
+
+      <button class="nav-btn" style="background:#102a43;" onclick="refreshData()" title="تحديث البيانات">
+        <i class="fa-solid fa-rotate"></i> تحديث
+      </button>
+    </div>
+
+    <!-- جدول الحسابات -->
+    <div class="table-container">
+      <table class="accounts-table">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th style="width: 130px;">الصورة والرقم</th>
+            <th style="width: 14%;">الاسم واللقب</th>
+            <th style="width: 12%;">الرتبة</th>
+            <th style="width: 15%;">مكان العمل</th>
+            <th style="width: 16%;">التخصصات والمقاييس</th>
+            <th style="width: 13%;">الأفواج والرتب المشرف عليها</th>
+            <th style="width: 110px;">حالة الحساب</th>
+            <th style="width: 160px;">إجراءات الحساب</th>
+          </tr>
+        </thead>
+        <tbody id="accountsTableBody">
+          <!-- يتم تعبئة البيانات عبر JavaScript -->
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="js/sys-shield-v2.js" defer></script>
+  <script src="js/supervisor_accounts.js" defer></script>
+</body>
+</html>

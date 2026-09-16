@@ -26,11 +26,11 @@ function validateNumber(input) {
 async function checkEmployee() {
   const empId = document.getElementById("empId").value.trim();
 
-  if (empId.length < 16) {
+  if (!empId || empId.length < 5) {
     Swal.fire({ 
       icon: 'warning', 
       title: 'تنبيه', 
-      text: 'رقم التعريف الوظيفي يجب أن يتكون من 16 رقمًا',
+      text: 'يرجى إدخال رقم التعريف الوظيفي بشكل صحيح',
       confirmButtonText: 'حسناً'
     });
     return;
@@ -39,6 +39,68 @@ async function checkEmployee() {
   Swal.fire({ title: 'جاري التحقق...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
   try {
+    // 1. الفحص الفوري في قاعدة بيانات حسابات الأساتذة المؤطرين
+    const supQuery = await db.collection("supervisor_accounts").where("empId", "==", empId).get();
+    if (!supQuery.empty) {
+      let activeDocs = [];
+      let disabledDocs = [];
+      supQuery.forEach(doc => {
+        let d = doc.data();
+        if (d.status === "disabled") disabledDocs.push(d);
+        else activeDocs.push(d);
+      });
+
+      if (activeDocs.length === 0 && disabledDocs.length > 0) {
+        Swal.close();
+        Swal.fire({
+          icon: "warning",
+          title: "الحساب معطل",
+          text: "عذراً أستاذنا الفاضل، لقد تم تعطيل حسابكم من طرف إدارة المركز. يرجى مراجعة إدارة المركز.",
+          confirmButtonText: "حسناً"
+        });
+        return;
+      }
+
+      // اعتماد الجلسة للأستاذ المؤطر
+      const firstActive = activeDocs[0];
+      const supervisorName = firstActive.name || "الأستاذ المؤطر";
+
+      if (window.SecurityGuard) {
+        SecurityGuard.createSession(empId, "SUPERVISOR", supervisorName, { isSupervisor: "true" });
+      } else {
+        sessionStorage.setItem("userEmpId", empId);
+        sessionStorage.setItem("userName", supervisorName);
+        sessionStorage.setItem("userRole", "SUPERVISOR");
+        sessionStorage.setItem("isLoggedIn", "true");
+      }
+
+      Swal.close();
+      Swal.fire({
+        icon: 'success',
+        title: 'مرحباً بك أستاذنا الفاضل',
+        html: `<b>${supervisorName}</b><br>جاري الدخول إلى فضاء الأساتذة المؤطرين...`,
+        timer: 1500,
+        timerProgressBar: true,
+        showConfirmButton: false,
+        willClose: () => {
+          window.location.href = (window.location.protocol === "file:") ? "supervisor_portal.html" : "/supervisor-portal";
+        }
+      });
+      return;
+    }
+
+    // 2. إذا لم يكن أستاذاً مؤطراً، يتم التحقق كأستاذ متربص (المتكونين)
+    if (empId.length < 16) {
+      Swal.close();
+      Swal.fire({ 
+        icon: 'warning', 
+        title: 'تنبيه', 
+        text: 'رقم التعريف الوظيفي للأستاذ المتربص يجب أن يتكون من 16 رقمًا',
+        confirmButtonText: 'حسناً'
+      });
+      return;
+    }
+
     const docRef = db.collection("employeescomnew").doc(empId);
     const docSnap = await docRef.get();
 

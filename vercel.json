@@ -55,6 +55,14 @@
     {
       "source": "/notifications",
       "destination": "/notifications_hub.html"
+    },
+    {
+      "source": "/supervisor-accounts",
+      "destination": "/supervisor_accounts.html"
+    },
+    {
+      "source": "/supervisor-portal",
+      "destination": "/supervisor_portal.html"
     }
   ],
   "headers": [
