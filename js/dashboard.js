@@ -354,17 +354,18 @@ function showCompletionForm() {
                 <input type="text" id="setup-adrs" class="swal2-input" value="${prevAdrs}" style="margin: 5px 0 15px 0; width: 100%; height: 40px; font-size:14px; font-family: 'Cairo', sans-serif; text-align: center;" placeholder="أدخل العنوان الشخصي">
 
                 <label style="font-weight:bold; color:#333; font-size:13px;">رقم الهاتف (موبيليس، جيزي، أوريدو): <span style="color:red">*</span></label>
-                <input type="text" id="setup-phone" class="swal2-input" value="${prevPhone}" style="margin: 5px 0 15px 0; width: 100%; height: 40px; text-align:center; direction:ltr; font-size:15px; letter-spacing:1px; font-family: 'Cairo', sans-serif;" placeholder="0X XX XX XX XX" oninput="liveFormatPhone(this)">
+                <input type="text" id="setup-phone" class="swal2-input" value="${prevPhone}" style="margin: 5px 0 5px 0; width: 100%; height: 40px; text-align:center; direction:ltr; font-size:15px; letter-spacing:1px; font-family: 'Cairo', sans-serif;" placeholder="0X XX XX XX XX" oninput="liveFormatPhone(this); window.checkPhoneAvailability(this)" onblur="window.checkPhoneAvailability(this)">
+                <div id="phone-feedback" style="font-size:12px; font-weight:bold; margin-bottom:10px; min-height:18px; text-align:center;"></div>
             </div>
         `,
         allowOutsideClick: false, allowEscapeKey: false, showCancelButton: false,
         confirmButtonText: 'تأكيد وحفظ البيانات', confirmButtonColor: '#0FBA50',
-        preConfirm: () => {
+        preConfirm: async () => {
             const pob = document.getElementById('setup-pob').value.trim();
             const daira = document.getElementById('setup-daira').value;
             const adrs = document.getElementById('setup-adrs').value.trim();
             const phoneRaw = document.getElementById('setup-phone').value.trim();
-            const phoneClean = phoneRaw.replace(/\s/g, ''); 
+            const phoneClean = phoneRaw.replace(/\D/g, ''); 
 
             if(!pob || !daira || !adrs || !phoneClean) {
                 Swal.showValidationMessage('الرجاء ملء جميع الحقول الإجبارية أولاً.'); return false;
@@ -380,7 +381,49 @@ function showCompletionForm() {
                 Swal.showValidationMessage('رقم الهاتف غير صحيح! يجب أن يتكون من 10 أرقام ويبدأ بـ (05، 06، 07).'); return false;
             }
 
-            return { pob: pob, daira: daira, adrs: adrs, phone: phoneRaw, infoCompleted: true };
+            // فحص منع الأرقام الوهمية أو المتكررة
+            const last8 = phoneClean.substring(2);
+            if (/^(\d)\1{7}$/.test(last8) || last8 === '12345678' || last8 === '87654321' || last8 === '01234567') {
+                Swal.showValidationMessage('رقم الهاتف المدخل غير صالح (أرقام وهمية أو متكررة)! يرجى إدخال رقم هاتفك الشخصي الحقيقي.');
+                return false;
+            }
+
+            const phoneFormatted = formatPhoneString(phoneClean);
+
+            // 🔍 فحص منع تكرار رقم الهاتف لأكثر من متكون في قاعدة البيانات
+            try {
+                const variants = Array.from(new Set([
+                    phoneClean,
+                    phoneFormatted,
+                    phoneRaw,
+                    "+213" + phoneClean.substring(1),
+                    "00213" + phoneClean.substring(1)
+                ])).filter(Boolean);
+
+                const existingSnap = await db.collection("employeescomnew")
+                    .where("phone", "in", variants)
+                    .get();
+
+                let isDuplicate = false;
+                const currentEmpId = String(loggedInUser.id || loggedInUser.empId || userDocId || "").trim();
+
+                existingSnap.forEach(doc => {
+                    const d = doc.data();
+                    const docEmpId = String(d.id || d.empId || doc.id || "").trim();
+                    if (doc.id !== userDocId && docEmpId !== currentEmpId) {
+                        isDuplicate = true;
+                    }
+                });
+
+                if (isDuplicate) {
+                    Swal.showValidationMessage('عذراً، رقم الهاتف هذا مسجل بالفعل لمتكون آخر! يجب على كل متكون إدخال رقم هاتفه الشخصي الخاص.');
+                    return false;
+                }
+            } catch (err) {
+                console.warn("فحص التكرار في Firestore:", err);
+            }
+
+            return { pob: pob, daira: daira, adrs: adrs, phone: phoneFormatted, infoCompleted: true };
         }
     }).then(async (result) => {
         if (result.isConfirmed) {
@@ -396,6 +439,63 @@ function showCompletionForm() {
         }
     });
 }
+
+// دالة فحص توفر رقم الهاتف لحظياً عند الإدخال وتنبيه المتكون فورياً
+window.checkPhoneAvailability = async function(input) {
+    const feedback = document.getElementById("phone-feedback");
+    if (!feedback) return;
+    const phoneClean = (input.value || "").replace(/\D/g, "");
+    if (phoneClean.length < 10) {
+        feedback.innerHTML = "";
+        return;
+    }
+    const phoneRegex = /^(05|06|07)[0-9]{8}$/;
+    if (!phoneRegex.test(phoneClean)) {
+        feedback.innerHTML = `<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> يجب أن يتكون الرقم من 10 أرقام ويبدأ بـ (05 أو 06 أو 07)</span>`;
+        return;
+    }
+
+    const last8 = phoneClean.substring(2);
+    if (/^(\d)\1{7}$/.test(last8) || last8 === '12345678' || last8 === '87654321' || last8 === '01234567') {
+        feedback.innerHTML = `<span style="color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i> رقم غير صالح (أرقام وهمية أو متكررة)</span>`;
+        return;
+    }
+
+    feedback.innerHTML = `<span style="color:#64748b;"><i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق من توفر الرقم...</span>`;
+
+    try {
+        const variants = Array.from(new Set([
+            phoneClean,
+            formatPhoneString(phoneClean),
+            input.value.trim(),
+            "+213" + phoneClean.substring(1),
+            "00213" + phoneClean.substring(1)
+        ])).filter(Boolean);
+
+        const snap = await db.collection("employeescomnew")
+            .where("phone", "in", variants)
+            .get();
+
+        let isDuplicate = false;
+        const currentEmpId = String(loggedInUser.id || loggedInUser.empId || userDocId || "").trim();
+
+        snap.forEach(doc => {
+            const d = doc.data();
+            const docEmpId = String(d.id || d.empId || doc.id || "").trim();
+            if (doc.id !== userDocId && docEmpId !== currentEmpId) {
+                isDuplicate = true;
+            }
+        });
+
+        if (isDuplicate) {
+            feedback.innerHTML = `<span style="color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i> عذراً، هذا الرقم مسجل لمتكون آخر!</span>`;
+        } else {
+            feedback.innerHTML = `<span style="color:#16a34a;"><i class="fa-solid fa-circle-check"></i> رقم الهاتف متاح وخاص بك</span>`;
+        }
+    } catch(e) {
+        feedback.innerHTML = "";
+    }
+};
 
 function liveFormatPhone(input) {
     let val = input.value.replace(/\D/g, ''); 

@@ -85,6 +85,167 @@ let currentSelectedSpec = "";
 let currentFolderId = null;
 let currentModalFiles = [];
 
+// ذاكرة تخزين مؤقت لبيانات رتب وتخصصات المتكونين حسب المراكز
+let centerDataCache = {};
+
+// دوال مساعدة للمطابقة الذكية للنصوص العربية
+function normalizeArabic(str) {
+    if (!str) return "";
+    return String(str).replace(/\u00A0/g, ' ')
+              .replace(/[إأآا]/g, 'ا')
+              .replace(/ة/g, 'ه')
+              .replace(/ى/g, 'ي')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
+}
+
+function ranksMatch(rankA, rankB) {
+    if (!rankA || !rankB) return false;
+    const a = normalizeArabic(rankA);
+    const b = normalizeArabic(rankB);
+    if (a === b) return true;
+    if (a.includes("ابتدائي") && b.includes("ابتدائي")) return true;
+    if (a.includes("متوسط") && b.includes("متوسط")) return true;
+    if (a.includes("ثانوي") && b.includes("ثانوي")) return true;
+    return a.includes(b) || b.includes(a);
+}
+
+function specsMatch(specA, specB) {
+    if (!specA || !specB) return false;
+    const a = normalizeArabic(specA);
+    const b = normalizeArabic(specB);
+    if (a === b) return true;
+    const keywords = ['عرب', 'فرنس', 'انجليز', 'رياض', 'بدن', 'فيزياء', 'علوم', 'تاريخ', 'جغرافيا', 'فلسف', 'اسلام', 'المان', 'اسبان', 'اعلام', 'موسيق', 'رسم'];
+    for (let kw of keywords) {
+        if (a.includes(kw) && b.includes(kw)) return true;
+    }
+    return a.includes(b) || b.includes(a);
+}
+
+function getLevelKeyFromRank(rankStr) {
+    if (!rankStr) return null;
+    const str = rankStr.toLowerCase();
+    if (str.includes("ابتدائي")) return "primary";
+    if (str.includes("متوسط")) return "middle";
+    if (str.includes("ثانوي")) return "secondary";
+    
+    if (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.levels) {
+        for (let lKey in SITE_SETTINGS.UI_NAMES.levels) {
+            const lName = SITE_SETTINGS.UI_NAMES.levels[lKey].toLowerCase();
+            const kw = lName.replace(/الطور|\s/g, '').trim();
+            if (kw && str.includes(kw)) return lKey;
+        }
+    }
+    return null;
+}
+
+function findCenterKey(centerName) {
+    if (!SITE_SETTINGS || !SITE_SETTINGS.dbLinks || !centerName) return null;
+    if (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
+        for (let k in SITE_SETTINGS.UI_NAMES.centers) {
+            if (SITE_SETTINGS.UI_NAMES.centers[k] && SITE_SETTINGS.UI_NAMES.centers[k].trim() === centerName.trim()) {
+                return k;
+            }
+        }
+    }
+    if (SITE_SETTINGS.dbLinks[centerName]) return centerName;
+    for (let k in SITE_SETTINGS.UI_NAMES?.centers || {}) {
+        let name = SITE_SETTINGS.UI_NAMES.centers[k];
+        if (name && (name.includes(centerName) || centerName.includes(name))) {
+            return k;
+        }
+    }
+    return null;
+}
+
+// تحميل وتخزين بيانات رتب وتخصصات المتكونين للمركز من employeescomnew
+async function ensureCenterDataLoaded(centerName) {
+    if (!centerName) return { rankToSpecs: {} };
+    const safeCenter = centerName.trim();
+    if (centerDataCache[safeCenter]) return centerDataCache[safeCenter];
+
+    try {
+        const snap = await db.collection("employeescomnew")
+            .where("center", "==", safeCenter)
+            .get();
+
+        let rankToSpecs = {};
+        snap.forEach(doc => {
+            const d = doc.data();
+            const r = (d.grade || d.rank || "").trim();
+            const s = (d.maty || d.specialty || "").trim().replace(/\u00A0/g, ' ');
+            if (r) {
+                if (!rankToSpecs[r]) rankToSpecs[r] = new Set();
+                if (s && s !== '-') rankToSpecs[r].add(s);
+            }
+        });
+
+        centerDataCache[safeCenter] = { rankToSpecs };
+        return centerDataCache[safeCenter];
+    } catch(err) {
+        console.warn("تعذر جلب بيانات المتكونين للمركز:", err);
+        centerDataCache[safeCenter] = { rankToSpecs: {} };
+        return centerDataCache[safeCenter];
+    }
+}
+
+// دالة ذكية لتصفية تخصصات الأستاذ بناءً على الرتبة المحددة
+function getFilteredSpecsForRank(centerDoc, selectedRank) {
+    if (!centerDoc) return [];
+
+    let teacherSpecs = centerDoc.specs || centerDoc.framingSpecs || [];
+    teacherSpecs = Array.from(new Set(teacherSpecs.map(s => (s || '').trim()).filter(s => s && s !== '-')));
+
+    if (teacherSpecs.length === 0) {
+        return ["جميع التخصصات"];
+    }
+
+    if (!selectedRank) return teacherSpecs;
+
+    const centerName = (centerDoc.center || "").trim();
+    let validRankSpecsSet = new Set();
+
+    // 1. من قاعدة بيانات المتكونين employeescomnew المحملة للمركز
+    if (centerDataCache[centerName] && centerDataCache[centerName].rankToSpecs) {
+        const cMap = centerDataCache[centerName].rankToSpecs;
+        for (let r in cMap) {
+            if (ranksMatch(r, selectedRank)) {
+                cMap[r].forEach(sp => validRankSpecsSet.add(sp));
+            }
+        }
+    }
+
+    // 2. من بنية مجلدات وروابط SITE_SETTINGS.dbLinks
+    if (SITE_SETTINGS && SITE_SETTINGS.dbLinks) {
+        const cId = findCenterKey(centerName);
+        const lvlKey = getLevelKeyFromRank(selectedRank);
+        if (cId && lvlKey && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvlKey]) {
+            const specKeysObj = SITE_SETTINGS.dbLinks[cId][lvlKey];
+            for (let spKey in specKeysObj) {
+                let spName = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[spKey]) || spKey;
+                if (spName) validRankSpecsSet.add(spName.trim());
+            }
+        }
+    }
+
+    // تصفية تخصصات الأستاذ المسندة بما يتوافق مع هذه الرتبة
+    if (validRankSpecsSet.size > 0) {
+        const validList = Array.from(validRankSpecsSet);
+        const matchedSpecs = teacherSpecs.filter(ts => {
+            return validList.some(vs => specsMatch(ts, vs));
+        });
+
+        if (matchedSpecs.length > 0) {
+            return matchedSpecs;
+        }
+    }
+
+    // احتياطي آمن: إذا لم نجد تطابقاً (مثلاً مركز جديد أو بيانات لم تكتمل)، نعرض تخصصات الأستاذ
+    return teacherSpecs;
+}
+
+
 // تشغيل النظام عند تحميل الصفحة
 window.onload = async function() {
     const loader = document.getElementById("loader");
@@ -143,11 +304,41 @@ window.onload = async function() {
                 const cName = (data.center || "").trim();
                 const fData = framersByCenter[cName] || {};
 
-                // دمج الحقول من الجدولين لضمان أعلى دقة
-                let specs = (data.specs && data.specs.length > 0) ? data.specs : (data.framingSpecs || fData.framingSpecs || fData.specs || []);
-                let modules = (data.modules && data.modules.length > 0) ? data.modules : (data.framingModules || fData.framingModules || fData.modules || []);
-                let groups = (data.groups && data.groups.length > 0) ? data.groups : (data.framingGroups || fData.framingGroups || fData.groups || []);
-                let supervisedRanks = (data.supervisedRanks && data.supervisedRanks.length > 0) ? data.supervisedRanks : (data.framingRanks || fData.framingRanks || fData.supervisedRanks || (data.rank ? [data.rank] : []));
+                // دمج الرتب المسندة من جدول المؤطرين المعتمدين بالمركز وجدول الحسابات
+                let ranksSet = new Set();
+                (fData.framingRanks || []).forEach(r => r && r.trim() && r !== '-' && ranksSet.add(r.trim()));
+                (fData.supervisedRanks || []).forEach(r => r && r.trim() && r !== '-' && ranksSet.add(r.trim()));
+                (data.supervisedRanks || []).forEach(r => r && r.trim() && r !== '-' && ranksSet.add(r.trim()));
+                (data.framingRanks || []).forEach(r => r && r.trim() && r !== '-' && ranksSet.add(r.trim()));
+                if (ranksSet.size === 0) {
+                    if (fData.rank && fData.rank !== '-') ranksSet.add(fData.rank.trim());
+                    else if (data.rank && data.rank !== '-') ranksSet.add(data.rank.trim());
+                }
+                let supervisedRanks = Array.from(ranksSet);
+
+                // دمج التخصصات المسندة
+                let specsSet = new Set();
+                (fData.framingSpecs || []).forEach(s => s && s.trim() && s !== '-' && specsSet.add(s.trim()));
+                (fData.specs || []).forEach(s => s && s.trim() && s !== '-' && specsSet.add(s.trim()));
+                (data.specs || []).forEach(s => s && s.trim() && s !== '-' && specsSet.add(s.trim()));
+                (data.framingSpecs || []).forEach(s => s && s.trim() && s !== '-' && specsSet.add(s.trim()));
+                let specs = Array.from(specsSet);
+
+                // دمج الأفواج المسندة
+                let groupsSet = new Set();
+                (fData.framingGroups || []).forEach(g => g && g.trim() && groupsSet.add(g.trim()));
+                (fData.groups || []).forEach(g => g && g.trim() && groupsSet.add(g.trim()));
+                (data.groups || []).forEach(g => g && g.trim() && groupsSet.add(g.trim()));
+                (data.framingGroups || []).forEach(g => g && g.trim() && groupsSet.add(g.trim()));
+                let groups = Array.from(groupsSet);
+
+                // دمج المقاييس المسندة
+                let modulesSet = new Set();
+                (fData.framingModules || []).forEach(m => m && m.trim() && modulesSet.add(m.trim()));
+                (fData.modules || []).forEach(m => m && m.trim() && modulesSet.add(m.trim()));
+                (data.modules || []).forEach(m => m && m.trim() && modulesSet.add(m.trim()));
+                (data.framingModules || []).forEach(m => m && m.trim() && modulesSet.add(m.trim()));
+                let modules = Array.from(modulesSet);
 
                 let s1 = (typeof data.s1 !== 'undefined') ? !!data.s1 : ((typeof fData.s1 !== 'undefined') ? !!fData.s1 : true);
                 let s2 = (typeof data.s2 !== 'undefined') ? !!data.s2 : ((typeof fData.s2 !== 'undefined') ? !!fData.s2 : false);
@@ -164,6 +355,48 @@ window.onload = async function() {
                 });
             }
         });
+
+        // إضافة أي مراكز مسندة في center_framers لم تُعتمد بعد في supervisor_accounts
+        for (let cName in framersByCenter) {
+            const fData = framersByCenter[cName];
+            const alreadyInList = activeList.some(a => (a.center || "").trim() === cName);
+            if (!alreadyInList && (fData.role === "أستاذ مؤطر" || fData.role === "أستاذ(ة) مكون(ة)" || (fData.framingSpecs && fData.framingSpecs.length > 0) || (fData.specs && fData.specs.length > 0))) {
+                let ranksSet = new Set();
+                (fData.framingRanks || []).forEach(r => r && r.trim() && r !== '-' && ranksSet.add(r.trim()));
+                (fData.supervisedRanks || []).forEach(r => r && r.trim() && r !== '-' && ranksSet.add(r.trim()));
+                if (ranksSet.size === 0 && fData.rank && fData.rank !== '-') ranksSet.add(fData.rank.trim());
+
+                let specsSet = new Set();
+                (fData.framingSpecs || []).forEach(s => s && s.trim() && s !== '-' && specsSet.add(s.trim()));
+                (fData.specs || []).forEach(s => s && s.trim() && s !== '-' && specsSet.add(s.trim()));
+
+                let groupsSet = new Set();
+                (fData.framingGroups || []).forEach(g => g && g.trim() && groupsSet.add(g.trim()));
+                (fData.groups || []).forEach(g => g && g.trim() && groupsSet.add(g.trim()));
+
+                let modulesSet = new Set();
+                (fData.framingModules || []).forEach(m => m && m.trim() && modulesSet.add(m.trim()));
+                (fData.modules || []).forEach(m => m && m.trim() && modulesSet.add(m.trim()));
+
+                activeList.push({
+                    docId: `framer_${fData.empId}_${encodeURIComponent(cName)}`,
+                    empId: fData.empId,
+                    name: fData.name,
+                    rank: fData.rank,
+                    workplace: fData.workplace,
+                    phone: fData.phone,
+                    center: cName,
+                    status: "active",
+                    specs: Array.from(specsSet),
+                    modules: Array.from(modulesSet),
+                    groups: Array.from(groupsSet),
+                    supervisedRanks: Array.from(ranksSet),
+                    s1: (typeof fData.s1 !== 'undefined') ? !!fData.s1 : true,
+                    s2: (typeof fData.s2 !== 'undefined') ? !!fData.s2 : false,
+                    s3: (typeof fData.s3 !== 'undefined') ? !!fData.s3 : false
+                });
+            }
+        }
 
         if (activeList.length === 0) {
             Swal.fire({
@@ -194,19 +427,138 @@ window.onload = async function() {
     }
 };
 
+const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0iiQtC1oB9mAkaNJ3b1r0pUsWpQgPznW4k5mItoMxlPjROd9wpev6rUjBw/exec";
+
+function extractCoreId(val) {
+    if (!val) return "";
+    let str = String(val).trim().toUpperCase();
+    let digitsOnly = str.replace(/\D/g, "");
+    let core = digitsOnly.replace(/^0+/, ""); 
+    return core === "" ? digitsOnly : core;
+}
+
+let framersBaseDataCache = {};
+async function fetchEmployeeBaseData(empId) {
+    if (!empId) return null;
+    let safeId = String(empId).trim();
+    if (framersBaseDataCache[safeId]) return framersBaseDataCache[safeId];
+
+    try {
+        let snapPlus = await db.collection("employeescomplus").doc(safeId).get();
+        if (snapPlus.exists) {
+            framersBaseDataCache[safeId] = snapPlus.data();
+            return snapPlus.data();
+        }
+        let snapNew = await db.collection("employeescomnew").doc(safeId).get();
+        if (snapNew.exists) {
+            framersBaseDataCache[safeId] = snapNew.data();
+            return snapNew.data();
+        }
+    } catch(e) {
+        console.warn("خطأ في جلب بيانات الموظف الأساسية:", e);
+    }
+    return null;
+}
+
+// دالة جلب وعرض الصورة الشخصية للأستاذ المؤطر بالاعتماد على الكاش المحلي ثم سيرفر الصور
+async function fetchSupervisorPhoto(empId) {
+    const coreId = extractCoreId(empId);
+    const img = document.getElementById("supAvatar");
+    const placeholder = document.getElementById("supPlaceholder");
+    if (!img || !placeholder) return;
+
+    // 1. الكاش المحلي المخصص للمستخدم للظهور الفوري في 0 جزء من الثانية
+    const localCached = localStorage.getItem("user_avatar_" + coreId);
+    if (localCached) {
+        img.src = localCached;
+        img.style.display = "block";
+        placeholder.style.display = "none";
+    }
+
+    // 2. كاش خريطة صور الموظفين إن وجدت
+    try {
+        const mapCache = JSON.parse(localStorage.getItem("employeePhotosMap_cache") || "{}");
+        if (mapCache && mapCache[coreId]) {
+            img.src = mapCache[coreId];
+            img.style.display = "block";
+            placeholder.style.display = "none";
+        }
+    } catch(e) {}
+
+    // 3. فحص Firebase في employeescomplus أو employeescomnew
+    try {
+        const base = await fetchEmployeeBaseData(empId);
+        if (base && (base.photoUrl_fb || base.photoUrl)) {
+            const photo = base.photoUrl_fb || base.photoUrl;
+            img.src = photo;
+            img.style.display = "block";
+            placeholder.style.display = "none";
+            try { localStorage.setItem("user_avatar_" + coreId, photo); } catch(e){}
+            return;
+        }
+    } catch(e) {}
+
+    // 4. جلب الصورة من Google Drive عبر السكريبت المركزي
+    try {
+        const cacheBusterUrl = `${PHOTO_SCRIPT_URL}?type=employees&_t=${Date.now()}`;
+        let res = await fetch(cacheBusterUrl, { cache: "no-store" });
+        let text = await res.text();
+        if (text && text.includes("[")) {
+            let photoData = JSON.parse(text);
+            let userPhotoObj = photoData.find(item => extractCoreId(item.jobId) === coreId);
+            if (userPhotoObj && userPhotoObj.photoUrl) {
+                let directUrl = userPhotoObj.photoUrl;
+                const match = directUrl.match(/id=([a-zA-Z0-9_-]+)/) || directUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                let finalUrl = directUrl;
+                let thumbUrl = directUrl;
+                if (match) {
+                    finalUrl = `https://lh3.googleusercontent.com/d/${match[1]}=s800`;
+                    thumbUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+                }
+                try { localStorage.setItem("user_avatar_" + coreId, finalUrl); } catch(e){}
+
+                img.onerror = function() {
+                    if (this.src !== thumbUrl) {
+                        this.src = thumbUrl;
+                    } else {
+                        this.style.display = "none";
+                        placeholder.style.display = "block";
+                    }
+                };
+                img.src = finalUrl;
+                img.style.display = "block";
+                placeholder.style.display = "none";
+            }
+        }
+    } catch(e) {
+        console.warn("تعذر جلب صورة الأستاذ من السيرفر:", e);
+    }
+}
+
 function setupProfileHeader(supData) {
+    const empId = supData.empId || userEmpId;
     document.getElementById("supName").innerText = supData.name || "أستاذ مؤطر";
-    document.getElementById("supEmpId").innerText = supData.empId || userEmpId;
+    document.getElementById("supEmpId").innerText = empId;
     document.getElementById("supRank").innerText = supData.rank || "أستاذ مؤطر";
     document.getElementById("supWorkplace").innerText = supData.workplace || "مديرية التربية لولاية توقرت";
 
-    // جلب الصورة الشخصية إن وجدت
-    if (supData.photoUrl) {
-        const img = document.getElementById("supAvatar");
-        img.src = supData.photoUrl;
-        img.style.display = "block";
-        document.getElementById("supPlaceholder").style.display = "none";
-    }
+    // إكمال البيانات الناقصة إن وجدت من القاعدة
+    fetchEmployeeBaseData(empId).then(base => {
+        if (base) {
+            if (base.name && (!supData.name || supData.name === "أستاذ مؤطر")) {
+                document.getElementById("supName").innerText = base.name;
+            }
+            if (base.place || base.workplace) {
+                document.getElementById("supWorkplace").innerText = base.place || base.workplace;
+            }
+            if ((!supData.rank || supData.rank === "أستاذ مؤطر" || supData.rank === "-") && (base.grade || base.rank)) {
+                document.getElementById("supRank").innerText = base.grade || base.rank;
+            }
+        }
+    });
+
+    // جلب وعرض الصورة الشخصية فورياً
+    fetchSupervisorPhoto(empId);
 }
 
 // رسم قائمة المراكز المكلف بها الأستاذ
@@ -238,7 +590,7 @@ function renderCentersGrid() {
 }
 
 // عند النقر على أي مركز: فتح نافذة اختيار الرتبة والتخصص
-window.selectCenter = function(docId) {
+window.selectCenter = async function(docId) {
     const found = supervisorAccounts.find(x => x.docId === docId);
     if (!found) return;
 
@@ -249,6 +601,9 @@ window.selectCenter = function(docId) {
     const activeCard = document.getElementById(`card_${docId}`);
     if (activeCard) activeCard.classList.add("active");
 
+    // تحميل وتخزين بيانات رتب وتخصصات المركز للتصفية الفورية
+    await ensureCenterDataLoaded(found.center);
+
     // فتح نافذة اختيار الرتبة والتخصص
     openRankSpecModal();
 };
@@ -257,20 +612,21 @@ window.selectCenter = function(docId) {
 window.openRankSpecModal = function() {
     if (!currentActiveCenterDoc) return;
 
-    let ranks = currentActiveCenterDoc.supervisedRanks || currentActiveCenterDoc.framingRanks || [];
+    let rawRanks = currentActiveCenterDoc.supervisedRanks || currentActiveCenterDoc.framingRanks || [];
+    let ranks = Array.from(new Set(rawRanks.map(r => (r || '').trim()).filter(r => r && r !== '-')));
     if (ranks.length === 0 && currentActiveCenterDoc.rank && currentActiveCenterDoc.rank !== '-') {
-        ranks = [currentActiveCenterDoc.rank];
+        ranks = [currentActiveCenterDoc.rank.trim()];
     }
     if (ranks.length === 0) ranks = ["التعليم العام"];
 
-    let specs = currentActiveCenterDoc.specs || currentActiveCenterDoc.framingSpecs || [];
-    if (specs.length === 0) specs = ["جميع التخصصات"];
-
     let defaultRank = (currentSelectedRank && ranks.includes(currentSelectedRank)) ? currentSelectedRank : ranks[0];
-    let defaultSpec = (currentSelectedSpec && specs.includes(currentSelectedSpec)) ? currentSelectedSpec : specs[0];
+
+    // جلب التخصصات المتاحة للرتبة الافتراضية
+    let initialSpecs = getFilteredSpecsForRank(currentActiveCenterDoc, defaultRank);
+    let defaultSpec = (currentSelectedSpec && initialSpecs.includes(currentSelectedSpec)) ? currentSelectedSpec : initialSpecs[0];
 
     let ranksOptions = ranks.map(r => `<option value="${r}" ${r === defaultRank ? 'selected' : ''}>${r}</option>`).join('');
-    let specsOptions = specs.map(s => `<option value="${s}" ${s === defaultSpec ? 'selected' : ''}>${s}</option>`).join('');
+    let specsOptions = initialSpecs.map(s => `<option value="${s}" ${s === defaultSpec ? 'selected' : ''}>${s}</option>`).join('');
 
     Swal.fire({
         title: '<div style="font-size:19px; font-weight:900; color:#102a43;"><i class="fa-solid fa-graduation-cap" style="color:#1E68E8; margin-left:8px;"></i> تحديد الرتبة والتخصص للتأطير</div>',
@@ -285,7 +641,7 @@ window.openRankSpecModal = function() {
                     <label style="display:block; font-size:13px; font-weight:800; color:#334155; margin-bottom:6px;">
                         <i class="fa-solid fa-user-graduate" style="color:#1E68E8;"></i> اختر الرتبة المسندة لك:
                     </label>
-                    <select id="modalSelRank" style="width:100%; padding:10px 14px; border:2px solid #cbd5e1; border-radius:10px; font-family:'Cairo'; font-size:14px; font-weight:700; outline:none; background:#fff;">
+                    <select id="modalSelRank" style="width:100%; padding:10px 14px; border:2px solid #cbd5e1; border-radius:10px; font-family:'Cairo'; font-size:14px; font-weight:700; outline:none; background:#fff;" onchange="window.updateModalSpecsForRank()">
                         ${ranksOptions}
                     </select>
                 </div>
@@ -311,6 +667,33 @@ window.openRankSpecModal = function() {
         confirmButtonText: '<i class="fa-solid fa-check"></i> تأكيد واستعراض المقاييس',
         cancelButtonText: 'إلغاء',
         didOpen: () => {
+            // دالة تحديث قائمة التخصصات فور تغيير الرتبة
+            window.updateModalSpecsForRank = () => {
+                const rankEl = document.getElementById("modalSelRank");
+                const specEl = document.getElementById("modalSelSpec");
+                if (!rankEl || !specEl || !currentActiveCenterDoc) return;
+
+                const selectedRank = rankEl.value;
+                const currentSpecVal = specEl.value;
+
+                const availableSpecs = getFilteredSpecsForRank(currentActiveCenterDoc, selectedRank);
+
+                let html = "";
+                availableSpecs.forEach(s => {
+                    let isSelected = (s === currentSpecVal || (s === currentSelectedSpec && availableSpecs.includes(currentSelectedSpec)));
+                    html += `<option value="${s}" ${isSelected ? 'selected' : ''}>${s}</option>`;
+                });
+
+                specEl.innerHTML = html;
+
+                if (!specEl.value && availableSpecs.length > 0) {
+                    specEl.value = availableSpecs[0];
+                }
+
+                window.updateModalGroupsPreview();
+            };
+
+            // دالة معاينة الأفواج
             window.updateModalGroupsPreview = () => {
                 const specVal = document.getElementById("modalSelSpec") ? document.getElementById("modalSelSpec").value : "";
                 const previewBox = document.getElementById("modalGroupsPreviewBox");
@@ -326,7 +709,9 @@ window.openRankSpecModal = function() {
                     previewBox.innerHTML = `<b><i class="fa-solid fa-users" style="color:#0FBA50;"></i> الأفواج المسندة:</b> <span style="color:#0f172a; font-weight:800;">جميع أفواج المركز</span>`;
                 }
             };
-            window.updateModalGroupsPreview();
+
+            // تشغيل التحديث لضبط التخصصات والأفواج الأولية
+            window.updateModalSpecsForRank();
         },
         preConfirm: () => {
             const r = document.getElementById("modalSelRank").value;
@@ -535,17 +920,50 @@ function resolveDriveFolder(module, cycle) {
 
     // 3. كشف التخصص من التخصص المحدد
     let specToUse = currentSelectedSpec || (currentActiveCenterDoc.specs && currentActiveCenterDoc.specs[0]) || "";
-    let spc = 'others';
-    if (specToUse.includes('عرب')) spc = 'arabic';
-    else if (specToUse.includes('فرنس')) spc = 'french';
-    else if (specToUse.includes('إنجليز') || specToUse.includes('انجليز')) spc = 'english';
-    else if (specToUse.includes('رياض') || specToUse.includes('بدني')) spc = 'sport';
-    else {
-        spc = Object.keys(SITE_SETTINGS.dbLinks[cId][lvl] || {})[0] || 'others';
+    let spc = null;
+
+    // البحث أولاً في UI_NAMES.specs عن المفتاح المطابق للتخصص المحدد
+    if (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs) {
+        for (let k in SITE_SETTINGS.UI_NAMES.specs) {
+            let sName = SITE_SETTINGS.UI_NAMES.specs[k];
+            if (specsMatch(specToUse, sName)) {
+                if (SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl] && SITE_SETTINGS.dbLinks[cId][lvl][k]) {
+                    spc = k;
+                    break;
+                } else if (!spc) {
+                    spc = k;
+                }
+            }
+        }
+    }
+
+    // فحص المفاتيح المباشرة في dbLinks[cId][lvl]
+    if (!spc && SITE_SETTINGS.dbLinks[cId] && SITE_SETTINGS.dbLinks[cId][lvl]) {
+        for (let k in SITE_SETTINGS.dbLinks[cId][lvl]) {
+            if (specsMatch(specToUse, k)) {
+                spc = k;
+                break;
+            }
+        }
+    }
+
+    if (!spc) {
+        if (specToUse.includes('عرب')) spc = 'arabic';
+        else if (specToUse.includes('فرنس')) spc = 'french';
+        else if (specToUse.includes('إنجليز') || specToUse.includes('انجليز')) spc = 'english';
+        else if (specToUse.includes('بدن') || specToUse.includes('رياض')) spc = 'sport';
+        else if (specToUse.includes('المان')) spc = 'اللغة_الألمانية';
+        else if (specToUse.includes('اسبان')) spc = 'اللغة_الإسبانية';
+        else if (specToUse.includes('حساب') || (specToUse.includes('رياضيات') && !specToUse.includes('بدن'))) spc = 'math';
+        else spc = 'others';
     }
 
     if (SITE_SETTINGS.dbLinks[cId][lvl] && !SITE_SETTINGS.dbLinks[cId][lvl][spc]) {
-        spc = Object.keys(SITE_SETTINGS.dbLinks[cId][lvl])[0] || 'others';
+        let matchedKey = Object.keys(SITE_SETTINGS.dbLinks[cId][lvl]).find(k => {
+            let n = (SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.specs && SITE_SETTINGS.UI_NAMES.specs[k]) || k;
+            return specsMatch(specToUse, n) || specsMatch(specToUse, k);
+        });
+        spc = matchedKey || Object.keys(SITE_SETTINGS.dbLinks[cId][lvl])[0] || 'others';
     }
 
     // 4. ترجمة اسم المقياس إلى المفتاح الإنجليزي المستخدم في dbLinks
