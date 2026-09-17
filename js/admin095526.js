@@ -81,6 +81,39 @@ async function checkAccessCode() {
       if (configSnap.exists) {
           const configData = configSnap.data();
           const adminPassword = configData['admin_panel_of']; 
+          const directorPassword = configData['director'] || configData['director_code'] || 'MO@TR#55';
+
+          if (inputVal === 'MO@TR#55' || inputVal === directorPassword) {
+              const directorEmail = "director_touggourt@system.local";
+              try {
+                  await firebase.auth().signInWithEmailAndPassword(directorEmail, inputVal);
+              } catch(e) {
+                  if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+                      try { await firebase.auth().createUserWithEmailAndPassword(directorEmail, inputVal); } catch(err){}
+                  }
+              }
+
+              sessionStorage.removeItem("admin_page_active");
+              if (window.SecurityGuard) {
+                  SecurityGuard.createSession("DIRECTOR_ACCESS", "DIRECTOR", "السيد مدير التربية", { isDirector: "true" });
+              } else {
+                  sessionStorage.setItem("userEmpId", "DIRECTOR_ACCESS");
+                  sessionStorage.setItem("userName", "السيد مدير التربية");
+                  sessionStorage.setItem("userRole", "DIRECTOR");
+                  sessionStorage.setItem("isLoggedIn", "true");
+              }
+
+              Swal.fire({
+                  icon: 'success',
+                  title: 'مرحباً بكم سيدي مدير التربية',
+                  text: 'جاري فتح لوحة القيادة الاستراتيجية والديوان...',
+                  timer: 1600,
+                  showConfirmButton: false
+              }).then(() => {
+                  window.location.href = (window.location.protocol === "file:") ? "director_dashboard.html" : "/director";
+              });
+              return;
+          }
           
           if (inputVal === adminPassword) {
               const adminEmail = "admin_directorate@system.local";

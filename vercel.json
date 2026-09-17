@@ -63,6 +63,14 @@
     {
       "source": "/supervisor-portal",
       "destination": "/supervisor_portal.html"
+    },
+    {
+      "source": "/director",
+      "destination": "/director_dashboard.html"
+    },
+    {
+      "source": "/director-portal",
+      "destination": "/director_dashboard.html"
     }
   ],
   "headers": [

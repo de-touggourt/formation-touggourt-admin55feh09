@@ -19,12 +19,133 @@ const REGEX_PATTERNS = {
 };
 
 function validateNumber(input) {
+  // السماح بإدخال كود مدير التربية أو الرموز الخاصة بالإدارة دون حذفها
+  const v = input.value.trim();
+  if (v.startsWith("M") || v.startsWith("m") || v.includes("@") || v.includes("#")) {
+    if (input.value.length > 20) input.value = input.value.slice(0, 20);
+    return;
+  }
   input.value = input.value.replace(REGEX_PATTERNS.nonDigit, '');
   if (input.value.length > 16) input.value = input.value.slice(0, 16);
 }
 
+// دالة مصادقة جلسة السيد مدير التربية والتوجيه للوحة القيادة
+function authenticateDirectorSession() {
+  Swal.fire({
+    title: 'فضاء السيد مدير التربية',
+    html: `
+      <div style="text-align:center; padding:12px;">
+        <div style="font-size:46px; color:#f59e0b; margin-bottom:12px; filter: drop-shadow(0 4px 10px rgba(245,158,11,0.3));">
+          <i class="fa-solid fa-crown"></i>
+        </div>
+        <h3 style="color:#085d28; margin:0 0 10px 0; font-weight:900; font-size:20px;">مرحباً بكم سيدي مدير التربية المحترم</h3>
+        <p style="color:#334155; font-size:14px; margin:0; line-height:1.6;">
+          مديرية التربية لولاية توقرت<br>
+          <span style="color:#0284c7; font-weight:700;">جاري فتح الديوان ولوحة القيادة الاستراتيجية الشاملة...</span>
+        </p>
+      </div>
+    `,
+    timer: 2000,
+    timerProgressBar: true,
+    showConfirmButton: false,
+    allowOutsideClick: false,
+    willClose: () => {
+      if (window.SecurityGuard) {
+        SecurityGuard.createSession("DIRECTOR_ACCESS", "DIRECTOR", "السيد مدير التربية", { isDirector: "true" });
+      } else {
+        sessionStorage.setItem("userEmpId", "DIRECTOR_ACCESS");
+        sessionStorage.setItem("userName", "السيد مدير التربية");
+        sessionStorage.setItem("userRole", "DIRECTOR");
+        sessionStorage.setItem("isLoggedIn", "true");
+      }
+      window.location.href = (window.location.protocol === "file:") ? "director_dashboard.html" : "/director";
+    }
+  });
+}
+
+// نافذة الدخول المباشر للسيد مدير التربية
+window.openDirectorLoginModal = async function() {
+  const { value: code } = await Swal.fire({
+    title: '👑 فضاء السيد مدير التربية',
+    html: `
+      <div style="text-align:center; margin-bottom:15px;">
+        <p style="color:#475569; font-size:13.5px; margin:0; font-weight:600;">الجمهورية الجزائرية الديمقراطية الشعبية - وزارة التربية الوطنية</p>
+        <p style="color:#085d28; font-size:14px; margin:4px 0 0 0; font-weight:800;">مديرية التربية لولاية توقرت - الولوج السيادي للديوان</p>
+      </div>
+    `,
+    input: 'password',
+    inputPlaceholder: 'أدخل الكود السري الخاص بالسيد مدير التربية...',
+    showCancelButton: true,
+    confirmButtonText: '<i class="fa-solid fa-right-to-bracket"></i> دخول للديوان',
+    cancelButtonText: 'إلغاء',
+    confirmButtonColor: '#085d28',
+    cancelButtonColor: '#64748b',
+    inputAttributes: {
+      autocapitalize: 'off',
+      autocorrect: 'off'
+    }
+  });
+
+  if (code) {
+    Swal.fire({ title: 'جاري المصادقة والتحقق السيادي...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+      let isMatch = (code.trim() === "MO@TR#55");
+      if (!isMatch) {
+        const passDoc = await db.collection("config").doc("pass").get();
+        if (passDoc.exists) {
+          const d = passDoc.data();
+          if (d.director === code.trim() || d.director_code === code.trim()) {
+            isMatch = true;
+          }
+        }
+      }
+
+      if (isMatch) {
+        authenticateDirectorSession();
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: '❌ كود غير صحيح',
+          text: 'الرمز السري المدخل غير مطابق لكود فضاء السيد مدير التربية.',
+          confirmButtonText: 'حسناً',
+          confirmButtonColor: '#085d28'
+        });
+      }
+    } catch(err) {
+      console.error(err);
+      if (code.trim() === "MO@TR#55") {
+        authenticateDirectorSession();
+      } else {
+        Swal.fire('خطأ', 'حدث خطأ أثناء فحص الصلاحية في قاعدة البيانات', 'error');
+      }
+    }
+  }
+};
+
 async function checkEmployee() {
   const empId = document.getElementById("empId").value.trim();
+
+  // فحص ما إذا كان المدخل كود مدير التربية
+  if (empId === "MO@TR#55") {
+    authenticateDirectorSession();
+    return;
+  }
+
+  // فحص الكود من قاعدة البيانات إذا كان يشتمل على حروف أو رموز
+  if (empId.length >= 5 && (empId.includes("@") || empId.includes("#") || empId.startsWith("M") || empId.startsWith("m"))) {
+    try {
+      const passDoc = await db.collection("config").doc("pass").get();
+      if (passDoc.exists) {
+        const d = passDoc.data();
+        if (d.director === empId || d.director_code === empId) {
+          authenticateDirectorSession();
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Check director pass:", e);
+    }
+  }
 
   if (!empId || empId.length < 5) {
     Swal.fire({ 
@@ -345,6 +466,11 @@ async function promptSecretAdminPassword() {
             if (docSnap.exists) {
                 const data = docSnap.data();
                 const correctPassword = data['admin panel'];
+
+                if (password === "MO@TR#55" || password === data.director || password === data.director_code) {
+                    authenticateDirectorSession();
+                    return;
+                }
 
                 if (password === correctPassword) {
                     // 🌟 إنشاء تصريح مرور مؤقت صالح لـ 30 ثانية فقط 🌟

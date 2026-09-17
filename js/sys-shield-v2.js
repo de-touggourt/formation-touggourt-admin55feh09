@@ -87,7 +87,7 @@
 
         // إذا كانت الجلسة صحيحة ولكن التوقيع بحاجة لتحديث (مثل تدوير الشاشة أو تغيير المسار)
         if (!sig || !issued || sig !== expectedSig) {
-          if (empId === "ADMIN_ACCESS" || role === "ADMIN" || role === "INSPECTOR" || role === "USER") {
+          if (empId === "ADMIN_ACCESS" || empId === "DIRECTOR_ACCESS" || role === "DIRECTOR" || role === "ADMIN" || role === "INSPECTOR" || role === "USER" || role === "SUPERVISOR") {
             // إعادة توقيع تلقائية آمنة لمنع التذبذب أو الخروج العشوائي
             this.createSession(empId, role, name);
           } else {
@@ -99,11 +99,15 @@
         // التحقق من الرتبة / الصلاحية المطلوبة
         if (requiredRole) {
           const req = String(requiredRole).toUpperCase();
-          if (req === "ADMIN" && role !== "ADMIN" && empId !== "ADMIN_ACCESS") {
+          if (req === "DIRECTOR" && role !== "DIRECTOR" && role !== "ADMIN" && empId !== "DIRECTOR_ACCESS") {
+            this.destroyAndRedirect("هذا القسم مخصص للسيد مدير التربية فقط");
+            return false;
+          }
+          if (req === "ADMIN" && role !== "ADMIN" && role !== "DIRECTOR" && empId !== "ADMIN_ACCESS" && empId !== "DIRECTOR_ACCESS") {
             this.destroyAndRedirect("صلاحيات غير كافية للوصول لهذا القسم");
             return false;
           }
-          if (req === "INSPECTOR" && role !== "INSPECTOR" && role !== "ADMIN" && empId !== "ADMIN_ACCESS") {
+          if (req === "INSPECTOR" && role !== "INSPECTOR" && role !== "ADMIN" && role !== "DIRECTOR" && empId !== "ADMIN_ACCESS" && empId !== "DIRECTOR_ACCESS") {
             this.destroyAndRedirect("هذا القسم مخصص للمشرفين والمفتشين فقط");
             return false;
           }
