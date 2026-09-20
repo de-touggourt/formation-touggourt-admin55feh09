@@ -37,14 +37,141 @@
       min-height: 100vh; display: flex; flex-direction: column;
     }
 
-    /* الشريط العلوي */
+    /* =========================================
+       الشريط العلوي المطور وأزرار التحكم
+       ========================================= */
     .top-nav {
-      background: #0FBA50; color: white; padding: 15px 30px; display: flex;
-      justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      background: linear-gradient(135deg, #0d7a36 0%, #0FBA50 50%, #16a34a 100%);
+      color: white;
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 18px rgba(15, 186, 80, 0.25), 0 2px 6px rgba(0,0,0,0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      flex-wrap: wrap;
+      gap: 12px;
     }
-    .top-nav h2 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 10px; }
-    .logout-btn { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-    .logout-btn:hover { background: #c82333; }
+    .top-nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .top-nav-brand h2 {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #ffffff;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+      letter-spacing: 0.2px;
+    }
+    .brand-shield-icon {
+      font-size: 23px;
+      color: #ffffff;
+      cursor: pointer;
+      transition: transform 0.25s ease, filter 0.25s ease;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+    .brand-shield-icon:hover {
+      transform: scale(1.15) rotate(-5deg);
+      filter: drop-shadow(0 0 10px rgba(255,255,255,0.85));
+    }
+    .active-year-badge {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-weight: 800;
+      font-size: 12.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      white-space: nowrap;
+    }
+    .active-year-badge i {
+      color: #fef08a;
+      font-size: 13px;
+    }
+    .top-nav-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .top-nav-btn, .logout-btn {
+      height: 38px;
+      padding: 0 13px;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-weight: 700;
+      font-size: 12.5px;
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      white-space: nowrap;
+      text-decoration: none;
+      outline: none;
+      vertical-align: middle;
+    }
+    .top-nav-btn:hover, .logout-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+      filter: brightness(1.1);
+      border-color: rgba(255, 255, 255, 0.45);
+    }
+    .top-nav-btn:active, .logout-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+      filter: brightness(0.95);
+    }
+    .top-nav-btn i, .logout-btn i {
+      font-size: 13px;
+    }
+    /* الألوان المتناسقة للأزرار */
+    .btn-settings { background: linear-gradient(135deg, #1e293b, #334155); border-color: #64748b; }
+    .btn-center-admins { background: linear-gradient(135deg, #d97706, #f59e0b); }
+    .btn-centers-map { background: linear-gradient(135deg, #ea580c, #f97316); }
+    .btn-hourly-vol { background: linear-gradient(135deg, #7c3aed, #8b5cf6); }
+    .btn-framers { background: linear-gradient(135deg, #0891b2, #06b6d4); }
+    .btn-attendance { background: linear-gradient(135deg, #db2777, #ec4899); }
+    .btn-grades { background: linear-gradient(135deg, #059669, #10b981); }
+    .btn-files { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
+    .btn-comms { background: linear-gradient(135deg, #0284c7, #38bdf8); }
+    .btn-notifs { background: linear-gradient(135deg, #c2410c, #ea580c); }
+    .btn-logout { background: linear-gradient(135deg, #b91c1c, #dc2626); border-color: rgba(255, 255, 255, 0.3); }
+
+    /* شارة العدادات للمراسلات والإشعارات */
+    .nav-counter-badge {
+      background: #ef4444;
+      color: #ffffff;
+      padding: 1px 7px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 800;
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      line-height: 1.2;
+      display: inline-block;
+      margin-right: 2px;
+    }
 
     .dashboard-container { padding: 20px; flex: 1; max-width: 100%; margin: 0 auto; width: 100%; }
 
@@ -155,7 +282,10 @@
 
     @media (max-width: 900px) {
       .dashboard-container { padding: 10px; }
-      .top-nav { flex-direction: column; gap: 15px; padding: 15px 10px; text-align: center; }
+      .top-nav { flex-direction: column; gap: 12px; padding: 12px 10px; text-align: center; }
+      .top-nav-brand { justify-content: center; }
+      .top-nav-actions { justify-content: center; gap: 6px; }
+      .top-nav-btn, .logout-btn { height: 35px; padding: 0 10px; font-size: 12px; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
       .filters-section { flex-direction: column; gap: 10px; padding: 15px; }
       .filter-group { width: 100%; min-width: 100%; }
@@ -233,67 +363,87 @@
 
   <!-- الشريط العلوي -->
   <div class="top-nav">
-    <!-- 🌟 تم إضافة خاصية onclick للدرع ليعمل كزر خفي 🌟 -->
-<h2><i class="fa-solid fa-shield-halved" onclick="handleShieldClick()" style="cursor: default;"></i> لوحة تحكم المديرية</h2>
-    <!-- شارة السنة التكوينية النشطة -->
-    <div id="activeYearBadge" style="background: rgba(15, 186, 80, 0.15); color: #0FBA50; border: 1px solid #0FBA50; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;" title="السنة التكوينية النشطة المعتمدة في النظام">
-      <i class="fa-solid fa-calendar-check"></i> <span id="activeYearBadgeText">السنة التكوينية: جارِ التحميل...</span>
+    <!-- الجزء الأيمن: عنوان لوحة التحكم والدرع وشارة السنة التكوينية النشطة -->
+    <div class="top-nav-brand">
+      <h2>
+        <i class="fa-solid fa-shield-halved brand-shield-icon" onclick="handleShieldClick()" title="لوحة تحكم المديرية (انقر للخيارات الخاصة)"></i>
+        <span>لوحة تحكم المديرية</span>
+      </h2>
+      <div id="activeYearBadge" class="active-year-badge" title="السنة التكوينية النشطة المعتمدة في النظام">
+        <i class="fa-solid fa-calendar-check"></i>
+        <span id="activeYearBadgeText">السنة التكوينية: جارِ التحميل...</span>
+      </div>
     </div>
-    <!-- زر فضاء السيد مدير التربية السيادي -->
-    <a href="/director" class="logout-btn" style="background: linear-gradient(135deg, #065f46, #044232); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 800;">
-      <i class="fa-solid fa-crown" style="color: #fbbf24;"></i> فضاء السيد مدير التربية
-    </a>
 
-    <!-- 🌟 تم إعطاء الزر ID (btnSettings) وإخفاؤه بـ display: none; 🌟 -->
-	<button id="btnSettings" class="logout-btn" style="background: #34495e; color: white; display: none;" onclick="openSettingsManager()">
-      <i class="fa-solid fa-gears"></i> إعدادات الموقع
-    </button>
-	
+    <!-- الجزء الأيسر: أزرار التحكم والعمليات -->
+    <div class="top-nav-actions">
+      <!-- 🌟 تم إعطاء الزر ID (btnSettings) وإخفاؤه بـ display: none; 🌟 -->
+      <button id="btnSettings" class="top-nav-btn btn-settings" style="display: none;" onclick="openSettingsManager()" title="إعدادات الموقع المركزي">
+        <i class="fa-solid fa-gears"></i>
+        <span>إعدادات الموقع</span>
+      </button>
+
       <!-- زر حسابات رؤساء المراكز -->
-      <button class="logout-btn" style="background: #ff9800; color: white;" onclick="manageCenterAdmins()">
-        <i class="fa-solid fa-user-tie"></i> حسابات رؤساء المراكز
-      </button>
-	  
-      <!-- الزر الجديد: إدارة المواقع الجغرافية -->
-      <button class="logout-btn" style="background: #e67e22; color: white;" onclick="openCentersMapModal()">
-        <i class="fa-solid fa-map-location-dot"></i> الخريطة والمواقع الجغرافية
-      </button>
-	  
-	  <!-- زر الحجم الساعي المستقل -->
-       <button class="logout-btn" style="background: #8e44ad; color: white;" onclick="openHourlyVolumeModal()">
-         <i class="fa-solid fa-clock"></i> الحجم الساعي
-       </button>
-	  
-	  <button class="logout-btn" style="background: #17a2b8; color: white;" onclick="openAdminFramersModal()">
-        <i class="fa-solid fa-chalkboard-user"></i>   تسيير المؤطرين
-      </button>
-	  
-	  <!-- زر الإحصاء الشامل للحضور -->
-      <button class="logout-btn" style="background: #e91e63; color: white;" onclick="openAdminAttendanceStats()">
-        <i class="fa-solid fa-chart-pie"></i> متابعة وإحصاء الحضور
-      </button>
-	  
-	  <button class="logout-btn" style="background: #27ae60; color: white;" onclick="openAdminGradesTracking()">
-        <i class="fa-solid fa-graduation-cap"></i> متابعة النقاط والنتائج
-      </button>
-	  
-      <button class="logout-btn" style="background: #1E68E8;" onclick="window.location.href='/files-upload'">
-        <i class="fa-solid fa-folder-open"></i> إدارة الملفات
+      <button class="top-nav-btn btn-center-admins" onclick="manageCenterAdmins()" title="حسابات ومفتشي المراكز">
+        <i class="fa-solid fa-user-tie"></i>
+        <span>حسابات رؤساء المراكز</span>
       </button>
 
-      <!-- زر المراسلات وتبادل الملفات -->
-      <button class="logout-btn" style="background: #0284c7; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="window.location.href='/communications'">
-        <i class="fa-solid fa-envelope"></i> المراسلات والملفات
-        <span id="adminMsgBadge" style="display:none; background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:800;">0</span>
+      <!-- إدارة المواقع الجغرافية -->
+      <button class="top-nav-btn btn-centers-map" onclick="openCentersMapModal()" title="الخريطة والمواقع الجغرافية">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>الخريطة والمواقع الجغرافية</span>
       </button>
 
-      <!-- زر منظومة الإشعارات والتنبيهات -->
-      <button class="logout-btn" style="background: #ea580c; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="window.location.href='/notifications'">
-        <i class="fa-solid fa-bullhorn"></i> منظومة الإشعارات
-        <span id="adminNotifBadge" style="display:none; background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; font-weight:800;">0</span>
+      <!-- زر الحجم الساعي -->
+      <button class="top-nav-btn btn-hourly-vol" onclick="openHourlyVolumeModal()" title="الحجم الساعي المعتمد">
+        <i class="fa-solid fa-clock"></i>
+        <span>الحجم الساعي</span>
       </button>
 
-      <button class="logout-btn" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
+      <!-- تسيير المؤطرين -->
+      <button class="top-nav-btn btn-framers" onclick="openAdminFramersModal()" title="تسيير المؤطرين والتأطير">
+        <i class="fa-solid fa-chalkboard-user"></i>
+        <span>تسيير المؤطرين</span>
+      </button>
+
+      <!-- متابعة وإحصاء الحضور -->
+      <button class="top-nav-btn btn-attendance" onclick="openAdminAttendanceStats()" title="متابعة وإحصاء الحضور والغياب">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>متابعة وإحصاء الحضور</span>
+      </button>
+
+      <!-- متابعة النقاط والنتائج -->
+      <button class="top-nav-btn btn-grades" onclick="openAdminGradesTracking()" title="متابعة النقاط والنتائج والمداولات">
+        <i class="fa-solid fa-graduation-cap"></i>
+        <span>متابعة النقاط والنتائج</span>
+      </button>
+
+      <!-- إدارة الملفات -->
+      <button class="top-nav-btn btn-files" onclick="window.location.href='/files-upload'" title="إدارة ملفات المقاييس والتكوين">
+        <i class="fa-solid fa-folder-open"></i>
+        <span>إدارة الملفات</span>
+      </button>
+
+      <!-- المراسلات وتبادل الملفات -->
+      <button class="top-nav-btn btn-comms" onclick="window.location.href='/communications'" title="منظومة المراسلات والملفات">
+        <i class="fa-solid fa-envelope"></i>
+        <span>المراسلات والملفات</span>
+        <span id="adminMsgBadge" class="nav-counter-badge" style="display:none;">0</span>
+      </button>
+
+      <!-- منظومة الإشعارات والتنبيهات -->
+      <button class="top-nav-btn btn-notifs" onclick="window.location.href='/notifications'" title="منظومة الإشعارات والتنبيهات">
+        <i class="fa-solid fa-bullhorn"></i>
+        <span>منظومة الإشعارات</span>
+        <span id="adminNotifBadge" class="nav-counter-badge" style="display:none;">0</span>
+      </button>
+
+      <!-- تسجيل الخروج -->
+      <button class="top-nav-btn btn-logout" onclick="logout()" title="تسجيل الخروج">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        <span>تسجيل الخروج</span>
+      </button>
     </div>
   </div>
 

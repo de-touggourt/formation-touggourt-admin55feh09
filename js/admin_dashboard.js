@@ -4753,7 +4753,7 @@ window.promptForSettingsPassword = function() {
     }).then((result) => {
         if (result.isConfirmed) {
             // إظهار زر إعدادات الموقع
-            document.getElementById('btnSettings').style.display = 'inline-block';
+            document.getElementById('btnSettings').style.display = 'inline-flex';
             Swal.fire({
                 icon: 'success',
                 title: 'صلاحية مقبولة',
