@@ -81,12 +81,9 @@ function goBack() {
 
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
-let charIndex = 0;
 function typeWriter() {
-    if (charIndex < textToType.length) {
-        typeWriterElement.innerHTML += textToType.charAt(charIndex);
-        charIndex++;
-        setTimeout(typeWriter, 45); 
+    if (typeWriterElement) {
+        typeWriterElement.innerHTML = textToType;
     }
 }
 
@@ -364,13 +361,13 @@ function prefetchCycleFiles(module) {
         const folderId = getFolderId(url);
         if (folderId) {
             const cacheKey = `files_data_${folderId}`;
-            if (!localStorage.getItem(cacheKey) && !sessionStorage.getItem(cacheKey)) {
+            if (!sessionStorage.getItem(cacheKey) && !sessionStorage.getItem(cacheKey)) {
                 fetch(`${APPS_SCRIPT_URL}?action=list&folderId=${folderId}`)
                     .then(r => r.json())
                     .then(d => {
                         if (!d.error) {
                             const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
-                            localStorage.setItem(cacheKey, JSON.stringify(filesList));
+                            sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
                             sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
                             sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
                         }
@@ -528,8 +525,8 @@ function openFileManager(module, cycle) {
   }
 
   const cacheKey = `files_data_${folderId}`;
-  // 1. فحص الكاش الفوري (localStorage أولاً لفتح النافذة في 0 ثانية)
-  let cached = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
+  // 1. فحص الكاش الفوري (sessionStorage أولاً لفتح النافذة في 0 ثانية)
+  let cached = sessionStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
   if (cached) {
     try {
       const cachedFiles = JSON.parse(cached);
@@ -541,7 +538,7 @@ function openFileManager(module, cycle) {
         .then(d => {
           if (!d.error) {
             const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
-            localStorage.setItem(cacheKey, JSON.stringify(filesList));
+            sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
             sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
             sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
             
@@ -579,7 +576,7 @@ function openFileManager(module, cycle) {
         Swal.fire('خطأ', 'تأكد من رابط السكريبت وصلاحيات المجلد على Google Drive.', 'error');
     } else {
       const filesList = Array.isArray(data) ? data : (Array.isArray(data?.files) ? data.files : []);
-      localStorage.setItem(cacheKey, JSON.stringify(filesList));
+      sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
       sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
       sessionStorage.setItem(`files_count_${folderId}`, filesList.length);
       renderFileManager(folderId, filesList, module, cycle);
@@ -672,8 +669,8 @@ function deleteFile(fileId, folderId, module, cycle) {
             .then(res => res.json())
             .then(data => {
                 if(data.status === 'success') { 
-                    localStorage.removeItem(`files_data_${folderId}`);
-                    localStorage.removeItem(`files_count_${folderId}`);
+                    sessionStorage.removeItem(`files_data_${folderId}`);
+                    sessionStorage.removeItem(`files_count_${folderId}`);
                     sessionStorage.removeItem(`files_data_${folderId}`);
                     sessionStorage.removeItem(`files_count_${folderId}`);
                     Swal.fire({
@@ -722,8 +719,8 @@ function uploadFile(folderId, module, cycle) {
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') { 
-                localStorage.removeItem(`files_data_${folderId}`);
-                localStorage.removeItem(`files_count_${folderId}`);
+                sessionStorage.removeItem(`files_data_${folderId}`);
+                sessionStorage.removeItem(`files_count_${folderId}`);
                 sessionStorage.removeItem(`files_data_${folderId}`);
                 sessionStorage.removeItem(`files_count_${folderId}`);
                 Swal.fire({

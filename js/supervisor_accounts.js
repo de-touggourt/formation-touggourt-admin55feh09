@@ -27,7 +27,7 @@ let framersBaseDataCache = {};
 let employeePhotosMap = {};
 
 try {
-    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    const cachedPhotos = sessionStorage.getItem("employeePhotosMap_cache");
     if (cachedPhotos) employeePhotosMap = JSON.parse(cachedPhotos);
 } catch (e) {}
 

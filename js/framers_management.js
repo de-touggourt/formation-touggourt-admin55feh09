@@ -25,7 +25,7 @@ let currentUserRole = "";
 // 🌟 1. استرجاع صور المؤطرين فوراً من التخزين المحلي لتظهر في 0 ثانية عند التحديث F5 🌟
 let employeePhotosMap = {}; 
 try {
-    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    const cachedPhotos = sessionStorage.getItem("employeePhotosMap_cache");
     if (cachedPhotos) {
         employeePhotosMap = JSON.parse(cachedPhotos);
     }
@@ -318,7 +318,7 @@ async function initializeSystem() {
             // دمج الصور وتحديث الكاش المحلي
             employeePhotosMap = { ...employeePhotosMap, ...freshPhotosMap };
             try {
-                localStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
+                sessionStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
             } catch(err) {}
 
             // إعادة رسم الجداول بالصور الجديدة
@@ -3503,7 +3503,7 @@ function getDirectDriveUrl(url) {
 async function askForParticipationCertData() {
     let today = new Date();
     let defaultPrintDate = `${today.getFullYear()}/${("0"+(today.getMonth()+1)).slice(-2)}/${("0"+today.getDate()).slice(-2)}`;
-    let savedBgUrl = localStorage.getItem('cert_bg_image') || '';
+    let savedBgUrl = sessionStorage.getItem('cert_bg_image') || '';
 
     const { value: formValues } = await Swal.fire({
         title: '<i class="fa-solid fa-image" style="color:#1E68E8;"></i> إعداد شهادة المشاركة',
@@ -3556,7 +3556,7 @@ async function askForParticipationCertData() {
                 return false;
             }
             
-            localStorage.setItem('cert_bg_image', bgValue);
+            sessionStorage.setItem('cert_bg_image', bgValue);
 
             return { 
                 bgUrl: getDirectDriveUrl(bgValue), // استدعاء دالة التحويل هنا

@@ -30,7 +30,7 @@ const PHOTO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSe-P_rRLZ0ii
 // 🌟 1. استرجاع الصور فوراً من التخزين المحلي لتظهر في 0 ثانية عند أي تحديث F5 🌟
 let employeePhotosMap = {};
 try {
-    const cachedPhotos = localStorage.getItem("employeePhotosMap_cache");
+    const cachedPhotos = sessionStorage.getItem("employeePhotosMap_cache");
     if (cachedPhotos) {
         employeePhotosMap = JSON.parse(cachedPhotos);
     }
@@ -294,7 +294,7 @@ function fetchData() {
                 // دمج الصور وتحديث الكاش المحلي
                 employeePhotosMap = { ...employeePhotosMap, ...freshPhotosMap };
                 try {
-                    localStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
+                    sessionStorage.setItem("employeePhotosMap_cache", JSON.stringify(employeePhotosMap));
                 } catch(err) {}
 
                 // إعادة رسم الجدول بالصور الجديدة

@@ -87,7 +87,7 @@ function initClock() {
 
 // تبديل النمط النهاري / الليلي
 function initTheme() {
-  const saved = localStorage.getItem("director_theme");
+  const saved = sessionStorage.getItem("director_theme");
   if (saved === "dark") {
     document.body.classList.add("dark-mode");
     const icon = document.getElementById("themeIcon");
@@ -98,7 +98,7 @@ function initTheme() {
 window.toggleDarkMode = function() {
   document.body.classList.toggle("dark-mode");
   const isDark = document.body.classList.contains("dark-mode");
-  localStorage.setItem("director_theme", isDark ? "dark" : "light");
+  sessionStorage.setItem("director_theme", isDark ? "dark" : "light");
   const icon = document.getElementById("themeIcon");
   if (icon) {
     if (isDark) { icon.classList.remove("fa-moon"); icon.classList.add("fa-sun"); }

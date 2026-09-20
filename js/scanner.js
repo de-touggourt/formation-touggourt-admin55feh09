@@ -327,10 +327,10 @@ window.onload = async function() {
     currentToken = token;
 
     // 3. التحقق من بصمة الجهاز
-    myDeviceId = localStorage.getItem('scanner_device_id');
+    myDeviceId = sessionStorage.getItem('scanner_device_id');
     if (!myDeviceId) {
         myDeviceId = 'DEV_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-        localStorage.setItem('scanner_device_id', myDeviceId);
+        sessionStorage.setItem('scanner_device_id', myDeviceId);
     }
     myDeviceModel = getDeviceModelName();
 

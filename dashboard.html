@@ -44,12 +44,20 @@ body.swal2-shown { overflow-y: auto !important; padding-right: 0 !important; }
    2. شريط الأخبار العلوي
    ========================================= */
 .news-ticker-container {
-    background: #085d28; color: #fff; width: 100%; min-height: 40px;
-    display: flex; align-items: center; justify-content: center;
-    position: relative; z-index: 20; padding: 5px 15px; font-size: 14px; font-weight: 600;
+    background: #085d28; color: #fff; width: 100%; height: 35px;
+    display: flex; align-items: center;
+    position: relative; z-index: 20; font-size: 14px; font-weight: 600;
+    overflow: hidden; white-space: nowrap;
 }
-.typewriter-text { display: inline-block; transition: opacity 0.5s; }
-.typewriter-text.fade-out { opacity: 0; }
+.typewriter-text { 
+    display: inline-block; 
+    animation: marquee 25s linear infinite;
+    white-space: nowrap;
+}
+@keyframes marquee {
+    0% { transform: translateX(-100vw); }
+    100% { transform: translateX(100%); }
+}
 
 /* =========================================
    3. قسم الهيدر (Hero Section) - البطاقة المدمجة
@@ -275,11 +283,13 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 
 <!-- الهيدر الحديث (البطاقة المدمجة) -->
 <header class="hero-section">
-<div style="position: absolute; top: 20px; left: 20px; display: flex; gap: 12px; z-index: 30; align-items: center;">
+<div style="position: absolute; top: 20px; right: 20px; z-index: 30;">
     <button onclick="openTraineeNotifications()" class="btn-notif-header" id="btnTraineeNotif" title="الإشعارات والتنبيهات">
         <i class="fa-solid fa-bell"></i>
         <span class="badge-notif-count" id="traineeNotifCount" style="display:none;">0</span>
     </button>
+</div>
+<div style="position: absolute; top: 20px; left: 20px; z-index: 30;">
     <button onclick="logout()" class="btn-logout-header">
         <i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج
     </button>
@@ -324,5 +334,6 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
   <script src="js/dashboard.js" defer></script>
 
 
+<script src="js/fcm-init.js" defer></script>
 </body>
 </html>

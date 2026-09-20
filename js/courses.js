@@ -4,15 +4,9 @@
 const SHOW_DRIVE_BUTTON = false; 
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
-let charIndex = 0;
-
 function typeWriter() {
-    if (charIndex < textToType.length) {
-        typeWriterElement.innerHTML += textToType.charAt(charIndex);
-        charIndex++;
-        setTimeout(typeWriter, 45); 
-    } else {
-        setTimeout(startFadeOut, 3000); 
+    if (typeWriterElement) {
+        typeWriterElement.innerHTML = textToType;
     }
 }
 
@@ -143,7 +137,7 @@ window.onload = async function() {
         const avatarBox = document.getElementById('userAvatarContainer');
         const coreId = extractCoreId(empId);
         
-        const localCachedAvatar = localStorage.getItem("user_avatar_" + coreId);
+        const localCachedAvatar = sessionStorage.getItem("user_avatar_" + coreId);
         if (localCachedAvatar) {
             avatarBox.innerHTML = `<img src="${localCachedAvatar}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '')">`;
         }
@@ -154,7 +148,7 @@ window.onload = async function() {
             if (imgUrl.includes('=s200')) imgUrl = imgUrl.replace('=s200', '=s800');
             
             try {
-                localStorage.setItem("user_avatar_" + coreId, imgUrl);
+                sessionStorage.setItem("user_avatar_" + coreId, imgUrl);
             } catch(e) {}
 
             avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="fetchPhotosFromDrive('${coreId}', document.getElementById('userAvatarContainer'))">`;
@@ -357,7 +351,7 @@ async function fetchPhotosFromDrive(coreId, avatarBox) {
                 }
 
                 try {
-                    localStorage.setItem("user_avatar_" + coreId, lh3Url);
+                    sessionStorage.setItem("user_avatar_" + coreId, lh3Url);
                 } catch(e) {}
 
                 avatarBox.innerHTML = `<img src="${lh3Url}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '${thumbUrl}')">`;

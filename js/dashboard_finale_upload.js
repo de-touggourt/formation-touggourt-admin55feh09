@@ -454,26 +454,10 @@ function openLink(centerId, levelId, specId) {
 // ==================== 4. تأثير الكتابة السلسة ====================
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
-let charIndex = 0;
-
 function typeWriter() {
-    if (charIndex < textToType.length) {
-        typeWriterElement.innerHTML += textToType.charAt(charIndex);
-        charIndex++;
-        setTimeout(typeWriter, 45); 
-    } else {
-        setTimeout(startFadeOut, 3000); 
+    if (typeWriterElement) {
+        typeWriterElement.innerHTML = textToType;
     }
-}
-
-function startFadeOut() {
-    typeWriterElement.classList.add('fade-out');
-    setTimeout(() => {
-        typeWriterElement.innerHTML = "";
-        charIndex = 0;
-        typeWriterElement.classList.remove('fade-out'); 
-        setTimeout(typeWriter, 500); 
-    }, 1000);
 }
 
 window.onload = async function() { 

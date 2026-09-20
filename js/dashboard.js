@@ -72,26 +72,11 @@ function getIconsSpecs() {
 // ==========================================
 const textToType = "الجمهورية الجزائرية الديمقراطية الشعبية | وزارة التربية الوطنية | مديرية التربية لولاية توقرت";
 const typeWriterElement = document.getElementById('typewriter-text');
-let charIndex = 0;
 
 function typeWriter() {
-    if (charIndex < textToType.length) {
-        typeWriterElement.innerHTML += textToType.charAt(charIndex);
-        charIndex++;
-        setTimeout(typeWriter, 45); 
-    } else {
-        setTimeout(startFadeOut, 3000); 
+    if (typeWriterElement) {
+        typeWriterElement.innerHTML = textToType;
     }
-}
-
-function startFadeOut() {
-    typeWriterElement.classList.add('fade-out');
-    setTimeout(() => {
-        typeWriterElement.innerHTML = "";
-        charIndex = 0;
-        typeWriterElement.classList.remove('fade-out'); 
-        setTimeout(typeWriter, 500); 
-    }, 1000);
 }
 
 // دالة مساعدة لتنقية المعرف
@@ -140,7 +125,7 @@ async function fetchPhotosFromDrive(coreId, avatarBox) {
 
                 // حفظ الصورة في التخزين المحلي للمتصفح لتظهر في المرة القادمة في 0 ثانية
                 try {
-                    localStorage.setItem("user_avatar_" + coreId, lh3Url);
+                    sessionStorage.setItem("user_avatar_" + coreId, lh3Url);
                 } catch(e) {}
 
                 avatarBox.innerHTML = `<img src="${lh3Url}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '${thumbUrl}')">`;
@@ -218,7 +203,7 @@ window.onload = async function() {
         const coreId = extractCoreId(empId);
 
         // 🌟 1. عرض الصورة فوراً من الكاش المحلي في 0 جزء من الثانية 🌟
-        const localCachedAvatar = localStorage.getItem("user_avatar_" + coreId);
+        const localCachedAvatar = sessionStorage.getItem("user_avatar_" + coreId);
         if (localCachedAvatar) {
             avatarBox.innerHTML = `<img src="${localCachedAvatar}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '')">`;
         }
@@ -230,7 +215,7 @@ window.onload = async function() {
             if (imgUrl.includes('=s200')) imgUrl = imgUrl.replace('=s200', '=s800');
             
             try {
-                localStorage.setItem("user_avatar_" + coreId, imgUrl);
+                sessionStorage.setItem("user_avatar_" + coreId, imgUrl);
             } catch(e) {}
 
             avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="fetchPhotosFromDrive('${coreId}', document.getElementById('userAvatarContainer'))">`;
@@ -897,7 +882,7 @@ function initTraineeNotifications() {
 
 function getReadNotifsMap() {
     try {
-        const stored = localStorage.getItem("read_trainee_notifs");
+        const stored = sessionStorage.getItem("read_trainee_notifs");
         return stored ? JSON.parse(stored) : {};
     } catch(e) {
         return {};
@@ -908,7 +893,7 @@ function markNotifAsRead(notifId) {
     try {
         const readMap = getReadNotifsMap();
         readMap[notifId] = Date.now();
-        localStorage.setItem("read_trainee_notifs", JSON.stringify(readMap));
+        sessionStorage.setItem("read_trainee_notifs", JSON.stringify(readMap));
         updateTraineeNotifBadge();
     } catch(e) {}
 }

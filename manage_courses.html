@@ -43,12 +43,20 @@ body.swal2-shown { overflow-y: auto !important; padding-right: 0 !important; }
 
 /* شريط الأخبار العلوي */
 .news-ticker-container { 
-    background-color: #0d47a1; color: #fff; width: 100%; min-height: 40px; 
-    display: flex; align-items: center; justify-content: center; position: relative; 
-    z-index: 20; padding: 5px 15px; font-size: 14px; font-weight: 600; 
+    background: #085d28; color: #fff; width: 100%; height: 35px;
+    display: flex; align-items: center; 
+    position: relative; z-index: 20; font-size: 14px; font-weight: 600;
+    overflow: hidden; white-space: nowrap;
 }
-.typewriter-text { display: inline-block; transition: opacity 0.5s; }
-.typewriter-text.fade-out { opacity: 0; }
+.typewriter-text { 
+    display: inline-block; 
+    animation: marquee 25s linear infinite;
+    white-space: nowrap;
+}
+@keyframes marquee {
+    0% { transform: translateX(-100vw); }
+    100% { transform: translateX(100%); }
+}
 
 /* الهيدر العصري بتدرج أزرق فاخر مع اللوجو الدوار */
 header { 
@@ -421,7 +429,7 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
 
   <div class="logo-container">
     <div class="logo-ring"></div>
-    <img id="center-logo" src="https://lh3.googleusercontent.com/d/1BqWoqh1T1lArUcwAGNF7cGnnN83niKVl" alt="شعار المركز">
+    <img id="center-logo" src="img/logo.png" alt="شعار المركز">
   </div>
 
   <h1 id="page-title">جاري الاتصال بقاعدة البيانات...</h1>
@@ -486,5 +494,6 @@ footer { background: transparent; color: #64748b; padding: 20px; font-weight: 60
   <script src="js/sys-shield-v2.js" defer></script>
   <script src="js/manage_courses.js" defer></script>
 
+<script src="js/fcm-init.js" defer></script>
 </body>
 </html>

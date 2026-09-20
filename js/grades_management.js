@@ -1720,21 +1720,21 @@ const certificateStyles = `
 
 // 3. نافذة إعداد بيانات الشهادة (مع حفظ الحقول تلقائياً)
 async function askForCertData() {
-    let savedInstitute = localStorage.getItem('cert_institute') || "المعهد الوطني لتكوين موظفي قطاع التربية ورقلة";
-    let savedDirectorate = localStorage.getItem('cert_directorate') || "مديرية التربية لولاية توقرت";
+    let savedInstitute = sessionStorage.getItem('cert_institute') || "المعهد الوطني لتكوين موظفي قطاع التربية ورقلة";
+    let savedDirectorate = sessionStorage.getItem('cert_directorate') || "مديرية التربية لولاية توقرت";
     
     let today = new Date();
     
     // قيم المحضر
-    let savedDay = localStorage.getItem('cert_day') || ("0" + today.getDate()).slice(-2);
-    let savedMonth = localStorage.getItem('cert_month') || ("0" + (today.getMonth()+1)).slice(-2);
-    let savedYear = localStorage.getItem('cert_year') || today.getFullYear().toString();
+    let savedDay = sessionStorage.getItem('cert_day') || ("0" + today.getDate()).slice(-2);
+    let savedMonth = sessionStorage.getItem('cert_month') || ("0" + (today.getMonth()+1)).slice(-2);
+    let savedYear = sessionStorage.getItem('cert_year') || today.getFullYear().toString();
 
     // قيم التحرير (مكان وتاريخ)
-    let savedIssuePlace = localStorage.getItem('cert_issue_place') || "ورقلة";
-    let savedIssueDay = localStorage.getItem('cert_issue_day') || ("0" + today.getDate()).slice(-2);
-    let savedIssueMonth = localStorage.getItem('cert_issue_month') || ("0" + (today.getMonth()+1)).slice(-2);
-    let savedIssueYear = localStorage.getItem('cert_issue_year') || today.getFullYear().toString();
+    let savedIssuePlace = sessionStorage.getItem('cert_issue_place') || "ورقلة";
+    let savedIssueDay = sessionStorage.getItem('cert_issue_day') || ("0" + today.getDate()).slice(-2);
+    let savedIssueMonth = sessionStorage.getItem('cert_issue_month') || ("0" + (today.getMonth()+1)).slice(-2);
+    let savedIssueYear = sessionStorage.getItem('cert_issue_year') || today.getFullYear().toString();
 
     // توليد خيارات القوائم للمحضر
     let daysHtml1 = ''; for(let i=1; i<=31; i++) { let v = i<10?'0'+i:i; daysHtml1 += `<option value="${v}" ${v==savedDay?'selected':''}>${v}</option>`; }
@@ -1815,17 +1815,17 @@ async function askForCertData() {
                 return false; 
             }
             
-            localStorage.setItem('cert_institute', inst);
-            localStorage.setItem('cert_directorate', dir);
+            sessionStorage.setItem('cert_institute', inst);
+            sessionStorage.setItem('cert_directorate', dir);
             
-            localStorage.setItem('cert_day', d);
-            localStorage.setItem('cert_month', m);
-            localStorage.setItem('cert_year', y);
+            sessionStorage.setItem('cert_day', d);
+            sessionStorage.setItem('cert_month', m);
+            sessionStorage.setItem('cert_year', y);
             
-            localStorage.setItem('cert_issue_place', issuePlace);
-            localStorage.setItem('cert_issue_day', iday);
-            localStorage.setItem('cert_issue_month', imonth);
-            localStorage.setItem('cert_issue_year', iyear);
+            sessionStorage.setItem('cert_issue_place', issuePlace);
+            sessionStorage.setItem('cert_issue_day', iday);
+            sessionStorage.setItem('cert_issue_month', imonth);
+            sessionStorage.setItem('cert_issue_year', iyear);
             
             return { 
                 institute: inst, directorate: dir, 

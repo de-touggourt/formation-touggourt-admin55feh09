@@ -468,7 +468,7 @@ async function fetchSupervisorPhoto(empId) {
     if (!img || !placeholder) return;
 
     // 1. الكاش المحلي المخصص للمستخدم للظهور الفوري في 0 جزء من الثانية
-    const localCached = localStorage.getItem("user_avatar_" + coreId);
+    const localCached = sessionStorage.getItem("user_avatar_" + coreId);
     if (localCached) {
         img.src = localCached;
         img.style.display = "block";
@@ -477,7 +477,7 @@ async function fetchSupervisorPhoto(empId) {
 
     // 2. كاش خريطة صور الموظفين إن وجدت
     try {
-        const mapCache = JSON.parse(localStorage.getItem("employeePhotosMap_cache") || "{}");
+        const mapCache = JSON.parse(sessionStorage.getItem("employeePhotosMap_cache") || "{}");
         if (mapCache && mapCache[coreId]) {
             img.src = mapCache[coreId];
             img.style.display = "block";
@@ -493,7 +493,7 @@ async function fetchSupervisorPhoto(empId) {
             img.src = photo;
             img.style.display = "block";
             placeholder.style.display = "none";
-            try { localStorage.setItem("user_avatar_" + coreId, photo); } catch(e){}
+            try { sessionStorage.setItem("user_avatar_" + coreId, photo); } catch(e){}
             return;
         }
     } catch(e) {}
@@ -515,7 +515,7 @@ async function fetchSupervisorPhoto(empId) {
                     finalUrl = `https://lh3.googleusercontent.com/d/${match[1]}=s800`;
                     thumbUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
                 }
-                try { localStorage.setItem("user_avatar_" + coreId, finalUrl); } catch(e){}
+                try { sessionStorage.setItem("user_avatar_" + coreId, finalUrl); } catch(e){}
 
                 img.onerror = function() {
                     if (this.src !== thumbUrl) {
@@ -1022,7 +1022,7 @@ window.openSupervisorFileManager = function(module, cycle) {
 
     currentFolderId = folderId;
     const cacheKey = `files_data_${folderId}`;
-    let cached = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
+    let cached = sessionStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
     if (cached) {
         try {
             const filesList = JSON.parse(cached);
@@ -1036,7 +1036,7 @@ window.openSupervisorFileManager = function(module, cycle) {
                     if (!d.error) {
                         const fresh = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
                         currentModalFiles = fresh;
-                        localStorage.setItem(cacheKey, JSON.stringify(fresh));
+                        sessionStorage.setItem(cacheKey, JSON.stringify(fresh));
                         sessionStorage.setItem(cacheKey, JSON.stringify(fresh));
                     }
                 }).catch(() => {});
@@ -1060,7 +1060,7 @@ window.openSupervisorFileManager = function(module, cycle) {
             } else {
                 const filesList = Array.isArray(d) ? d : (Array.isArray(d?.files) ? d.files : []);
                 currentModalFiles = filesList;
-                localStorage.setItem(cacheKey, JSON.stringify(filesList));
+                sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
                 sessionStorage.setItem(cacheKey, JSON.stringify(filesList));
                 renderFmModal(folderId, filesList, module, cycle);
             }
@@ -1220,7 +1220,7 @@ window.startSupervisorUpload = function(folderId, module, cycle) {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    localStorage.removeItem(`files_data_${folderId}`);
+                    sessionStorage.removeItem(`files_data_${folderId}`);
                     sessionStorage.removeItem(`files_data_${folderId}`);
                     Swal.fire({
                         icon: 'success',
@@ -1267,7 +1267,7 @@ window.deleteSupervisorFile = function(fileId, folderId, module, cycle) {
                 .then(r => r.json())
                 .then(d => {
                     if (d.status === 'success') {
-                        localStorage.removeItem(`files_data_${folderId}`);
+                        sessionStorage.removeItem(`files_data_${folderId}`);
                         sessionStorage.removeItem(`files_data_${folderId}`);
                         Swal.fire({
                             icon: 'success',
