@@ -137,7 +137,7 @@ window.onload = async function() {
         const avatarBox = document.getElementById('userAvatarContainer');
         const coreId = extractCoreId(empId);
         
-        const localCachedAvatar = sessionStorage.getItem("user_avatar_" + coreId);
+        const localCachedAvatar = localStorage.getItem("user_avatar_" + coreId);
         if (localCachedAvatar) {
             avatarBox.innerHTML = `<img src="${localCachedAvatar}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '')">`;
         }
@@ -148,7 +148,7 @@ window.onload = async function() {
             if (imgUrl.includes('=s200')) imgUrl = imgUrl.replace('=s200', '=s800');
             
             try {
-                sessionStorage.setItem("user_avatar_" + coreId, imgUrl);
+                localStorage.setItem("user_avatar_" + coreId, imgUrl);
             } catch(e) {}
 
             avatarBox.innerHTML = `<img src="${imgUrl}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="fetchPhotosFromDrive('${coreId}', document.getElementById('userAvatarContainer'))">`;
@@ -351,7 +351,7 @@ async function fetchPhotosFromDrive(coreId, avatarBox) {
                 }
 
                 try {
-                    sessionStorage.setItem("user_avatar_" + coreId, lh3Url);
+                    localStorage.setItem("user_avatar_" + coreId, lh3Url);
                 } catch(e) {}
 
                 avatarBox.innerHTML = `<img src="${lh3Url}" alt="الصورة الشخصية" referrerpolicy="no-referrer" onerror="window.handleAvatarFallback(this, '${thumbUrl}')">`;
