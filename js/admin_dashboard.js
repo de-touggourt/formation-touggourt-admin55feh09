@@ -252,6 +252,7 @@ async function initSiteSettings() {
                 populateCentersDropdownsDynamic(); 
                 updateDashboardStatsDynamic(); 
                 if (typeof renderTable === 'function') renderTable(); 
+                if (typeof updateActiveYearHeader === 'function') updateActiveYearHeader();
 
                 if (document.getElementById('settingsModal') && document.getElementById('settingsModal').style.display === 'flex') {
                     refreshCurrentTab();
@@ -355,6 +356,8 @@ function refreshCurrentTab() {
 	if (CURRENT_TAB === 'drive') renderDriveTab();
 	if (CURRENT_TAB === 'database') renderDatabaseTab();
 	if (CURRENT_TAB === 'levels_specs') renderLevelsSpecsTab();
+	if (CURRENT_TAB === 'passwords') renderPasswordsTab();
+	if (CURRENT_TAB === 'training_years') renderTrainingYearsTab();
 }
 
 // =========================================================================
@@ -7221,124 +7224,364 @@ window.filterDigiTable = function() {
 };
 
 // =========================================================================
-// نظام تحديث ورفع قواعد البيانات (الموظفين والمتربصين)
+// =========================================================================
+// نظام تحديث وإدارة قواعد البيانات والحذف الانتقائي والشامل
 // =========================================================================
 function renderDatabaseTab() {
     const body = document.getElementById('settingsBody');
-    body.innerHTML = `
-    <div class="setting-card">
-        <h3><i class="fa-solid fa-database"></i> تحديث قواعد البيانات الشاملة</h3>
-        <div style="background:#fff3cd; color:#856404; padding:15px; border-radius:8px; margin-bottom:20px; font-weight:bold; font-size:14px; border: 1px solid #ffeeba;">
-            <i class="fa-solid fa-triangle-exclamation"></i> تنبيه هام: رفع ملف إكسل جديد سيقوم <b>بمسح كافة البيانات القديمة</b> في القاعدة واستبدالها بالبيانات المرفوعة حديثاً! يرجى التأكد من الملف قبل الرفع.
-        </div>
-
-        <!-- قاعدة بيانات الموظفين الكلية -->
-        <div style="margin-bottom: 20px; border: 1px solid #cbd5e1; padding: 20px; border-radius: 12px; background: #f8fafc;">
-            <h4 style="margin-top:0; color:#1E68E8;"><i class="fa-solid fa-users"></i> قاعدة بيانات الموظفين الكلية </h4>
-            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                <input type="file" id="file_plus" accept=".xlsx, .xls" class="crud-input" style="flex: 2; padding: 10px; background: #fff; cursor: pointer;">
-                <button class="btn-action btn-save" onclick="uploadDatabase('plus')" style="flex: 1; justify-content: center; background:#1E68E8;">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> رفع وتحديث (Plus)
-                </button>
-            </div>
-        </div>
-
-        <!-- قاعدة بيانات المتربصين -->
-        <div style="margin-bottom: 10px; border: 1px solid #cbd5e1; padding: 20px; border-radius: 12px; background: #f8fafc;">
-            <h4 style="margin-top:0; color:#0FBA50;"><i class="fa-solid fa-user-graduate"></i> قاعدة بيانات المتربصين </h4>
-            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                <input type="file" id="file_new" accept=".xlsx, .xls" class="crud-input" style="flex: 2; padding: 10px; background: #fff; cursor: pointer;">
-                <button class="btn-action btn-save" onclick="uploadDatabase('new')" style="flex: 1; justify-content: center; background:#0FBA50;">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> رفع وتحديث (New)
-                </button>
-            </div>
-        </div>
-
-        <!-- شريط التقدم -->
-        <div id="dbProgressContainer" style="display: none; margin-top: 20px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; color: #102a43;">
-                <span id="dbProgressText">جاري تهيئة الملف...</span>
-                <span id="dbProgressPercent">0%</span>
-            </div>
-            <div style="width: 100%; background-color: #e2e8f0; border-radius: 10px; overflow: hidden; height: 25px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
-                <div id="dbProgressBar" style="width: 0%; height: 100%; background-color: #e67e22; transition: width 0.3s ease;"></div>
-            </div>
-        </div>
-    </div>`;
-}
-
-// 1. الدالة الرئيسية للقراءة والرفع
-window.uploadDatabase = async function(type) {
-    const inputId = type === 'plus' ? 'file_plus' : 'file_new';
-    const collectionName = type === 'plus' ? 'employeescomplus' : 'employeescomnew';
-    const fileInput = document.getElementById(inputId);
     
-    if (!fileInput.files.length) {
-        return Swal.fire('تنبيه', 'يرجى اختيار ملف الإكسل من جهازك أولاً.', 'warning');
+    // بناء خيارات المراكز المعتمدة للتصفية في عمليات الحذف
+    let centersOptions = '<option value="ALL">🏛️ كافة المراكز التكوينية</option>';
+    if (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
+        for (let k in SITE_SETTINGS.UI_NAMES.centers) {
+            const cName = SITE_SETTINGS.UI_NAMES.centers[k];
+            centersOptions += `<option value="${cName}">${cName}</option>`;
+        }
     }
 
-    const confirm = await Swal.fire({
-        title: 'تأكيد الحذف الشامل والرفع',
-        html: `هل أنت متأكد من <b>حذف كافة السجلات الحالية</b> في قاعدة <b>(${collectionName})</b> ورفع الملف الجديد؟<br><br><span style="color:#d90429; font-size:13px;">هذا الإجراء لا يمكن التراجع عنه.</span>`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'نعم، قم بالمسح والرفع',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#d90429'
+    body.innerHTML = `
+    <div class="setting-card">
+        <h3>
+            <span><i class="fa-solid fa-database" style="color:#1E68E8;"></i> إدارة وتطهير قواعد البيانات المركزية</span>
+            <button class="btn-action btn-add" onclick="refreshDatabaseCounters()" style="font-size:12px; padding:6px 14px; background:#0284c7;">
+                <i class="fa-solid fa-rotate"></i> تحديث عداد السجلات
+            </button>
+        </h3>
+        
+        <!-- شريط التنبيه العام -->
+        <div style="background:#fff3cd; color:#856404; padding:14px 18px; border-radius:10px; margin-bottom:20px; font-weight:600; font-size:13px; border: 1px solid #ffeeba; display:flex; align-items:center; gap:12px;">
+            <i class="fa-solid fa-triangle-exclamation fa-2x" style="color:#e67e22;"></i>
+            <div>
+                <b>منطقة العمليات الحساسة:</b> تتيح هذه اللوحة للإدارة المركزية رفع قواعد البيانات الجديدة أو مسح السجلات المحفوظة من قبل المفتشين ولوحة المديرية بشكل انتقائي ومدروس أو كلي.
+            </div>
+        </div>
+
+        <!-- 1. شريط إحصائيات وعدادات السجلات الحية -->
+        <div style="margin-bottom: 25px;">
+            <h4 style="margin:0 0 12px 0; color:#1e293b; font-size:15px; display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-chart-simple" style="color:#0FBA50;"></i> إحصائيات السجلات الفعلية في قواعد البيانات:
+            </h4>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:10px;" id="dbCountersGrid">
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-trainees">...</div><div class="counter-stat-lbl">المتكونين</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-employees">...</div><div class="counter-stat-lbl">الموظفين (Plus)</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-trainee-att">...</div><div class="counter-stat-lbl">حضور المتكونين</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-framer-att">...</div><div class="counter-stat-lbl">حضور المؤطرين</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-framers">...</div><div class="counter-stat-lbl">المؤطرين بالمراكز</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-supervisors">...</div><div class="counter-stat-lbl">حسابات المؤطرين</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-grades">...</div><div class="counter-stat-lbl">سجلات النقاط</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-messages">...</div><div class="counter-stat-lbl">المراسلات</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-notifs">...</div><div class="counter-stat-lbl">الإشعارات</div></div>
+                <div class="counter-stat-box"><div class="counter-stat-val" id="cnt-tokens">...</div><div class="counter-stat-lbl">رموز الماسح</div></div>
+            </div>
+        </div>
+
+        <!-- 2. قسم رفع وتحديث قواعد البيانات بالإكسل -->
+        <div style="margin-bottom: 25px;">
+            <h4 style="margin:0 0 15px 0; color:#1e293b; font-size:15px; display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-file-excel" style="color:#0FBA50;"></i> رفع وتحديث قواعد البيانات (ملفات Excel):
+            </h4>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:15px;">
+                <!-- قاعدة بيانات الموظفين الكلية Plus -->
+                <div style="border: 1px solid #cbd5e1; padding: 16px; border-radius: 10px; background: #f8fafc; border-right: 4px solid #1E68E8;">
+                    <div style="font-weight:bold; color:#1E68E8; margin-bottom:8px;"><i class="fa-solid fa-users"></i> قاعدة الموظفين الكلية (Plus)</div>
+                    <p style="font-size:12px; color:#64748b; margin-top:0; margin-bottom:12px;">قاعدة البيانات الشاملة لكافة موظفي المديرية والمؤطرين.</p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input type="file" id="file_plus" accept=".xlsx, .xls" class="crud-input" style="flex: 2; padding: 7px; background: #fff; font-size:12px;">
+                        <button class="btn-action btn-save" onclick="uploadDatabase('plus')" style="flex: 1; padding: 7px 12px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> رفع وتحديث
+                        </button>
+                    </div>
+                </div>
+
+                <!-- قاعدة بيانات المتربصين New -->
+                <div style="border: 1px solid #cbd5e1; padding: 16px; border-radius: 10px; background: #f8fafc; border-right: 4px solid #0FBA50;">
+                    <div style="font-weight:bold; color:#0FBA50; margin-bottom:8px;"><i class="fa-solid fa-user-graduate"></i> قاعدة المتربصين والمتكونين (New)</div>
+                    <p style="font-size:12px; color:#64748b; margin-top:0; margin-bottom:12px;">قاعدة الأساتذة المتربصين الموزعين على مراكز التكوين.</p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input type="file" id="file_new" accept=".xlsx, .xls" class="crud-input" style="flex: 2; padding: 7px; background: #fff; font-size:12px;">
+                        <button class="btn-action btn-save" onclick="uploadDatabase('new')" style="flex: 1; padding: 7px 12px; font-size:12px; justify-content:center; background:#0FBA50;">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> رفع وتحديث
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- شريط تقدم رفع الإكسل -->
+            <div id="dbProgressContainer" style="display: none; margin-top: 15px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; color: #102a43; font-size:13px;">
+                    <span id="dbProgressText">جاري تهيئة الملف...</span>
+                    <span id="dbProgressPercent">0%</span>
+                </div>
+                <div style="width: 100%; background-color: #e2e8f0; border-radius: 10px; overflow: hidden; height: 20px;">
+                    <div id="dbProgressBar" style="width: 0%; height: 100%; background-color: #e67e22; transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. قسم الحذف الانتقائي للبيانات -->
+        <div style="margin-bottom: 30px;">
+            <h4 style="margin:0 0 15px 0; color:#dc2626; font-size:15px; display:flex; align-items:center; gap:8px; border-top:1px dashed #cbd5e1; padding-top:20px;">
+                <i class="fa-solid fa-filter-circle-xmark"></i> أدوات الحذف الانتقائي المخصص للبيانات:
+            </h4>
+            <p style="font-size:13px; color:#64748b; margin-top:0; margin-bottom:15px;">يمكنك هنا حذف جزء محدد من البيانات (لمركز معين أو دورة معينة أو كلياً) دون المساس بباقي السجلات.</p>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:15px;">
+                
+                <!-- بطاقة: المتكونين -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-user-graduate" style="color:#0284c7;"></i> بيانات المتكونين (المتربصين)</h4>
+                        <span class="sec-badge sec-badge-info">employeescomnew</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">حذف بيانات المتكونين المسجلين في النظام كلياً أو لمركز محدد.</p>
+                    <div style="display:flex; gap:8px;">
+                        <select id="delScope_trainees" class="crud-input" style="flex:2; padding:6px; font-size:12px;">${centersOptions}</select>
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('trainees')" style="flex:1; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: قاعدة الموظفين الكلية -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-users" style="color:#1E68E8;"></i> قاعدة الموظفين الكلية</h4>
+                        <span class="sec-badge sec-badge-info">employeescomplus</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">مسح كافة الموظفين والمؤطرين المخزنين في القاعدة التكميلية.</p>
+                    <div style="display:flex; justify-content:flex-end;">
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('employees')" style="width:100%; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> مسح قاعدة الموظفين
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: حضور وغياب المتكونين -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-clipboard-user" style="color:#0FBA50;"></i> سجل غيابات وحضور المتكونين</h4>
+                        <span class="sec-badge sec-badge-info">attendance_daily</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">مسح تسجيلات الحضور اليومية للمتربصين المحفوظة من قبل المفتشين.</p>
+                    <div style="display:flex; gap:8px;">
+                        <select id="delScope_attCenter" class="crud-input" style="flex:2; padding:6px; font-size:12px;">${centersOptions}</select>
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('attendance')" style="flex:1; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: حضور وغياب المؤطرين -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-clock-rotate-left" style="color:#f59e0b;"></i> سجل حضور وغياب المؤطرين</h4>
+                        <span class="sec-badge sec-badge-info">framers_attendance_daily</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">مسح توقيعات وسجلات دوام وتأطير الأساتذة بالمراكز.</p>
+                    <div style="display:flex; gap:8px;">
+                        <select id="delScope_framerAttCenter" class="crud-input" style="flex:2; padding:6px; font-size:12px;">${centersOptions}</select>
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('framers_attendance')" style="flex:1; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: المؤطرين المعتمدين وتكليفاتهم -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-chalkboard-user" style="color:#6366f1;"></i> تكليفات المؤطرين بالمراكز</h4>
+                        <span class="sec-badge sec-badge-info">center_framers</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">تفريغ قوائم المؤطرين المعتمدين والمكلفين بتدريس المقاييس.</p>
+                    <div style="display:flex; gap:8px;">
+                        <select id="delScope_framersCenter" class="crud-input" style="flex:2; padding:6px; font-size:12px;">${centersOptions}</select>
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('center_framers')" style="flex:1; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: حسابات الأساتذة المؤطرين -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-key" style="color:#d97706;"></i> حسابات الأساتذة المؤطرين</h4>
+                        <span class="sec-badge sec-badge-info">supervisor_accounts</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">مسح حسابات وكلمات مرور الأساتذة المؤطرين المسجلة بالمراكز.</p>
+                    <div style="display:flex; gap:8px;">
+                        <select id="delScope_supAccCenter" class="crud-input" style="flex:2; padding:6px; font-size:12px;">${centersOptions}</select>
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('supervisor_accounts')" style="flex:1; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: النقاط والتقييمات والمحاضر -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-award" style="color:#e11d48;"></i> النقاط والتقييمات والمحاضر</h4>
+                        <span class="sec-badge sec-badge-info">training_grades</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">مسح كشوف النقاط ومحاضر المداولات ومعدلات التقييم.</p>
+                    <div style="display:flex; gap:8px;">
+                        <select id="delScope_gradesCenter" class="crud-input" style="flex:2; padding:6px; font-size:12px;">${centersOptions}</select>
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('grades')" style="flex:1; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> حذف
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: المراسلات والملفات الرسمية -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-envelope-open-text" style="color:#0284c7;"></i> المراسلات والملفات الرسمية</h4>
+                        <span class="sec-badge sec-badge-info">messages</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">تفريغ صندوق المراسلات والملفات المتبادلة بين المديرية والمراكز.</p>
+                    <div style="display:flex; justify-content:flex-end;">
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('messages')" style="width:100%; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> مسح المراسلات
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: الإشعارات والتنبيهات -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-bell" style="color:#ea580c;"></i> الإشعارات والتنبيهات</h4>
+                        <span class="sec-badge sec-badge-info">notifications</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">تفريغ مركز الإشعارات والإنذارات المتبادلة في النظام.</p>
+                    <div style="display:flex; justify-content:flex-end;">
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('notifications')" style="width:100%; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> مسح الإشعارات
+                        </button>
+                    </div>
+                </div>
+
+                <!-- بطاقة: رموز وأكواد الماسح -->
+                <div class="danger-action-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h4 style="margin:0; color:#1e293b; font-size:14px;"><i class="fa-solid fa-qrcode" style="color:#0d9488;"></i> جلسات ورموز الماسح الرقمي</h4>
+                        <span class="sec-badge sec-badge-info">scanner_tokens</span>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin-bottom:10px;">إعادة تعيين كافة رموز QR وروابط الماسح المخصصة للمراكز.</p>
+                    <div style="display:flex; justify-content:flex-end;">
+                        <button class="btn-action btn-del" onclick="selectiveDeleteAction('scanner_tokens')" style="width:100%; padding:6px 10px; font-size:12px; justify-content:center;">
+                            <i class="fa-solid fa-trash"></i> إعادة تعيين الرموز
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. قسم التطهير والمسح الشامل لبدء دورة/سنة جديدة (Factory Reset) -->
+        <div style="background:#fff5f5; border: 2px dashed #dc2626; border-radius:12px; padding:20px;">
+            <h4 style="margin:0 0 10px 0; color:#991b1b; font-size:16px; display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-radiation fa-lg" style="color:#dc2626;"></i>
+                <span>المسح الشامل وتطهير سجلات التكوين (بدء دورة / سنة جديدة فارغة):</span>
+            </h4>
+            <p style="font-size:13px; color:#7f1d1d; line-height:1.6; margin-top:0; margin-bottom:15px;">
+                هذا الإجراء مخصص للمديرية لتنظيف كافة البيانات التشغيلية دفعة واحدة عند الانتقال لدورة جديدة أو سنة تكوينية جديدة. سيتم مسح السجلات المحددة أدناه بالكامل، مع <b>الحفاظ التام</b> على هيكلة المراكز، الأطوار، التخصصات، وإعدادات النظام وكلمات المرور.
+            </p>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-bottom:15px; background:white; padding:15px; border-radius:8px; border:1px solid #fecaca;">
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_trainees" checked style="width:16px; height:16px; accent-color:#dc2626;"> سجلات المتكونين
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_attendance" checked style="width:16px; height:16px; accent-color:#dc2626;"> حضور وغياب المتكونين
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_framers_att" checked style="width:16px; height:16px; accent-color:#dc2626;"> حضور وغياب المؤطرين
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_framers" checked style="width:16px; height:16px; accent-color:#dc2626;"> تكليفات المؤطرين بالمراكز
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_grades" checked style="width:16px; height:16px; accent-color:#dc2626;"> النقاط والنتائج والمحاضر
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_messages" checked style="width:16px; height:16px; accent-color:#dc2626;"> المراسلات والملفات
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_notifs" checked style="width:16px; height:16px; accent-color:#dc2626;"> الإشعارات والتنبيهات
+                </label>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="wipe_tokens" checked style="width:16px; height:16px; accent-color:#dc2626;"> رموز الماسح الضوئي
+                </label>
+            </div>
+
+            <button class="btn-action" onclick="factoryResetAllData()" style="background:#dc2626; padding:12px 25px; font-size:14px; width:100%; justify-content:center; box-shadow:0 4px 10px rgba(220,38,38,0.3);">
+                <i class="fa-solid fa-triangle-exclamation"></i> بدء التطهير والمسح الشامل للبيانات المحددة
+            </button>
+        </div>
+    </div>`;
+
+    // استدعاء أولي لتحديث العدادات تلقائياً
+    refreshDatabaseCounters();
+}
+
+// -------------------------------------------------------------------------
+// تحديث عدادات الوثائق اللحظية في التبويب
+// -------------------------------------------------------------------------
+window.refreshDatabaseCounters = async function() {
+    const ids = ['trainees', 'employees', 'trainee-att', 'framer-att', 'framers', 'supervisors', 'grades', 'messages', 'notifs', 'tokens'];
+    ids.forEach(id => {
+        const el = document.getElementById(`cnt-${id}`);
+        if (el) el.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:14px; color:#94a3b8;"></i>';
     });
 
-    if (!confirm.isConfirmed) return;
+    try {
+        const collections = [
+            { id: 'trainees', col: 'employeescomnew' },
+            { id: 'employees', col: 'employeescomplus' },
+            { id: 'trainee-att', col: 'attendance_daily' },
+            { id: 'framer-att', col: 'framers_attendance_daily' },
+            { id: 'framers', col: 'center_framers' },
+            { id: 'supervisors', col: 'supervisor_accounts' },
+            { id: 'grades', col: 'training_grades' },
+            { id: 'messages', col: 'messages' },
+            { id: 'notifs', col: 'notifications' },
+            { id: 'tokens', col: 'scanner_tokens' }
+        ];
 
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-
-    document.getElementById('dbProgressContainer').style.display = 'block';
-    updateDbProgress(5, 'جاري قراءة ملف الإكسل...');
-
-    reader.onload = async (e) => {
-        try {
-            const data = new Uint8Array(e.target.result);
-            // تفعيل cellDates لقراءة التواريخ ككائنات زمنية
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-            const sheetName = workbook.SheetNames[0];
-            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-            if (rows.length === 0) throw new Error("ملف الإكسل فارغ ولا يحتوي على بيانات.");
-
-            updateDbProgress(15, `تمت قراءة ${rows.length} سجل. جاري حذف البيانات القديمة (قد يستغرق بعض الوقت)...`);
-
-            // 1. مسح البيانات القديمة بالدفعات (Batches)
-            await clearCollectionData(collectionName);
-
-            updateDbProgress(40, 'تم مسح البيانات القديمة. جاري تهيئة ورفع البيانات الجديدة...');
-
-            // 2. رفع البيانات الجديدة بالدفعات
-            await uploadRowsInBatches(collectionName, rows, type);
-
-            updateDbProgress(100, 'اكتملت العملية بنجاح تام!');
-            Swal.fire('نجاح', `تم تحديث قاعدة بيانات ${collectionName} بنجاح وإضافة ${rows.length} سجل.`, 'success');
-
-        } catch (err) {
-            console.error(err);
-            Swal.fire('خطأ', 'فشلت العملية: ' + err.message, 'error');
-            updateDbProgress(0, 'فشلت العملية');
-        }
-    };
-    reader.readAsArrayBuffer(file);
+        await Promise.all(collections.map(async (item) => {
+            try {
+                const snap = await db.collection(item.col).get();
+                const el = document.getElementById(`cnt-${item.id}`);
+                if (el) el.innerText = snap.size.toLocaleString();
+            } catch (e) {
+                const el = document.getElementById(`cnt-${item.id}`);
+                if (el) el.innerText = '0';
+            }
+        }));
+    } catch (err) {
+        console.warn("خطأ في تحديث عداد السجلات:", err);
+    }
 };
 
-// 2. دالة مسح الكوليكشن (Collections) بالدفعات (500 كحد أقصى)
-async function clearCollectionData(collectionPath) {
-    const snapshot = await db.collection(collectionPath).get();
-    if (snapshot.empty) return; // الكوليكشن فارغ أصلاً
+// -------------------------------------------------------------------------
+// دالة مسح الكوليكشن (Collections) بالدفعات السريعة مع دعم التصفية
+// -------------------------------------------------------------------------
+async function clearCollectionData(collectionPath, filterField = null, filterVal = null) {
+    let query = db.collection(collectionPath);
+    if (filterField && filterVal && filterVal !== 'ALL') {
+        query = query.where(filterField, "==", filterVal);
+    }
+    
+    const snapshot = await query.get();
+    if (snapshot.empty) return 0;
 
     const batches = [];
     let currentBatch = db.batch();
     let count = 0;
+    let totalDeleted = 0;
 
     snapshot.docs.forEach((doc) => {
         currentBatch.delete(doc.ref);
         count++;
+        totalDeleted++;
         if (count === 500) {
             batches.push(currentBatch);
             currentBatch = db.batch();
@@ -7351,7 +7594,241 @@ async function clearCollectionData(collectionPath) {
     for (let batch of batches) {
         await batch.commit();
     }
+    return totalDeleted;
 }
+
+// -------------------------------------------------------------------------
+// دوال الحذف الانتقائي المتخصصة لكل فئة
+// -------------------------------------------------------------------------
+window.selectiveDeleteAction = async function(type) {
+    let title = "", colName = "", filterField = null, filterVal = "ALL", desc = "";
+    
+    if (type === 'trainees') {
+        title = "بيانات المتكونين (المتربصين)";
+        colName = "employeescomnew";
+        filterVal = document.getElementById('delScope_trainees')?.value || 'ALL';
+        filterField = (filterVal !== 'ALL') ? 'center' : null;
+        desc = filterVal === 'ALL' ? "كافة المتكونين في جميع المراكز التكوينية" : `المتكونين المسجلين في مركز: <b>${filterVal}</b> فقط`;
+    } else if (type === 'employees') {
+        title = "قاعدة الموظفين الكلية (Plus)";
+        colName = "employeescomplus";
+        desc = "كافة الموظفين والمؤطرين في قاعدة Plus";
+    } else if (type === 'attendance') {
+        title = "سجل حضور وغياب المتكونين";
+        colName = "attendance_daily";
+        filterVal = document.getElementById('delScope_attCenter')?.value || 'ALL';
+        filterField = (filterVal !== 'ALL') ? 'center' : null;
+        desc = filterVal === 'ALL' ? "كافة سجلات الحضور والغياب للمتكونين في كل المراكز" : `سجلات الحضور الخاصة بمركز: <b>${filterVal}</b>`;
+    } else if (type === 'framers_attendance') {
+        title = "سجل حضور وغياب المؤطرين";
+        colName = "framers_attendance_daily";
+        filterVal = document.getElementById('delScope_framerAttCenter')?.value || 'ALL';
+        filterField = (filterVal !== 'ALL') ? 'center' : null;
+        desc = filterVal === 'ALL' ? "كافة سجلات دوام وتأطير المؤطرين" : `حضور مؤطري مركز: <b>${filterVal}</b>`;
+    } else if (type === 'center_framers') {
+        title = "تكليفات المؤطرين بالمراكز";
+        colName = "center_framers";
+        filterVal = document.getElementById('delScope_framersCenter')?.value || 'ALL';
+        filterField = (filterVal !== 'ALL') ? 'center' : null;
+        desc = filterVal === 'ALL' ? "كافة تكليفات المؤطرين المسجلة في كل المراكز" : `مؤطري مركز: <b>${filterVal}</b>`;
+    } else if (type === 'supervisor_accounts') {
+        title = "حسابات الأساتذة المؤطرين";
+        colName = "supervisor_accounts";
+        filterVal = document.getElementById('delScope_supAccCenter')?.value || 'ALL';
+        filterField = (filterVal !== 'ALL') ? 'center' : null;
+        desc = filterVal === 'ALL' ? "كافة حسابات دخول الأساتذة المؤطرين" : `حسابات مؤطري مركز: <b>${filterVal}</b>`;
+    } else if (type === 'grades') {
+        title = "سجلات النقاط والتقييمات والمحاضر";
+        colName = "training_grades";
+        filterVal = document.getElementById('delScope_gradesCenter')?.value || 'ALL';
+        filterField = (filterVal !== 'ALL') ? 'center' : null;
+        desc = filterVal === 'ALL' ? "كافة كشوف التقييم والنقاط والنتائج في جميع المراكز" : `نقاط مركز: <b>${filterVal}</b>`;
+    } else if (type === 'messages') {
+        title = "المراسلات والملفات الرسمية";
+        colName = "messages";
+        desc = "كافة المراسلات الصادرة والواردة والملفات المرفقة";
+    } else if (type === 'notifications') {
+        title = "الإشعارات والتنبيهات";
+        colName = "notifications";
+        desc = "كافة الإشعارات والتنبيهات السابقة";
+    } else if (type === 'scanner_tokens') {
+        title = "رموز وأكواد الماسح الرقمي";
+        colName = "scanner_tokens";
+        desc = "كافة جلسات ورموز الماسح الضوئي للمراكز";
+    }
+
+    // 1. فحص عدد السجلات المستهدفة أولاً
+    Swal.fire({ title: 'جاري فحص السجلات...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    let query = db.collection(colName);
+    if (filterField && filterVal !== 'ALL') query = query.where(filterField, "==", filterVal);
+    const snap = await query.get();
+
+    if (snap.empty) {
+        return Swal.fire('لا توجد بيانات', `لا توجد سجلات حالية في قسم (${title}) للمسح.`, 'info');
+    }
+
+    const count = snap.size;
+
+    // 2. طلب تأكيد مضاعف بكتابة كلمة تأكيد لمنع الخطأ
+    const result = await Swal.fire({
+        title: `تأكيد مسح ${title}`,
+        html: `
+            <div style="text-align:right; font-family:'Cairo';">
+                <div style="background:#fee2e2; color:#991b1b; padding:12px; border-radius:8px; margin-bottom:12px; font-size:13px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> <b>تحذير لا يمكن التراجع عنه:</b><br>
+                    سيتم حذف <b>${count} سجل</b> نهائياً من قاعدة (${colName})!<br>
+                    النطاق المستهدف: ${desc}.
+                </div>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b;">لتأكيد الحذف، اكتب كلمة <span style="color:#dc2626;">حذف</span> في المربع أدناه:</label>
+            </div>
+        `,
+        input: 'text',
+        inputPlaceholder: 'اكتب: حذف',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'تأكيد الحذف النهائي',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#dc2626',
+        preConfirm: (inputVal) => {
+            if (inputVal !== 'حذف') {
+                Swal.showValidationMessage('الكلمة غير صحيحة! يرجى كتابة "حذف" بدقة لتأكيد العملية.');
+                return false;
+            }
+            return true;
+        }
+    });
+
+    if (!result.isConfirmed) return;
+
+    // 3. تنفيذ الحذف بالدفعات
+    Swal.fire({
+        title: 'جاري حذف السجلات...',
+        text: `جاري معالجة وحذف ${count} سجل، يرجى الانتظار...`,
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const deleted = await clearCollectionData(colName, filterField, filterVal);
+        
+        // إذا كان حضوراً، نحذف أيضاً مجموعة attendance القديمة إن وُجدت
+        if (type === 'attendance') {
+            await clearCollectionData('attendance', filterField, filterVal).catch(()=>{});
+        }
+        // إذا كان تكليفات، نحذف framers القديمة إن وُجدت
+        if (type === 'center_framers') {
+            await clearCollectionData('framers', filterField, filterVal).catch(()=>{});
+        }
+        // إذا كان نقاط، نحذف grades القديمة إن وُجدت
+        if (type === 'grades') {
+            await clearCollectionData('grades', filterField, filterVal).catch(()=>{});
+        }
+
+        await refreshDatabaseCounters();
+        
+        Swal.fire('تم الحذف بنجاح', `تم مسح ${deleted} سجل بنجاح من قاعدة ${title}.`, 'success');
+    } catch (err) {
+        console.error("خطأ أثناء الحذف:", err);
+        Swal.fire('خطأ', 'تعذر استكمال عملية الحذف: ' + err.message, 'error');
+    }
+};
+
+// -------------------------------------------------------------------------
+// أداة المسح الشامل وتطهير النظام لبدء دورة جديدة (Factory Reset)
+// -------------------------------------------------------------------------
+window.factoryResetAllData = async function() {
+    const collectionsToWipe = [];
+    if (document.getElementById('wipe_trainees')?.checked) collectionsToWipe.push({ name: "المتكونين", col: "employeescomnew" });
+    if (document.getElementById('wipe_attendance')?.checked) {
+        collectionsToWipe.push({ name: "حضور المتكونين", col: "attendance_daily" });
+        collectionsToWipe.push({ name: "حضور المتكونين (قديم)", col: "attendance" });
+    }
+    if (document.getElementById('wipe_framers_att')?.checked) collectionsToWipe.push({ name: "حضور المؤطرين", col: "framers_attendance_daily" });
+    if (document.getElementById('wipe_framers')?.checked) {
+        collectionsToWipe.push({ name: "تكليفات المؤطرين", col: "center_framers" });
+        collectionsToWipe.push({ name: "تكليفات المؤطرين (قديم)", col: "framers" });
+    }
+    if (document.getElementById('wipe_grades')?.checked) {
+        collectionsToWipe.push({ name: "النقاط والمحاضر", col: "training_grades" });
+        collectionsToWipe.push({ name: "النقاط (قديم)", col: "grades" });
+    }
+    if (document.getElementById('wipe_messages')?.checked) collectionsToWipe.push({ name: "المراسلات والملفات", col: "messages" });
+    if (document.getElementById('wipe_notifs')?.checked) collectionsToWipe.push({ name: "الإشعارات", col: "notifications" });
+    if (document.getElementById('wipe_tokens')?.checked) collectionsToWipe.push({ name: "رموز الماسح", col: "scanner_tokens" });
+
+    if (collectionsToWipe.length === 0) {
+        return Swal.fire('تنبيه', 'يرجى تحديد قاعدة واحدة على الأقل للمسح الشامل.', 'warning');
+    }
+
+    const colNamesList = collectionsToWipe.map(c => `<li>${c.name} (${c.col})</li>`).join('');
+
+    // طلب كلمة مرور إعدادات الموقع الحساسة admin_takwin
+    const confirmPass = await Swal.fire({
+        title: '<i class="fa-solid fa-triangle-exclamation" style="color:#dc2626;"></i> تأكيد التطهير الشامل',
+        html: `
+            <div style="text-align:right; font-family:'Cairo';">
+                <div style="background:#fee2e2; color:#991b1b; padding:12px; border-radius:8px; margin-bottom:12px; font-size:13px; line-height:1.5;">
+                    <b>تحذير أمني شديد:</b> أنت على وشك مسح القواعد التشغيلية التالية بالكامل:<br>
+                    <ul style="margin:8px 0; padding-right:20px;">${colNamesList}</ul>
+                    هذه العملية ستفرغ النظام لبدء دورة/سنة جديدة بيضاء وفارغة ولا يمكن التراجع عنها.
+                </div>
+                <label style="font-size:13px; font-weight:bold; color:#1e293b;">أدخل الرقم السري لمدير النظام (admin_takwin) للمتابعة:</label>
+            </div>
+        `,
+        input: 'password',
+        inputPlaceholder: 'الرقم السري لمدير النظام...',
+        showCancelButton: true,
+        confirmButtonText: 'تأكيد المسح الكلي',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#dc2626',
+        preConfirm: async (enteredPass) => {
+            if (!enteredPass) {
+                Swal.showValidationMessage('يرجى إدخال الرقم السري!');
+                return false;
+            }
+            try {
+                const passDoc = await db.collection("config").doc("pass").get();
+                if (!passDoc.exists || passDoc.data().admin_takwin !== enteredPass) {
+                    Swal.showValidationMessage('الرقم السري لمدير النظام غير صحيح!');
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                Swal.showValidationMessage('تعذر التحقق من الرقم السري: ' + e.message);
+                return false;
+            }
+        }
+    });
+
+    if (!confirmPass.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري التطهير الشامل...',
+        text: 'جاري مسح القواعد المختارة بالدفعات، قد يستغرق هذا بضع لحظات...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        let grandTotal = 0;
+        for (let item of collectionsToWipe) {
+            const count = await clearCollectionData(item.col);
+            grandTotal += count;
+        }
+
+        await refreshDatabaseCounters();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'اكتمل التطهير الشامل',
+            text: `تم تفريغ القواعد المختارة بنجاح ومسح ${grandTotal} سجل تشغيلي. النظام الآن فارغ وجاهز لدورة أو سنة جديدة.`
+        });
+    } catch (err) {
+        console.error("خطأ أثناء التطهير الشامل:", err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء التطهير الشامل: ' + err.message, 'error');
+    }
+};
 
 // 3. دالة رفع السجلات بالدفعات السريعة (500 كحد أقصى)
 async function uploadRowsInBatches(collectionPath, rows, type) {
@@ -10411,3 +10888,1471 @@ window.saveAdminCenterLocation = saveAdminCenterLocation;
 window.autoCaptureAdminLocation = autoCaptureAdminLocation;
 window.printCentersMapPoster = printCentersMapPoster;
 window.printInteractiveStateMap = printInteractiveStateMap;
+
+// =========================================================================
+// =========================================================================
+// منظومة إدارة وتعديل كلمات المرور المركزية والمراكز والأساتذة المؤطرين
+// =========================================================================
+// =========================================================================
+window.cachedCenterAdminsList = [];
+window.cachedSupervisorAccountsList = [];
+
+window.renderPasswordsTab = async function() {
+    const body = document.getElementById('settingsBody');
+    body.innerHTML = `
+    <div style="text-align:center; padding:50px; color:#64748b;">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+        <p style="margin-top:10px; font-weight:bold; font-family:'Cairo';">جاري تحميل كلمات المرور والحسابات من السحابة...</p>
+    </div>`;
+
+    try {
+        // 1. جلب كلمات المرور المركزية من config/pass
+        let masterPass = {};
+        try {
+            const passSnap = await db.collection("config").doc("pass").get();
+            if (passSnap.exists) masterPass = passSnap.data() || {};
+        } catch (e) {
+            console.warn("تعذر قراءة config/pass:", e);
+        }
+
+        // 2. جلب مسؤولي ومفتشي المراكز من center_admins
+        const adminsSnap = await db.collection("center_admins").get();
+        window.cachedCenterAdminsList = [];
+        adminsSnap.forEach(doc => {
+            window.cachedCenterAdminsList.push({ id: doc.id, ...doc.data() });
+        });
+
+        // 3. جلب حسابات الأساتذة المؤطرين من supervisor_accounts
+        const supSnap = await db.collection("supervisor_accounts").get();
+        window.cachedSupervisorAccountsList = [];
+        supSnap.forEach(doc => {
+            window.cachedSupervisorAccountsList.push({ docId: doc.id, ...doc.data() });
+        });
+
+        // 4. خيارات المراكز للتصفية
+        let centersFilterOptions = '<option value="ALL">🏛️ كافة المراكز</option>';
+        if (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
+            for (let k in SITE_SETTINGS.UI_NAMES.centers) {
+                const c = SITE_SETTINGS.UI_NAMES.centers[k];
+                centersFilterOptions += `<option value="${c}">${c}</option>`;
+            }
+        }
+
+        // بناء واجهة التبويب الكاملة
+        body.innerHTML = `
+        <div class="setting-card">
+            <h3>
+                <span><i class="fa-solid fa-key" style="color:#d97706;"></i> إدارة وتعديل كلمات المرور المركزية والمراكز</span>
+                <span class="sec-badge sec-badge-warning" style="font-size:12px;">لوحة السيادة والأمان</span>
+            </h3>
+            
+            <!-- أ) الكلمات السرية المركزية للنظام -->
+            <div style="margin-bottom: 25px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                    <h4 style="margin:0; color:#1e293b; font-size:15px; display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-shield-halved" style="color:#1E68E8;"></i> الكلمات السرية المركزية للنظام (config/pass):
+                    </h4>
+                    <button class="btn-action btn-save" onclick="saveAllMasterPasswords()" style="padding:7px 16px; font-size:12px;">
+                        <i class="fa-solid fa-floppy-disk"></i> حفظ كافة الكلمات السرية المركزية
+                    </button>
+                </div>
+                
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:12px;">
+                    
+                    <!-- 1. لوحة تحكم المديرية -->
+                    <div class="pass-item-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:bold; font-size:13px; color:#1e293b;"><i class="fa-solid fa-desktop" style="color:#1E68E8;"></i> لوحة تحكم المديرية</span>
+                            <span class="sec-badge sec-badge-info">admin_panel_of</span>
+                        </div>
+                        <p style="font-size:11.5px; color:#64748b; margin:0 0 8px 0;">كلمة سر دخول الإدارة المركزية إلى لوحة التحكم الرئيسية.</p>
+                        <div style="display:flex; gap:6px;">
+                            <input type="password" id="mp_admin_panel_of" value="${masterPass['admin_panel_of'] || ''}" class="crud-input" style="padding:6px 10px; font-family:monospace; font-weight:bold; font-size:14px; direction:ltr; text-align:left;">
+                            <button type="button" onclick="togglePasswordVisibility('mp_admin_panel_of', this)" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="إظهار/إخفاء"><i class="fa-solid fa-eye"></i></button>
+                            <button type="button" onclick="document.getElementById('mp_admin_panel_of').value = generateStrongPassword()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="توليد عشوائي"><i class="fa-solid fa-shuffle"></i></button>
+                            <button type="button" onclick="copyPasswordValue('mp_admin_panel_of', 'كلمة سر لوحة المديرية')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="نسخ"><i class="fa-solid fa-copy"></i></button>
+                            <button type="button" class="btn-action btn-save" onclick="saveMasterPassword('admin_panel_of')" style="padding:6px 10px; font-size:12px;" title="حفظ"><i class="fa-solid fa-check"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- 2. بوابة الدخول السرية للمديرية -->
+                    <div class="pass-item-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:bold; font-size:13px; color:#1e293b;"><i class="fa-solid fa-door-open" style="color:#0FBA50;"></i> بوابة الدخول السرية</span>
+                            <span class="sec-badge sec-badge-active">admin panel</span>
+                        </div>
+                        <p style="font-size:11.5px; color:#64748b; margin:0 0 8px 0;">الرقم السري في الصفحة الرئيسية لفتح نافذة الدخول للمديرية.</p>
+                        <div style="display:flex; gap:6px;">
+                            <input type="password" id="mp_admin_panel" value="${masterPass['admin panel'] || ''}" class="crud-input" style="padding:6px 10px; font-family:monospace; font-weight:bold; font-size:14px; direction:ltr; text-align:left;">
+                            <button type="button" onclick="togglePasswordVisibility('mp_admin_panel', this)" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="إظهار/إخفاء"><i class="fa-solid fa-eye"></i></button>
+                            <button type="button" onclick="document.getElementById('mp_admin_panel').value = generateStrongPassword()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="توليد عشوائي"><i class="fa-solid fa-shuffle"></i></button>
+                            <button type="button" onclick="copyPasswordValue('mp_admin_panel', 'كلمة سر بوابة الدخول')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="نسخ"><i class="fa-solid fa-copy"></i></button>
+                            <button type="button" class="btn-action btn-save" onclick="saveMasterPassword('admin panel')" style="padding:6px 10px; font-size:12px; background:#0FBA50;" title="حفظ"><i class="fa-solid fa-check"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- 3. كلمة سر إعدادات الموقع -->
+                    <div class="pass-item-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:bold; font-size:13px; color:#1e293b;"><i class="fa-solid fa-gears" style="color:#d97706;"></i> قفل إعدادات الموقع والحماية</span>
+                            <span class="sec-badge sec-badge-warning">admin_takwin</span>
+                        </div>
+                        <p style="font-size:11.5px; color:#64748b; margin:0 0 8px 0;">الرقم السري المطلوب بعد 10 نقرات على الدرع وتأكيد عمليات المسح.</p>
+                        <div style="display:flex; gap:6px;">
+                            <input type="password" id="mp_admin_takwin" value="${masterPass['admin_takwin'] || ''}" class="crud-input" style="padding:6px 10px; font-family:monospace; font-weight:bold; font-size:14px; direction:ltr; text-align:left;">
+                            <button type="button" onclick="togglePasswordVisibility('mp_admin_takwin', this)" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="إظهار/إخفاء"><i class="fa-solid fa-eye"></i></button>
+                            <button type="button" onclick="document.getElementById('mp_admin_takwin').value = generateStrongPassword()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="توليد عشوائي"><i class="fa-solid fa-shuffle"></i></button>
+                            <button type="button" onclick="copyPasswordValue('mp_admin_takwin', 'كلمة سر إعدادات الموقع')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="نسخ"><i class="fa-solid fa-copy"></i></button>
+                            <button type="button" class="btn-action btn-save" onclick="saveMasterPassword('admin_takwin')" style="padding:6px 10px; font-size:12px; background:#d97706;" title="حفظ"><i class="fa-solid fa-check"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- 4. ديوان السيد مدير التربية -->
+                    <div class="pass-item-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:bold; font-size:13px; color:#1e293b;"><i class="fa-solid fa-crown" style="color:#e11d48;"></i> فضاء السيد مدير التربية</span>
+                            <span class="sec-badge sec-badge-danger">director</span>
+                        </div>
+                        <p style="font-size:11.5px; color:#64748b; margin:0 0 8px 0;">الرقم السري السيادي لفتح لوحة القيادة الاستراتيجية لمدير التربية.</p>
+                        <div style="display:flex; gap:6px;">
+                            <input type="password" id="mp_director" value="${masterPass['director'] || masterPass['director_code'] || 'MO@TR#55'}" class="crud-input" style="padding:6px 10px; font-family:monospace; font-weight:bold; font-size:14px; direction:ltr; text-align:left;">
+                            <button type="button" onclick="togglePasswordVisibility('mp_director', this)" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="إظهار/إخفاء"><i class="fa-solid fa-eye"></i></button>
+                            <button type="button" onclick="document.getElementById('mp_director').value = generateStrongPassword()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="توليد عشوائي"><i class="fa-solid fa-shuffle"></i></button>
+                            <button type="button" onclick="copyPasswordValue('mp_director', 'كلمة سر فضاء مدير التربية')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; cursor:pointer;" title="نسخ"><i class="fa-solid fa-copy"></i></button>
+                            <button type="button" class="btn-action btn-save" onclick="saveMasterPassword('director')" style="padding:6px 10px; font-size:12px; background:#e11d48;" title="حفظ"><i class="fa-solid fa-check"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ب) حسابات وكلمات مرور مسؤولي ومفتشي المراكز (center_admins) -->
+            <div style="margin-bottom: 25px; border-top:1px dashed #cbd5e1; padding-top:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                    <h4 style="margin:0; color:#1e293b; font-size:15px; display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-user-tie" style="color:#0284c7;"></i> حسابات وكلمات مرور مسؤولي ومفتشي المراكز (center_admins):
+                        <span class="sec-badge sec-badge-info" id="adminsCountBadge">${window.cachedCenterAdminsList.length} مسؤول</span>
+                    </h4>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="text" id="searchAdminPassInput" placeholder="بحث بالاسم أو المركز أو الصفة..." class="crud-input" style="padding:6px 12px; font-size:12px; width:220px;" oninput="filterCenterAdminsInPasswords()">
+                        <button class="btn-action btn-add" onclick="manageCenterAdmins()" style="padding:6px 14px; font-size:12px;">
+                            <i class="fa-solid fa-plus"></i> إضافة مسؤول جديد
+                        </button>
+                    </div>
+                </div>
+
+                <div style="overflow-x:auto; background:white; border:1px solid #e2e8f0; border-radius:10px;">
+                    <table class="crud-table" style="margin:0;">
+                        <thead>
+                            <tr>
+                                <th>اسم المسؤول / المفتش</th>
+                                <th>المركز التكويني</th>
+                                <th>الصفة / الرتبة</th>
+                                <th>البريد الإلكتروني</th>
+                                <th style="min-width:240px;">كلمة المرور</th>
+                                <th style="text-align:center;">الحالة</th>
+                                <th style="text-align:center;">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminPassTableBody">
+                            <!-- سيتم حقن أسطر المفتشين هنا -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ج) كلمات مرور الأساتذة المؤطرين (supervisor_accounts) -->
+            <div style="border-top:1px dashed #cbd5e1; padding-top:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                    <h4 style="margin:0; color:#1e293b; font-size:15px; display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-chalkboard-user" style="color:#0FBA50;"></i> كلمات مرور الأساتذة المؤطرين (supervisor_accounts):
+                        <span class="sec-badge sec-badge-active" id="supervisorsCountBadge">${window.cachedSupervisorAccountsList.length} مؤطر</span>
+                    </h4>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <select id="supCenterFilterPass" class="crud-input" style="padding:6px 10px; font-size:12px; width:180px;" onchange="filterSupervisorsInPasswords()">
+                            ${centersFilterOptions}
+                        </select>
+                        <input type="text" id="searchSupervisorPassInput" placeholder="بحث بالاسم أو الرقم الوظيفي..." class="crud-input" style="padding:6px 12px; font-size:12px; width:200px;" oninput="filterSupervisorsInPasswords()">
+                    </div>
+                </div>
+
+                <div style="overflow-x:auto; background:white; border:1px solid #e2e8f0; border-radius:10px; max-height:400px; overflow-y:auto;">
+                    <table class="crud-table" style="margin:0;">
+                        <thead style="position:sticky; top:0; z-index:5;">
+                            <tr>
+                                <th>اسم الأستاذ المؤطر</th>
+                                <th>الرقم الوظيفي</th>
+                                <th>المركز</th>
+                                <th style="min-width:240px;">كلمة المرور</th>
+                                <th style="text-align:center;">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="supervisorPassTableBody">
+                            <!-- سيتم حقن أسطر المؤطرين هنا -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>`;
+
+        // حقن أسطر الجداول
+        filterCenterAdminsInPasswords();
+        filterSupervisorsInPasswords();
+
+    } catch (err) {
+        console.error("خطأ في بناء تبويب كلمات المرور:", err);
+        body.innerHTML = `<div style="padding:30px; text-align:center; color:#dc2626;">حدث خطأ أثناء تحميل كلمات المرور: ${err.message}</div>`;
+    }
+};
+
+// -------------------------------------------------------------------------
+// دوال مساعدة لتبويب كلمات المرور
+// -------------------------------------------------------------------------
+window.togglePasswordVisibility = function(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-eye-slash" style="color:#dc2626;"></i>';
+    } else {
+        input.type = 'password';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+    }
+};
+
+window.copyPasswordValue = function(inputIdOrText, label = "القيمة") {
+    let text = inputIdOrText;
+    const el = document.getElementById(inputIdOrText);
+    if (el) text = el.value;
+    if (!text) return Swal.fire('تنبيه', 'لا توجد قيمة لنسخها.', 'info');
+
+    navigator.clipboard.writeText(text).then(() => {
+        Swal.fire({
+            icon: 'success',
+            title: 'تم النسخ بنجاح',
+            text: `تم نسخ ${label} إلى الحافظة.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    }).catch(() => {
+        Swal.fire('خطأ', 'تعذر النسخ التلقائي إلى الحافظة.', 'error');
+    });
+};
+
+window.saveMasterPassword = async function(key) {
+    const inputId = `mp_${key.replace(/ /g, '_')}`;
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const newVal = input.value.trim();
+
+    if (!newVal) {
+        return Swal.fire('تنبيه', 'يرجى كتابة كلمة المرور أولاً.', 'warning');
+    }
+
+    try {
+        Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        await db.collection("config").doc("pass").set({ [key]: newVal }, { merge: true });
+        Swal.fire({
+            icon: 'success',
+            title: 'تم الحفظ بنجاح',
+            text: `تم تحديث كلمة المرور (${key}) بنجاح.`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        console.error("خطأ في حفظ كلمة المرور:", err);
+        Swal.fire('خطأ', 'فشل حفظ كلمة المرور: ' + err.message, 'error');
+    }
+};
+
+window.saveAllMasterPasswords = async function() {
+    const p1 = document.getElementById('mp_admin_panel_of')?.value.trim();
+    const p2 = document.getElementById('mp_admin_panel')?.value.trim();
+    const p3 = document.getElementById('mp_admin_takwin')?.value.trim();
+    const p4 = document.getElementById('mp_director')?.value.trim();
+
+    const updates = {};
+    if (p1) updates['admin_panel_of'] = p1;
+    if (p2) updates['admin panel'] = p2;
+    if (p3) updates['admin_takwin'] = p3;
+    if (p4) updates['director'] = p4;
+
+    try {
+        Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        await db.collection("config").doc("pass").set(updates, { merge: true });
+        Swal.fire('نجاح', 'تم تحديث كافة الكلمات السرية المركزية بنجاح.', 'success');
+    } catch (err) {
+        Swal.fire('خطأ', 'تعذر حفظ الكلمات السرية: ' + err.message, 'error');
+    }
+};
+
+window.filterCenterAdminsInPasswords = function() {
+    const term = (document.getElementById('searchAdminPassInput')?.value || '').trim().toLowerCase();
+    const tbody = document.getElementById('adminPassTableBody');
+    if (!tbody) return;
+
+    let filtered = window.cachedCenterAdminsList || [];
+    if (term) {
+        filtered = filtered.filter(a => 
+            (a.name && a.name.toLowerCase().includes(term)) ||
+            (a.center && a.center.toLowerCase().includes(term)) ||
+            (a.jobTitle && a.jobTitle.toLowerCase().includes(term)) ||
+            (a.id && a.id.toLowerCase().includes(term))
+        );
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#94a3b8;">لا يوجد مسؤولين مطابقين لمعايير البحث</td></tr>`;
+        return;
+    }
+
+    let rowsHtml = '';
+    filtered.forEach(admin => {
+        const inputId = `pwd_admin_${admin.id}`;
+        const isDisabled = admin.disabled === true;
+        const pwd = admin.password || '';
+
+        rowsHtml += `
+        <tr>
+            <td style="font-weight:bold; color:#1e293b;">${admin.name || 'بدون اسم'}</td>
+            <td><span class="badge" style="color:#1E68E8; border-color:#1E68E8;"><i class="fa-solid fa-school"></i> ${admin.center || '-'}</span></td>
+            <td>${admin.jobTitle || admin.rank || 'مسؤول مركز'}</td>
+            <td style="font-family:monospace; font-size:12px; direction:ltr; text-align:left;">${admin.email || '-'}</td>
+            <td>
+                <div style="display:flex; gap:4px; align-items:center;">
+                    <input type="password" id="${inputId}" value="${pwd}" class="crud-input" style="padding:5px 8px; font-family:monospace; font-weight:bold; font-size:13px; direction:ltr; text-align:left;">
+                    <button type="button" onclick="togglePasswordVisibility('${inputId}', this)" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; cursor:pointer;" title="إظهار/إخفاء"><i class="fa-solid fa-eye"></i></button>
+                    <button type="button" onclick="document.getElementById('${inputId}').value = generateStrongPassword()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; cursor:pointer;" title="توليد عشوائي"><i class="fa-solid fa-shuffle"></i></button>
+                    <button type="button" onclick="copyPasswordValue('${inputId}', 'كلمة مرور ${admin.name}')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; cursor:pointer;" title="نسخ كلمة المرور"><i class="fa-solid fa-copy"></i></button>
+                    <button type="button" class="btn-action btn-save" onclick="saveAdminPasswordFromSettings('${admin.id}')" style="padding:5px 8px; font-size:11px;" title="حفظ التعديل"><i class="fa-solid fa-floppy-disk"></i></button>
+                </div>
+            </td>
+            <td style="text-align:center;">
+                <label class="switch" style="transform:scale(0.8);" title="${isDisabled ? 'الحساب معطل' : 'الحساب نشط'}">
+                    <input type="checkbox" onchange="toggleAdminStatusFromSettings('${admin.id}', this.checked)" ${!isDisabled ? 'checked' : ''}>
+                    <span class="slider"></span>
+                </label>
+            </td>
+            <td style="text-align:center;">
+                <button onclick="copyAdminFullCredentials('${admin.id}')" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="نسخ بيانات الدخول كاملة"><i class="fa-solid fa-share-nodes"></i></button>
+                <button onclick="deleteAdminFromSettings('${admin.id}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:30px; height:30px; border-radius:6px; cursor:pointer; margin-right:4px;" title="حذف الحساب"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = rowsHtml;
+};
+
+window.copyAdminFullCredentials = function(adminId) {
+    const admin = (window.cachedCenterAdminsList || []).find(a => a.id === adminId);
+    if (!admin) return;
+    const pwdInput = document.getElementById(`pwd_admin_${adminId}`);
+    const pwd = pwdInput ? pwdInput.value : admin.password;
+    
+    const text = `فضاء التكوين البيداغوجي - بيانات الدخول:\nالاسم: ${admin.name}\nالمركز: ${admin.center}\nالبريد/المعرف: ${admin.email || admin.id}\nكلمة المرور: ${pwd}`;
+    copyPasswordValue(text, `بيانات دخول (${admin.name})`);
+};
+
+window.saveAdminPasswordFromSettings = async function(adminId) {
+    const input = document.getElementById(`pwd_admin_${adminId}`);
+    if (!input) return;
+    const newPassword = input.value.trim();
+    if (!newPassword) return Swal.fire('تنبيه', 'لا يمكن ترك كلمة المرور فارغة.', 'warning');
+
+    const admin = (window.cachedCenterAdminsList || []).find(a => a.id === adminId);
+    if (!admin) return;
+
+    try {
+        Swal.fire({ title: 'جاري تحديث كلمة المرور...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        // 1. تحديث في Firestore
+        await db.collection("center_admins").doc(adminId).update({
+            password: newPassword,
+            updatedAt: new Date().toISOString()
+        });
+        await db.collection("employeescomplus").doc(adminId).update({ password: newPassword }).catch(()=>{});
+
+        // 2. تحديث الحساب المساعد في Firebase Auth إن أمكن
+        try {
+            const secondaryApp = firebase.apps.find(a => a.name === "SecondaryAuth") || firebase.initializeApp(firebaseConfig, "SecondaryAuth");
+            const inspectorEmail = admin.email || `inspector_${admin.id}@system.local`;
+            try {
+                const userCred = await secondaryApp.auth().signInWithEmailAndPassword(inspectorEmail, admin.password);
+                await userCred.user.updatePassword(newPassword);
+            } catch (e) {
+                // إذا لم يوجد، ننشئه بكلمة السر الجديدة
+                await secondaryApp.auth().createUserWithEmailAndPassword(inspectorEmail, newPassword).catch(()=>{});
+            }
+        } catch (authErr) {
+            console.warn("تنبيه تحديث Auth الثانوي:", authErr);
+        }
+
+        admin.password = newPassword;
+        Swal.fire({ icon: 'success', title: 'تم التحديث', text: `تم تحديث كلمة المرور للمسؤول (${admin.name}) بنجاح.`, timer: 1500, showConfirmButton: false });
+    } catch (err) {
+        console.error("خطأ في حفظ كلمة مرور المسؤول:", err);
+        Swal.fire('خطأ', 'فشل تحديث كلمة المرور: ' + err.message, 'error');
+    }
+};
+
+window.toggleAdminStatusFromSettings = async function(adminId, isChecked) {
+    try {
+        await db.collection("center_admins").doc(adminId).update({
+            disabled: !isChecked
+        });
+        const admin = (window.cachedCenterAdminsList || []).find(a => a.id === adminId);
+        if (admin) admin.disabled = !isChecked;
+
+        Swal.fire({
+            icon: 'success',
+            title: isChecked ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب',
+            timer: 1200,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        Swal.fire('خطأ', 'تعذر تغيير حالة الحساب: ' + err.message, 'error');
+    }
+};
+
+window.deleteAdminFromSettings = async function(adminId) {
+    const admin = (window.cachedCenterAdminsList || []).find(a => a.id === adminId);
+    const name = admin ? admin.name : adminId;
+
+    const conf = await Swal.fire({
+        title: 'تأكيد الحذف',
+        text: `هل أنت متأكد من حذف حساب المسؤول (${name}) نهائياً؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، حذف الحساب',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#dc2626'
+    });
+
+    if (!conf.isConfirmed) return;
+
+    try {
+        await db.collection("center_admins").doc(adminId).delete();
+        window.cachedCenterAdminsList = window.cachedCenterAdminsList.filter(a => a.id !== adminId);
+        filterCenterAdminsInPasswords();
+        Swal.fire('تم الحذف', 'تم حذف حساب المسؤول بنجاح.', 'success');
+    } catch (err) {
+        Swal.fire('خطأ', 'فشل حذف الحساب: ' + err.message, 'error');
+    }
+};
+
+window.filterSupervisorsInPasswords = function() {
+    const center = document.getElementById('supCenterFilterPass')?.value || 'ALL';
+    const term = (document.getElementById('searchSupervisorPassInput')?.value || '').trim().toLowerCase();
+    const tbody = document.getElementById('supervisorPassTableBody');
+    if (!tbody) return;
+
+    let filtered = window.cachedSupervisorAccountsList || [];
+    if (center !== 'ALL') {
+        filtered = filtered.filter(s => s.center === center);
+    }
+    if (term) {
+        filtered = filtered.filter(s => 
+            (s.name && s.name.toLowerCase().includes(term)) ||
+            (s.empId && String(s.empId).toLowerCase().includes(term)) ||
+            (s.center && s.center.toLowerCase().includes(term))
+        );
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#94a3b8;">لا توجد حسابات مؤطرين مطابقة لمعايير البحث</td></tr>`;
+        return;
+    }
+
+    let rowsHtml = '';
+    filtered.slice(0, 100).forEach(sup => {
+        const inputId = `pwd_sup_${sup.docId}`;
+        const pwd = sup.password || '';
+
+        rowsHtml += `
+        <tr>
+            <td style="font-weight:bold; color:#1e293b;">${sup.name || 'أستاذ مؤطر'}</td>
+            <td style="font-family:monospace; font-weight:bold; color:#1E68E8;">${sup.empId || '-'}</td>
+            <td><span class="badge" style="color:#0FBA50; border-color:#0FBA50;"><i class="fa-solid fa-school"></i> ${sup.center || '-'}</span></td>
+            <td>
+                <div style="display:flex; gap:4px; align-items:center;">
+                    <input type="password" id="${inputId}" value="${pwd}" class="crud-input" style="padding:5px 8px; font-family:monospace; font-weight:bold; font-size:13px; direction:ltr; text-align:left;">
+                    <button type="button" onclick="togglePasswordVisibility('${inputId}', this)" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; cursor:pointer;" title="إظهار/إخفاء"><i class="fa-solid fa-eye"></i></button>
+                    <button type="button" onclick="document.getElementById('${inputId}').value = generateStrongPassword()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; cursor:pointer;" title="توليد عشوائي"><i class="fa-solid fa-shuffle"></i></button>
+                    <button type="button" onclick="copyPasswordValue('${inputId}', 'كلمة مرور ${sup.name}')" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; cursor:pointer;" title="نسخ كلمة المرور"><i class="fa-solid fa-copy"></i></button>
+                    <button type="button" class="btn-action btn-save" onclick="saveSupervisorPasswordFromSettings('${sup.docId}')" style="padding:5px 8px; font-size:11px;" title="حفظ التعديل"><i class="fa-solid fa-floppy-disk"></i></button>
+                </div>
+            </td>
+            <td style="text-align:center;">
+                <button onclick="copySupervisorFullCredentials('${sup.docId}')" style="background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="نسخ بيانات الدخول"><i class="fa-solid fa-share-nodes"></i></button>
+                <button onclick="deleteSupervisorFromSettings('${sup.docId}')" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; width:30px; height:30px; border-radius:6px; cursor:pointer; margin-right:4px;" title="حذف الحساب"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = rowsHtml;
+};
+
+window.copySupervisorFullCredentials = function(docKey) {
+    const sup = (window.cachedSupervisorAccountsList || []).find(s => s.docId === docKey);
+    if (!sup) return;
+    const pwdInput = document.getElementById(`pwd_sup_${docKey}`);
+    const pwd = pwdInput ? pwdInput.value : sup.password;
+    
+    const text = `فضاء الأستاذ المؤطر - بيانات الدخول:\nالأستاذ: ${sup.name}\nالرقم الوظيفي: ${sup.empId}\nالمركز: ${sup.center}\nكلمة المرور: ${pwd}`;
+    copyPasswordValue(text, `بيانات دخول الأستاذ (${sup.name})`);
+};
+
+window.saveSupervisorPasswordFromSettings = async function(docKey) {
+    const input = document.getElementById(`pwd_sup_${docKey}`);
+    if (!input) return;
+    const newPassword = input.value.trim();
+    if (!newPassword) return Swal.fire('تنبيه', 'يرجى كتابة كلمة المرور أولاً.', 'warning');
+
+    try {
+        Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        await db.collection("supervisor_accounts").doc(docKey).update({
+            password: newPassword,
+            updatedAt: new Date().toISOString()
+        });
+        const sup = (window.cachedSupervisorAccountsList || []).find(s => s.docId === docKey);
+        if (sup) sup.password = newPassword;
+
+        Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث كلمة مرور الأستاذ المؤطر بنجاح.', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+        Swal.fire('خطأ', 'فشل تحديث كلمة المرور: ' + err.message, 'error');
+    }
+};
+
+window.deleteSupervisorFromSettings = async function(docKey) {
+    const sup = (window.cachedSupervisorAccountsList || []).find(s => s.docId === docKey);
+    const name = sup ? sup.name : docKey;
+
+    const conf = await Swal.fire({
+        title: 'تأكيد الحذف',
+        text: `هل أنت متأكد من حذف حساب الأستاذ المؤطر (${name})؟`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، حذف الحساب',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#dc2626'
+    });
+
+    if (!conf.isConfirmed) return;
+
+    try {
+        await db.collection("supervisor_accounts").doc(docKey).delete();
+        window.cachedSupervisorAccountsList = window.cachedSupervisorAccountsList.filter(s => s.docId !== docKey);
+        filterSupervisorsInPasswords();
+        Swal.fire('تم الحذف', 'تم حذف حساب الأستاذ بنجاح.', 'success');
+    } catch (err) {
+        Swal.fire('خطأ', 'فشل حذف الحساب: ' + err.message, 'error');
+    }
+};
+
+// =========================================================================
+// =========================================================================
+// منظومة إدارة السنوات التكوينية الشامل
+// =========================================================================
+// =========================================================================
+window.cachedTrainingYearsList = [];
+
+window.updateActiveYearHeader = async function() {
+    try {
+        const badgeText = document.getElementById("activeYearBadgeText");
+        if (!badgeText) return;
+        
+        let activeTitle = "";
+        if (SITE_SETTINGS && SITE_SETTINGS.active_year) {
+            activeTitle = SITE_SETTINGS.active_year;
+        }
+
+        const activeSnap = await db.collection("training_years").where("isActive", "==", true).limit(1).get();
+        if (!activeSnap.empty) {
+            const data = activeSnap.docs[0].data();
+            activeTitle = data.title || data.yearId;
+        }
+
+        if (activeTitle) {
+            badgeText.innerText = `السنة التكوينية: ${activeTitle}`;
+        } else {
+            badgeText.innerText = `السنة التكوينية: 2025-2026`;
+        }
+    } catch(e) {
+        console.warn("تعذر تحديث شارة السنة التكوينية:", e);
+    }
+};
+
+window.renderTrainingYearsTab = async function() {
+    const body = document.getElementById('settingsBody');
+    body.innerHTML = `
+    <div style="text-align:center; padding:50px; color:#64748b;">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+        <p style="margin-top:10px; font-weight:bold; font-family:'Cairo';">جاري مزامنة منظومة السنوات التكوينية من السحابة...</p>
+    </div>`;
+
+    try {
+        // 1. جلب السنوات التكوينية
+        const yearsSnap = await db.collection("training_years").orderBy("createdAt", "desc").get();
+        window.cachedTrainingYearsList = [];
+        yearsSnap.forEach(doc => {
+            window.cachedTrainingYearsList.push({ id: doc.id, ...doc.data() });
+        });
+
+        // 2. التهيئة التلقائية للسنة الحالية إن لم تكن مسجلة
+        if (window.cachedTrainingYearsList.length === 0) {
+            const currentYearId = (SITE_SETTINGS && SITE_SETTINGS.active_year) || "2025-2026";
+            const approvedCenters = (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) 
+                ? Object.values(SITE_SETTINGS.UI_NAMES.centers) : [];
+
+            const initialYear = {
+                yearId: currentYearId,
+                title: `السنة التكوينية ${currentYearId}`,
+                startDate: "2025-10-01",
+                endDate: "2026-07-15",
+                isActive: true,
+                createdAt: new Date().toISOString(),
+                visibilityForCenters: true,
+                approvedCenters: approvedCenters,
+                statsSummary: {
+                    traineesCount: 0,
+                    framersCount: 0,
+                    gradesCount: 0
+                }
+            };
+            await db.collection("training_years").doc(currentYearId).set(initialYear);
+            window.cachedTrainingYearsList.push({ id: currentYearId, ...initialYear });
+        }
+
+        // تحديد السنة النشطة
+        let activeYear = window.cachedTrainingYearsList.find(y => y.isActive) || window.cachedTrainingYearsList[0];
+        let archivedYears = window.cachedTrainingYearsList.filter(y => y.id !== activeYear.id);
+
+        // إحصائيات حية للسنة النشطة
+        let activeTraineesCount = 0, activeFramersCount = 0, activeGradesCount = 0;
+        try {
+            const tSnap = await db.collection("employeescomnew").get();
+            activeTraineesCount = tSnap.size;
+            const fSnap = await db.collection("center_framers").get();
+            activeFramersCount = fSnap.size;
+            const gSnap = await db.collection("training_grades").get();
+            activeGradesCount = gSnap.size;
+        } catch(e){}
+
+        let centersBadgesHtml = '';
+        const approvedCenters = activeYear.approvedCenters || [];
+        approvedCenters.forEach(c => {
+            centersBadgesHtml += `<span class="sec-badge sec-badge-active"><i class="fa-solid fa-school"></i> ${c}</span>`;
+        });
+        if (!centersBadgesHtml) centersBadgesHtml = '<span style="color:#94a3b8; font-size:12px;">لم يتم تسجيل مراكز معتمدة بعد</span>';
+
+        // بناء بطاقات السنوات السابقة
+        let archivedCardsHtml = '';
+        if (archivedYears.length === 0) {
+            archivedCardsHtml = `
+            <div style="background:white; border:1px dashed #cbd5e1; border-radius:10px; padding:30px; text-align:center; color:#94a3b8;">
+                <i class="fa-solid fa-box-open fa-2x" style="margin-bottom:8px;"></i>
+                <p style="margin:0; font-weight:bold; font-size:14px;">لا توجد سنوات سابقة مؤرشفة حتى الآن.</p>
+                <p style="margin:5px 0 0 0; font-size:12px;">عند إضافة سنة تكوينية جديدة، ستتم أرشفة السنة الحالية تلقائياً لتظهر هنا في الأرشيف التاريخي.</p>
+            </div>`;
+        } else {
+            archivedYears.forEach(year => {
+                const isVisCenters = year.visibilityForCenters !== false;
+                const stats = year.statsSummary || {};
+                let cBadges = '';
+                (year.approvedCenters || []).forEach(c => {
+                    cBadges += `<span class="sec-badge sec-badge-archived"><i class="fa-solid fa-school"></i> ${c}</span>`;
+                });
+
+                archivedCardsHtml += `
+                <div class="year-item-card is-archived">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <h4 style="margin:0; font-size:17px; color:#1e293b;">
+                                    <i class="fa-solid fa-box-archive" style="color:#64748b;"></i> ${year.title || year.yearId}
+                                </h4>
+                                <span class="sec-badge sec-badge-archived">مؤرشفة</span>
+                                <span class="sec-badge ${isVisCenters ? 'sec-badge-active' : 'sec-badge-warning'}">
+                                    <i class="fa-solid ${isVisCenters ? 'fa-eye' : 'fa-lock'}"></i>
+                                    ${isVisCenters ? 'متاحة للمراكز المعتمدة' : 'محصورة بالمديرية فقط'}
+                                </span>
+                            </div>
+                            <div style="font-size:12px; color:#64748b; margin-top:6px;">
+                                <span><i class="fa-solid fa-calendar"></i> الفترة: ${year.startDate || '-'} إلى ${year.endDate || '-'}</span>
+                                <span style="margin:0 8px;">|</span>
+                                <span><i class="fa-solid fa-clock"></i> تاريخ الأرشفة: ${year.archivedAt ? new Date(year.archivedAt).toLocaleDateString('ar-DZ') : '-'}</span>
+                            </div>
+                        </div>
+
+                        <!-- أزرار الإجراءات على السنة المؤرشفة -->
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn-action" onclick="browseYearArchive('${year.yearId}')" style="background:#0284c7; padding:7px 14px; font-size:12px;">
+                                <i class="fa-solid fa-magnifying-glass"></i> تصفح بيانات السنة
+                            </button>
+                            <button class="btn-action" onclick="toggleYearCenterVisibility('${year.yearId}', ${!isVisCenters})" style="background:#475569; padding:7px 14px; font-size:12px;" title="التبديل بين إتاحتها للمراكز أو حظرها">
+                                <i class="fa-solid ${isVisCenters ? 'fa-eye-slash' : 'fa-eye'}"></i> ${isVisCenters ? 'حظر على المراكز' : 'إتاحة للمراكز'}
+                            </button>
+                            <button class="btn-action" onclick="restoreYearAsActive('${year.yearId}')" style="background:#0FBA50; padding:7px 14px; font-size:12px;" title="استرجاع وتعيين هذه السنة كسنة نشطة">
+                                <i class="fa-solid fa-rotate-left"></i> تعيين كسنة نشطة
+                            </button>
+                            <button class="btn-action" onclick="exportYearArchiveJSON('${year.yearId}')" style="background:#f59e0b; padding:7px 12px; font-size:12px;" title="تصدير نسخة JSON احتياطية">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- إحصائيات السنة المؤرشفة -->
+                    <div style="display:flex; gap:15px; margin:14px 0 10px 0; background:#f8fafc; padding:10px 15px; border-radius:8px; border:1px solid #e2e8f0; font-size:13px; font-weight:bold; color:#475569; flex-wrap:wrap;">
+                        <span><i class="fa-solid fa-user-graduate" style="color:#0284c7;"></i> المتكونين: <span style="color:#1e293b;">${stats.traineesCount || 0}</span></span>
+                        <span><i class="fa-solid fa-chalkboard-user" style="color:#0FBA50;"></i> المؤطرين: <span style="color:#1e293b;">${stats.framersCount || 0}</span></span>
+                        <span><i class="fa-solid fa-award" style="color:#e11d48;"></i> سجلات النقاط: <span style="color:#1e293b;">${stats.gradesCount || 0}</span></span>
+                        <span><i class="fa-solid fa-school" style="color:#6366f1;"></i> المراكز المعتمدة: <span style="color:#1e293b;">${(year.approvedCenters || []).length}</span></span>
+                    </div>
+
+                    <!-- شارات المراكز المعتمدة بالسنة -->
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                        <span style="font-size:11.5px; font-weight:bold; color:#64748b;">المراكز المعتمدة في هذه السنة:</span>
+                        ${cBadges || '<span style="font-size:11px; color:#94a3b8;">لا توجد مراكز</span>'}
+                    </div>
+                </div>`;
+            });
+        }
+
+        body.innerHTML = `
+        <div class="setting-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                <h3 style="margin:0; border:none; padding:0;">
+                    <i class="fa-solid fa-calendar-days" style="color:#0FBA50;"></i> منظومة إدارة السنوات التكوينية الشامل
+                </h3>
+                <button class="btn-action btn-add" onclick="openAddNewTrainingYearModal()" style="padding:10px 20px; font-size:14px; background:#0FBA50;">
+                    <i class="fa-solid fa-plus"></i> إضافة سنة تكوينية جديدة (بيضاء / فارغة)
+                </button>
+            </div>
+
+            <!-- بطاقة السنة التكوينية النشطة حالياً -->
+            <div class="year-item-card is-active" style="margin-bottom:25px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h4 style="margin:0; font-size:19px; color:#0FBA50;">
+                                <i class="fa-solid fa-calendar-check"></i> ${activeYear.title || activeYear.yearId}
+                            </h4>
+                            <span class="sec-badge sec-badge-active">السنة النشطة الحالية</span>
+                            <span class="sec-badge ${activeYear.visibilityForCenters !== false ? 'sec-badge-active' : 'sec-badge-warning'}">
+                                <i class="fa-solid ${activeYear.visibilityForCenters !== false ? 'fa-eye' : 'fa-lock'}"></i>
+                                ${activeYear.visibilityForCenters !== false ? 'متاحة للمراكز المعتمدة' : 'محصورة بالمديرية فقط'}
+                            </span>
+                        </div>
+                        <div style="font-size:12.5px; color:#64748b; margin-top:6px;">
+                            <span><i class="fa-solid fa-clock"></i> الفترة الزمنية: ${activeYear.startDate || '2025-10-01'} إلى ${activeYear.endDate || '2026-07-15'}</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-action" onclick="toggleYearCenterVisibility('${activeYear.yearId}', ${activeYear.visibilityForCenters === false})" style="background:#475569; padding:8px 14px; font-size:12px;">
+                            <i class="fa-solid ${activeYear.visibilityForCenters !== false ? 'fa-eye-slash' : 'fa-eye'}"></i>
+                            ${activeYear.visibilityForCenters !== false ? 'حظر الظهور للمراكز' : 'إتاحة الظهور للمراكز'}
+                        </button>
+                        <button class="btn-action" onclick="exportYearArchiveJSON('${activeYear.yearId}')" style="background:#1E68E8; padding:8px 14px; font-size:12px;">
+                            <i class="fa-solid fa-download"></i> تصدير نسخة احتياطية
+                        </button>
+                    </div>
+                </div>
+
+                <!-- عدادات السنة الحالية النشطة -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin:15px 0;">
+                    <div class="counter-stat-box"><div class="counter-stat-val" style="color:#0284c7;">${activeTraineesCount}</div><div class="counter-stat-lbl">المتكونين المسجلين</div></div>
+                    <div class="counter-stat-box"><div class="counter-stat-val" style="color:#0FBA50;">${activeFramersCount}</div><div class="counter-stat-lbl">المؤطرين بالمراكز</div></div>
+                    <div class="counter-stat-box"><div class="counter-stat-val" style="color:#e11d48;">${activeGradesCount}</div><div class="counter-stat-lbl">سجلات النقاط</div></div>
+                    <div class="counter-stat-box"><div class="counter-stat-val" style="color:#6366f1;">${approvedCenters.length}</div><div class="counter-stat-lbl">المراكز المعتمدة</div></div>
+                </div>
+
+                <!-- المراكز المعتمدة بالسنة الحالية -->
+                <div>
+                    <div style="font-size:12.5px; font-weight:bold; color:#334e68; margin-bottom:6px;">المراكز المعتمدة حالياً في هذه السنة:</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px;">${centersBadgesHtml}</div>
+                </div>
+            </div>
+
+            <!-- قائمة السنوات التكوينية السابقة والمؤرشفة -->
+            <div style="margin-top:20px;">
+                <h4 style="margin:0 0 15px 0; color:#1e293b; font-size:16px; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-clock-rotate-left" style="color:#475569;"></i> سجل السنوات التكوينية السابقة والمؤرشفة:
+                </h4>
+                ${archivedCardsHtml}
+            </div>
+        </div>`;
+
+        // تحديث شارة الشريط العلوي
+        updateActiveYearHeader();
+
+    } catch (err) {
+        console.error("خطأ في بناء تبويب السنوات التكوينية:", err);
+        body.innerHTML = `<div style="padding:30px; text-align:center; color:#dc2626;">حدث خطأ أثناء تحميل السنوات التكوينية: ${err.message}</div>`;
+    }
+};
+
+// -------------------------------------------------------------------------
+// نافذة إضافة سنة تكوينية جديدة (بيضاء وفارغة مع أرشفة السابقة)
+// -------------------------------------------------------------------------
+window.openAddNewTrainingYearModal = async function() {
+    const currentYear = (window.cachedTrainingYearsList || []).find(y => y.isActive) || { yearId: "2025-2026", title: "السنة التكوينية 2025-2026" };
+
+    // حساب اقتراح السنة القادمة تلقائياً
+    let nextYearSuggestion = "2026-2027";
+    const parts = (currentYear.yearId || "").split('-');
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        nextYearSuggestion = `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`;
+    }
+
+    // بناء قائمة المراكز لاختيار المراكز المعاد اعتمادها
+    let centersCheckboxesHtml = '';
+    if (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES && SITE_SETTINGS.UI_NAMES.centers) {
+        for (let k in SITE_SETTINGS.UI_NAMES.centers) {
+            const cName = SITE_SETTINGS.UI_NAMES.centers[k];
+            centersCheckboxesHtml += `
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:bold; color:#334e68; cursor:pointer; background:#fff; padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1;">
+                <input type="checkbox" class="swal-year-center" value="${cName}" checked style="width:16px; height:16px; accent-color:#0FBA50;">
+                ${cName}
+            </label>`;
+        }
+    }
+    if (!centersCheckboxesHtml) {
+        centersCheckboxesHtml = '<span style="color:#94a3b8; font-size:12px;">لا توجد مراكز سابقة مسجلة.</span>';
+    }
+
+    const { value: formValues } = await Swal.fire({
+        title: '<i class="fa-solid fa-calendar-plus" style="color:#0FBA50;"></i> إضافة سنة تكوينية جديدة',
+        html: `
+            <div style="text-align:right; font-family:'Cairo'; font-size:13px; max-height:70vh; overflow-y:auto; padding:5px;">
+                <div style="background:#e8fbf0; color:#065f46; padding:12px; border-radius:8px; margin-bottom:15px; border:1px solid #bbf7d0;">
+                    <b>مرحباً بك في معالج إنشاء سنة تكوينية جديدة:</b><br>
+                    سيقوم هذا المعالج بأرشفة كامل بيانات السنة الحالية (<b>${currentYear.title}</b>) تلقائياً، وتأسيس سنة تكوينية جديدة تبدأ فارغة ونظيفة لتسجيل المتكونين والمؤطرين الجدد.
+                </div>
+
+                <!-- 1. تعريف السنة الجديدة -->
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:5px;">معرف السنة التكوينية الجديدة (مثال: 2026-2027):</label>
+                    <input type="text" id="new_year_id" class="crud-input" value="${nextYearSuggestion}" placeholder="2026-2027" style="font-weight:bold; font-family:monospace; font-size:15px;">
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:5px;">المسمى الرسمي للسنة:</label>
+                    <input type="text" id="new_year_title" class="crud-input" value="السنة التكوينية ${nextYearSuggestion}" style="font-weight:bold;">
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+                    <div>
+                        <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:5px;">تاريخ البداية:</label>
+                        <input type="date" id="new_year_start" class="crud-input" value="2026-10-01">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:5px;">تاريخ النهاية:</label>
+                        <input type="date" id="new_year_end" class="crud-input" value="2027-07-15">
+                    </div>
+                </div>
+
+                <!-- 2. خيارات الأرشفة للسنة الحالية -->
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:15px;">
+                    <div style="font-weight:bold; color:#1E68E8; margin-bottom:8px;"><i class="fa-solid fa-box-archive"></i> خطوة الأرشفة التلقائية:</div>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#1e293b;">
+                        <input type="checkbox" id="opt_archive_current" checked disabled style="width:18px; height:18px; accent-color:#1E68E8;">
+                        أرشفة كامل بيانات السنة الحالية (${currentYear.title}) في السحابة قبل البدء (إلزامي للأمان)
+                    </label>
+                    <div style="font-size:11.5px; color:#64748b; margin-top:5px;">يشمل الأرشيف: المتكونين، المؤطرين، كشوف النقاط، وسجلات الحضور والغياب.</div>
+                </div>
+
+                <!-- 3. المراكز المعتمدة مجدداً -->
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-weight:bold; color:#1e293b;"><i class="fa-solid fa-school" style="color:#0FBA50;"></i> المراكز المعتمدة في السنة الجديدة:</span>
+                        <button type="button" onclick="document.querySelectorAll('.swal-year-center').forEach(c=>c.checked=true)" style="background:none; border:none; color:#0284c7; cursor:pointer; font-size:11px; font-weight:bold;">تحديد الكل</button>
+                    </div>
+                    <p style="font-size:11.5px; color:#64748b; margin-top:0; margin-bottom:8px;">حدد المراكز المعاد اعتمادها في هذه السنة التكوينية (ستتمكن المراكز المعتمدة فقط من الاطلاع على أرشيفها السابق إن تم السماح بذلك):</p>
+                    <div style="display:grid; grid-template-columns:1fr; gap:6px; max-height:140px; overflow-y:auto; padding:2px;">
+                        ${centersCheckboxesHtml}
+                    </div>
+                </div>
+
+                <!-- 4. خيارات التصفير للبدء فارغاً (بكل شيء جديد) -->
+                <div style="background:#fff5f5; border:1px solid #fecaca; border-radius:8px; padding:12px; margin-bottom:15px;">
+                    <div style="font-weight:bold; color:#dc2626; margin-bottom:6px;"><i class="fa-solid fa-sparkles"></i> التهيئة النظيفة للسنة الجديدة (بدء فارغ):</div>
+                    <p style="font-size:11.5px; color:#991b1b; margin-top:0; margin-bottom:8px;">حدد القواعد المراد تصفيرها بعد اكتمال أرشفتها لتبدأ السنة الجديدة نظيفة وفارغة تماماً:</p>
+                    
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <label style="display:flex; align-items:center; gap:6px; font-weight:bold; color:#1e293b; cursor:pointer;">
+                            <input type="checkbox" id="clean_trainees" checked style="accent-color:#dc2626;"> مسح المتكونين القدامى
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; font-weight:bold; color:#1e293b; cursor:pointer;">
+                            <input type="checkbox" id="clean_attendance" checked style="accent-color:#dc2626;"> مسح سجلات الحضور
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; font-weight:bold; color:#1e293b; cursor:pointer;">
+                            <input type="checkbox" id="clean_grades" checked style="accent-color:#dc2626;"> مسح كشوف النقاط
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px; font-weight:bold; color:#1e293b; cursor:pointer;">
+                            <input type="checkbox" id="clean_framers" checked style="accent-color:#dc2626;"> تفريغ تكليفات المؤطرين
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 5. سياسة ظهور الأرشيف للمراكز -->
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:#1e293b;">
+                        <input type="checkbox" id="opt_vis_centers" checked style="width:18px; height:18px; accent-color:#0FBA50;">
+                        السماح للمراكز المعتمدة مجدداً فقط بتصفح أرشيفها للسنة المنتهية
+                    </label>
+                    <div style="font-size:11.5px; color:#64748b; margin-top:4px;">إذا أُلغي التحديد، سيكون الأرشيف متاحاً للإدارة المركزية (المديرية) فقط.</div>
+                </div>
+            </div>
+        `,
+        width: '650px',
+        showCancelButton: true,
+        confirmButtonText: 'اعتماد وبدء السنة التكوينية الجديدة',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#0FBA50',
+        preConfirm: () => {
+            const yearId = document.getElementById('new_year_id')?.value.trim();
+            const title = document.getElementById('new_year_title')?.value.trim();
+            const start = document.getElementById('new_year_start')?.value;
+            const end = document.getElementById('new_year_end')?.value;
+            
+            if (!yearId) {
+                Swal.showValidationMessage('يرجى تحديد معرف السنة التكوينية الجديدة (مثال: 2026-2027)');
+                return false;
+            }
+
+            const chosenCenters = Array.from(document.querySelectorAll('.swal-year-center:checked')).map(cb => cb.value);
+            return {
+                yearId,
+                title: title || `السنة التكوينية ${yearId}`,
+                startDate: start,
+                endDate: end,
+                approvedCenters: chosenCenters,
+                cleanTrainees: document.getElementById('clean_trainees')?.checked,
+                cleanAttendance: document.getElementById('clean_attendance')?.checked,
+                cleanGrades: document.getElementById('clean_grades')?.checked,
+                cleanFramers: document.getElementById('clean_framers')?.checked,
+                visibilityForCenters: document.getElementById('opt_vis_centers')?.checked
+            };
+        }
+    });
+
+    if (!formValues) return;
+
+    // تأكيد إضافي قبل تنفيذ النقل الشامل
+    const finalConfirm = await Swal.fire({
+        title: 'تأكيد الانتقال النهائي',
+        html: `هل أنت متأكد من ترحيل السنة الحالية واعتماد السنة التكوينية الجديدة <b>(${formValues.title})</b>؟<br><br>سيتم أرشفة البيانات وتجهيز مساحة العمل الجديدة.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، ابدأ العملية الآن',
+        cancelButtonText: 'تراجع',
+        confirmButtonColor: '#0FBA50'
+    });
+
+    if (!finalConfirm.isConfirmed) return;
+
+    Swal.fire({
+        title: 'جاري أرشفة السنة الحالية وبدء السنة الجديدة...',
+        text: 'يرجى الانتظار ريثما تكتمل كتابة الأرشيف وتصفير قواعد البيانات المحددة...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const oldYearId = currentYear.yearId || "2025-2026";
+        const newYearId = formValues.yearId;
+
+        // 1. جمع بيانات السنة الحالية للأرشفة
+        const [traineesSnap, framersSnap, gradesSnap, attSnap] = await Promise.all([
+            db.collection("employeescomnew").get(),
+            db.collection("center_framers").get(),
+            db.collection("training_grades").get(),
+            db.collection("attendance_daily").get()
+        ]);
+
+        const archiveMeta = {
+            yearId: oldYearId,
+            title: currentYear.title || `السنة التكوينية ${oldYearId}`,
+            archivedAt: new Date().toISOString(),
+            statsSummary: {
+                traineesCount: traineesSnap.size,
+                framersCount: framersSnap.size,
+                gradesCount: gradesSnap.size,
+                attendanceCount: attSnap.size
+            },
+            approvedCenters: currentYear.approvedCenters || (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES ? Object.values(SITE_SETTINGS.UI_NAMES.centers) : []),
+            settingsSnapshot: {
+                centers: (SITE_SETTINGS && SITE_SETTINGS.UI_NAMES) ? SITE_SETTINGS.UI_NAMES.centers : {},
+                dbLinks: (SITE_SETTINGS && SITE_SETTINGS.dbLinks) ? SITE_SETTINGS.dbLinks : {}
+            }
+        };
+
+        // 2. حفظ وثيقة الأرشيف الوصفية
+        await db.collection("training_years_archives").doc(oldYearId).set(archiveMeta);
+
+        // حفظ بيانات الأرشيف بالدفعات في مجموعات فرعية (لتجاوز أي حد حجمي)
+        const archiveBatches = [];
+        let curBatch = db.batch();
+        let opCount = 0;
+
+        // أرشفة المتكونين
+        traineesSnap.docs.forEach(doc => {
+            const ref = db.collection("training_years_archives").doc(oldYearId).collection("trainees").doc(doc.id);
+            curBatch.set(ref, doc.data());
+            opCount++;
+            if (opCount === 450) { archiveBatches.push(curBatch); curBatch = db.batch(); opCount = 0; }
+        });
+
+        // أرشفة المؤطرين
+        framersSnap.docs.forEach(doc => {
+            const ref = db.collection("training_years_archives").doc(oldYearId).collection("framers").doc(doc.id);
+            curBatch.set(ref, doc.data());
+            opCount++;
+            if (opCount === 450) { archiveBatches.push(curBatch); curBatch = db.batch(); opCount = 0; }
+        });
+
+        // أرشفة النقاط
+        gradesSnap.docs.forEach(doc => {
+            const ref = db.collection("training_years_archives").doc(oldYearId).collection("grades").doc(doc.id);
+            curBatch.set(ref, doc.data());
+            opCount++;
+            if (opCount === 450) { archiveBatches.push(curBatch); curBatch = db.batch(); opCount = 0; }
+        });
+
+        // أرشفة الحضور
+        attSnap.docs.forEach(doc => {
+            const ref = db.collection("training_years_archives").doc(oldYearId).collection("attendance").doc(doc.id);
+            curBatch.set(ref, doc.data());
+            opCount++;
+            if (opCount === 450) { archiveBatches.push(curBatch); curBatch = db.batch(); opCount = 0; }
+        });
+
+        if (opCount > 0) archiveBatches.push(curBatch);
+
+        for (let b of archiveBatches) {
+            await b.commit();
+        }
+
+        // 3. تحديث حالة السنة القديمة في training_years
+        await db.collection("training_years").doc(oldYearId).set({
+            isActive: false,
+            archivedAt: new Date().toISOString(),
+            visibilityForCenters: formValues.visibilityForCenters,
+            statsSummary: archiveMeta.statsSummary,
+            approvedCenters: archiveMeta.approvedCenters
+        }, { merge: true });
+
+        // 4. إنشاء السنة الجديدة كـ active في training_years
+        await db.collection("training_years").doc(newYearId).set({
+            yearId: newYearId,
+            title: formValues.title,
+            startDate: formValues.startDate,
+            endDate: formValues.endDate,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            visibilityForCenters: formValues.visibilityForCenters,
+            approvedCenters: formValues.approvedCenters,
+            statsSummary: {
+                traineesCount: 0,
+                framersCount: 0,
+                gradesCount: 0
+            }
+        });
+
+        // 5. تصفير القواعد التشغيلية لبدء سنة جديدة فارغة تماماً ("بكل شيء جديد")
+        if (formValues.cleanTrainees) {
+            await clearCollectionData("employeescomnew");
+        }
+        if (formValues.cleanAttendance) {
+            await clearCollectionData("attendance_daily");
+            await clearCollectionData("attendance").catch(()=>{});
+            await clearCollectionData("framers_attendance_daily").catch(()=>{});
+        }
+        if (formValues.cleanGrades) {
+            await clearCollectionData("training_grades");
+            await clearCollectionData("grades").catch(()=>{});
+        }
+        if (formValues.cleanFramers) {
+            await clearCollectionData("center_framers");
+            await clearCollectionData("framers").catch(()=>{});
+            await clearCollectionData("supervisor_accounts").catch(()=>{});
+        }
+
+        // 6. تحديث إعدادات الموقع المركزية
+        await db.collection("site_settings").doc("main").set({
+            active_year: newYearId,
+            active_year_title: formValues.title
+        }, { merge: true });
+
+        // 7. تحديث الواجهة والشارة العلوية
+        await updateActiveYearHeader();
+        await renderTrainingYearsTab();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'تم اعتماد السنة التكوينية الجديدة بنجاح',
+            html: `
+                <div style="text-align:right; font-family:'Cairo'; font-size:13px; line-height:1.6;">
+                    ✅ تمت أرشفة بيانات (${currentYear.title || oldYearId}) بنجاح.<br>
+                    ✅ تم تعيين (<b>${formValues.title}</b>) كسنة نشطة معتمدة.<br>
+                    ✅ تم تصفير القواعد التشغيلية لتكون جاهزة وفارغة للتسجيلات الجديدة.<br>
+                    ✅ تم اعتماد ${formValues.approvedCenters.length} مركزاً تكوينياً.
+                </div>
+            `
+        });
+
+    } catch (err) {
+        console.error("خطأ أثناء إنشاء السنة التكوينية الجديدة:", err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء العملية: ' + err.message, 'error');
+    }
+};
+
+// -------------------------------------------------------------------------
+// تصفح بيانات السنة المؤرشفة (المستكشف التاريخي)
+// -------------------------------------------------------------------------
+window.currentViewingArchiveYearId = null;
+window.currentViewingArchiveSubTab = 'trainees';
+window.currentArchiveRawData = { trainees: [], framers: [], grades: [], attendance: [] };
+
+window.browseYearArchive = async function(yearId) {
+    window.currentViewingArchiveYearId = yearId;
+    window.currentViewingArchiveSubTab = 'trainees';
+    
+    const modal = document.getElementById('historicalArchiveModal');
+    if (modal) modal.style.display = 'flex';
+
+    document.getElementById('archiveModalYearTitle').innerText = yearId;
+    document.getElementById('archiveContentBody').innerHTML = `
+        <div style="text-align:center; padding:50px; color:#64748b;">
+            <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+            <p style="margin-top:10px; font-weight:bold; font-family:'Cairo';">جاري جلب سجلات أرشيف ${yearId}...</p>
+        </div>`;
+
+    try {
+        // جلب وثيقة الأرشيف الرئيسية
+        const metaSnap = await db.collection("training_years_archives").doc(yearId).get();
+        let meta = metaSnap.exists ? metaSnap.data() : {};
+
+        // تعبئة خيارات المراكز في فلتر الأرشيف
+        const centerSel = document.getElementById('archiveCenterFilter');
+        centerSel.innerHTML = '<option value="ALL">🏛️ كافة المراكز المعتمدة بالسنة</option>';
+        const centers = meta.approvedCenters || [];
+        centers.forEach(c => {
+            centerSel.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+
+        // جلب عينات أو سجلات الأرشيف المتاحة
+        const [tSnap, fSnap, gSnap, aSnap] = await Promise.all([
+            db.collection("training_years_archives").doc(yearId).collection("trainees").limit(500).get(),
+            db.collection("training_years_archives").doc(yearId).collection("framers").limit(500).get(),
+            db.collection("training_years_archives").doc(yearId).collection("grades").limit(500).get(),
+            db.collection("training_years_archives").doc(yearId).collection("attendance").limit(500).get()
+        ]);
+
+        window.currentArchiveRawData = {
+            trainees: tSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            framers: fSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            grades: gSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            attendance: aSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        };
+
+        switchArchiveSubTab('trainees');
+
+    } catch (err) {
+        console.error("خطأ في جلب بيانات الأرشيف:", err);
+        document.getElementById('archiveContentBody').innerHTML = `<div style="text-align:center; padding:40px; color:#dc2626;">تعذر جلب بيانات الأرشيف: ${err.message}</div>`;
+    }
+};
+
+window.switchArchiveSubTab = function(subTab) {
+    window.currentViewingArchiveSubTab = subTab;
+    const tabs = ['trainees', 'framers', 'grades', 'attendance'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`archTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (btn) {
+            btn.style.background = (t === subTab) ? '#0284c7' : '#64748b';
+        }
+    });
+    filterArchiveData();
+};
+
+window.filterArchiveData = function() {
+    const center = document.getElementById('archiveCenterFilter')?.value || 'ALL';
+    const term = (document.getElementById('archiveSearchInput')?.value || '').trim().toLowerCase();
+    const container = document.getElementById('archiveContentBody');
+    if (!container) return;
+
+    const subTab = window.currentViewingArchiveSubTab;
+    let list = window.currentArchiveRawData[subTab] || [];
+
+    if (center !== 'ALL') {
+        list = list.filter(item => (item.center === center) || (item.baseInfo && item.baseInfo.center === center));
+    }
+    if (term) {
+        list = list.filter(item => {
+            const name = (item.name || (item.baseInfo && item.baseInfo.name) || '').toLowerCase();
+            const id = String(item.id || item.empId || '').toLowerCase();
+            const spec = String(item.specialty || item.spec || '').toLowerCase();
+            return name.includes(term) || id.includes(term) || spec.includes(term);
+        });
+    }
+
+    if (list.length === 0) {
+        container.innerHTML = `
+        <div style="text-align:center; padding:40px; color:#94a3b8; font-family:'Cairo';">
+            <i class="fa-solid fa-folder-open fa-2x" style="margin-bottom:8px;"></i>
+            <p style="margin:0; font-weight:bold;">لا توجد سجلات في هذا القسم مطابقة للتصفية.</p>
+        </div>`;
+        return;
+    }
+
+    let tableHtml = '';
+    if (subTab === 'trainees') {
+        tableHtml = `
+        <table class="crud-table" id="archivePrintTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>الاسم واللقب</th>
+                    <th>الرقم الوظيفي / التعريف</th>
+                    <th>الرتبة</th>
+                    <th>التخصص</th>
+                    <th>الطور</th>
+                    <th>المركز التكويني</th>
+                    <th>الفوج</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((t, i) => {
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold; color:#1e293b;">${t.name || '-'}</td>
+                <td style="font-family:monospace; color:#1E68E8;">${t.id || t.empId || '-'}</td>
+                <td>${t.grade || t.rank || '-'}</td>
+                <td><span class="badge" style="color:#0FBA50; border-color:#0FBA50;">${t.specialty || t.spec || '-'}</span></td>
+                <td>${t.level || '-'}</td>
+                <td>${t.center || '-'}</td>
+                <td>${t.group || '-'}</td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    } else if (subTab === 'framers') {
+        tableHtml = `
+        <table class="crud-table" id="archivePrintTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>اسم المؤطر</th>
+                    <th>الرقم الوظيفي</th>
+                    <th>المركز التكويني</th>
+                    <th>المهمة / الصفة</th>
+                    <th>المقاييس المسندة</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((f, i) => {
+            const modules = Array.isArray(f.framingModules) ? f.framingModules.join(', ') : (f.modules || '-');
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold; color:#1e293b;">${f.name || '-'}</td>
+                <td style="font-family:monospace;">${f.empId || f.id || '-'}</td>
+                <td>${f.center || '-'}</td>
+                <td><span class="badge" style="color:#1E68E8; border-color:#1E68E8;">${f.role || 'أستاذ مؤطر'}</span></td>
+                <td>${modules}</td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    } else if (subTab === 'grades') {
+        tableHtml = `
+        <table class="crud-table" id="archivePrintTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>اسم المتربص</th>
+                    <th>الرقم الوظيفي</th>
+                    <th>المركز التكويني</th>
+                    <th>المعدل العام</th>
+                    <th>القرار</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((g, i) => {
+            const avg = g.grades ? g.grades.genAverage : (g.genAverage || '-');
+            const dec = g.grades ? g.grades.decision : (g.decision || '-');
+            const decClass = (dec === 'ناجح') ? 'sec-badge-active' : 'sec-badge-danger';
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold; color:#1e293b;">${g.name || '-'}</td>
+                <td style="font-family:monospace;">${g.empId || g.id || '-'}</td>
+                <td>${g.center || '-'}</td>
+                <td style="font-weight:bold; font-size:14px; color:#1E68E8;">${avg}</td>
+                <td><span class="sec-badge ${decClass}">${dec}</span></td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    } else if (subTab === 'attendance') {
+        tableHtml = `
+        <table class="crud-table" id="archivePrintTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>اسم المتكون</th>
+                    <th>الرقم الوظيفي</th>
+                    <th>المركز</th>
+                    <th>التاريخ</th>
+                    <th>الدورة</th>
+                    <th>الحالة</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((a, i) => {
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold;">${a.name || a.empName || '-'}</td>
+                <td style="font-family:monospace;">${a.empId || '-'}</td>
+                <td>${a.center || '-'}</td>
+                <td>${a.date || '-'}</td>
+                <td>الدورة ${a.cycle || a.session || '1'}</td>
+                <td><span class="sec-badge sec-badge-active">${a.status || 'حاضر'}</span></td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    }
+
+    container.innerHTML = `
+        <div style="margin-bottom:10px; font-size:12.5px; font-weight:bold; color:#64748b;">
+            عدد السجلات المعروضة: <span style="color:#0284c7;">${list.length}</span> سجل
+        </div>
+        ${tableHtml}
+    `;
+};
+
+window.exportCurrentArchiveToExcel = function() {
+    const table = document.getElementById('archivePrintTable');
+    if (!table) return Swal.fire('تنبيه', 'لا يوجد جدول لتصديره.', 'info');
+    
+    try {
+        const wb = XLSX.utils.table_to_book(table, { sheet: "الأرشيف" });
+        const subTab = window.currentViewingArchiveSubTab;
+        const year = window.currentViewingArchiveYearId || 'Archive';
+        XLSX.writeFile(wb, `ارشف_${year}_${subTab}.xlsx`);
+    } catch (e) {
+        Swal.fire('خطأ', 'تعذر تصدير ملف الإكسل: ' + e.message, 'error');
+    }
+};
+
+window.toggleYearCenterVisibility = async function(yearId, isVisible) {
+    try {
+        await db.collection("training_years").doc(yearId).update({
+            visibilityForCenters: isVisible
+        });
+        
+        const y = (window.cachedTrainingYearsList || []).find(item => item.yearId === yearId || item.id === yearId);
+        if (y) y.visibilityForCenters = isVisible;
+
+        Swal.fire({
+            icon: 'success',
+            title: isVisible ? 'أُتيح العرض للمراكز المعتمدة' : 'حُصر العرض بالمديرية فقط',
+            text: isVisible ? 'يمكن الآن للمراكز المعتمدة تصفح أرشيف هذه السنة.' : 'تم حظر الوصول على المراكز وحصر الأرشيف بالمديرية.',
+            timer: 1600,
+            showConfirmButton: false
+        });
+
+        renderTrainingYearsTab();
+    } catch (e) {
+        Swal.fire('خطأ', 'فشل تغيير سياسة الظهور: ' + e.message, 'error');
+    }
+};
+
+window.restoreYearAsActive = async function(yearId) {
+    const year = (window.cachedTrainingYearsList || []).find(y => y.yearId === yearId || y.id === yearId);
+    if (!year) return;
+
+    const conf = await Swal.fire({
+        title: 'تأكيد استرجاع السنة وتعيينها نشطة',
+        html: `
+            هل أنت متأكد من تعيين (<b>${year.title || yearId}</b>) كسنة تكوينية نشطة في النظام؟<br><br>
+            <span style="font-size:12.5px; color:#64748b;">سيتم تبديل السنة التكوينية النشطة والاعتماد عليها في إحصائيات لوحة التحكم.</span>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، تعيين كسنة نشطة',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#0FBA50'
+    });
+
+    if (!conf.isConfirmed) return;
+
+    try {
+        Swal.fire({ title: 'جاري تبديل السنة النشطة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        // إلغاء تفعيل كافة السنوات
+        const allSnap = await db.collection("training_years").get();
+        const batch = db.batch();
+        allSnap.forEach(d => {
+            batch.update(d.ref, { isActive: (d.id === yearId) });
+        });
+        await batch.commit();
+
+        // تحديث site_settings
+        await db.collection("site_settings").doc("main").set({
+            active_year: yearId,
+            active_year_title: year.title || yearId
+        }, { merge: true });
+
+        await updateActiveYearHeader();
+        await renderTrainingYearsTab();
+
+        Swal.fire('تم بنجاح', `تم تعيين (${year.title || yearId}) كسنة تكوينية نشطة حالياً.`, 'success');
+    } catch (e) {
+        Swal.fire('خطأ', 'فشلت عملية التعيين: ' + e.message, 'error');
+    }
+};
+
+window.exportYearArchiveJSON = async function(yearId) {
+    Swal.fire({ title: 'جاري تجميع ملف الأرشيف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const metaSnap = await db.collection("training_years_archives").doc(yearId).get();
+        const meta = metaSnap.exists ? metaSnap.data() : {};
+
+        const [tSnap, fSnap, gSnap, aSnap] = await Promise.all([
+            db.collection("training_years_archives").doc(yearId).collection("trainees").get(),
+            db.collection("training_years_archives").doc(yearId).collection("framers").get(),
+            db.collection("training_years_archives").doc(yearId).collection("grades").get(),
+            db.collection("training_years_archives").doc(yearId).collection("attendance").get()
+        ]);
+
+        const fullExport = {
+            metadata: meta,
+            trainees: tSnap.docs.map(d => d.data()),
+            framers: fSnap.docs.map(d => d.data()),
+            grades: gSnap.docs.map(d => d.data()),
+            attendance: aSnap.docs.map(d => d.data())
+        };
+
+        const jsonStr = JSON.stringify(fullExport, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `archive_backup_${yearId}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'تم تصدير النسخة الاحتياطية',
+            text: `تم تنزيل ملف الأرشيف الكامل للسنة (${yearId}) بصيغة JSON.`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } catch (e) {
+        Swal.fire('خطأ', 'تعذر تصدير الأرشيف: ' + e.message, 'error');
+    }
+};
+

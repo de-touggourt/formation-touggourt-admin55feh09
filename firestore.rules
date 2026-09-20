@@ -122,6 +122,16 @@ service cloud.firestore {
       allow delete: if isAdmin() || isInspector() || true;
     }
 
+    // 10. نظام السنوات التكوينية والأرشيف (training_years & training_years_archives)
+    match /training_years/{yearId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /training_years_archives/{doc=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // القاعدة الافتراضية لأي مجموعة أخرى غير معلنة
     match /{document=**} {
       allow read, write: if isAdmin();

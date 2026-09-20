@@ -4234,3 +4234,266 @@ function onSelectRecordedDay(selectedDay) {
         loadAttendanceData();
     }
 }
+
+// =========================================================================
+// =========================================================================
+// منظومة تصفح أرشيف السنوات التكوينية السابقة للمركز المعتمد
+// =========================================================================
+// =========================================================================
+window.inspAllowedArchiveYears = [];
+window.currentInspArchiveRawData = { trainees: [], framers: [], grades: [] };
+window.currentInspArchiveSubTab = 'trainees';
+
+window.openInspectorArchiveModal = async function() {
+    const center = (INSPECTOR_CENTER || sessionStorage.getItem("inspectorCenter") || "").trim();
+    if (!center) {
+        return Swal.fire('تنبيه', 'لم يتم التعرف على المركز التكويني لجلسة المفتش الحالية.', 'warning');
+    }
+
+    Swal.fire({
+        title: 'جاري فحص صلاحية الأرشيف...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        // استعلام السنوات السابقة المتاح عرضها للمراكز المعتمدة
+        const yearsSnap = await db.collection("training_years")
+            .where("isActive", "==", false)
+            .get();
+
+        window.inspAllowedArchiveYears = [];
+        yearsSnap.forEach(doc => {
+            const y = doc.data();
+            // التحقق من سياسة العرض: متاح للمراكز المعتمدة + المركز الحالي مسجل ضمن المراكز المعتمدة لتلك السنة
+            const isVis = (y.visibilityForCenters !== false);
+            const isApprovedInYear = Array.isArray(y.approvedCenters) && (
+                y.approvedCenters.includes(center) ||
+                y.approvedCenters.some(c => c.trim().toLowerCase() === center.toLowerCase())
+            );
+
+            if (isVis && isApprovedInYear) {
+                window.inspAllowedArchiveYears.push({ id: doc.id, ...y });
+            }
+        });
+
+        if (window.inspAllowedArchiveYears.length === 0) {
+            return Swal.fire({
+                icon: 'info',
+                title: 'أرشيف السنوات السابقة',
+                html: `
+                    <div style="text-align:right; font-family:'Cairo'; font-size:13px; line-height:1.6;">
+                        لا تتوفر سنوات تكوينية سابقة متاحة للعرض لمركز (<b>${center}</b>) حالياً.<br><br>
+                        <span style="color:#64748b;">ملاحظة: تظهر الأرشيفات التاريخية للمراكز فقط إذا كانت السنة السابقة مسموحاً بعرضها للمراكز من إعدادات المديرية وكان المركز نفسه معتمداً في تلك السنة.</span>
+                    </div>
+                `
+            });
+        }
+
+        Swal.close();
+
+        const modal = document.getElementById('inspectorArchiveModal');
+        if (modal) modal.style.display = 'flex';
+
+        const centerHeader = document.getElementById('inspArchiveCenterHeader');
+        if (centerHeader) centerHeader.innerText = center;
+
+        const sel = document.getElementById('inspArchiveYearSelect');
+        sel.innerHTML = '';
+        window.inspAllowedArchiveYears.forEach(y => {
+            sel.innerHTML += `<option value="${y.yearId || y.id}">${y.title || y.yearId || y.id}</option>`;
+        });
+
+        loadInspectorYearArchiveData(window.inspAllowedArchiveYears[0].yearId || window.inspAllowedArchiveYears[0].id);
+
+    } catch (err) {
+        console.error("خطأ في فحص أرشيف المفتش:", err);
+        Swal.fire('خطأ', 'تعذر جلب بيانات الأرشيف: ' + err.message, 'error');
+    }
+};
+
+window.loadInspectorYearArchiveData = async function(yearId) {
+    const center = (INSPECTOR_CENTER || sessionStorage.getItem("inspectorCenter") || "").trim();
+    const container = document.getElementById('inspArchiveContentBody');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div style="text-align:center; padding:50px; color:#64748b; font-family:'Cairo';">
+            <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+            <p style="margin-top:10px; font-weight:bold;">جاري جلب بيانات أرشيف (${yearId}) لمركزكم...</p>
+        </div>`;
+
+    try {
+        // جلب المتكونين والمؤطرين والنقاط لهذا المركز من وثائق أو مجموعات الأرشيف
+        const [tSnap, fSnap, gSnap] = await Promise.all([
+            db.collection("training_years_archives").doc(yearId).collection("trainees").where("center", "==", center).get(),
+            db.collection("training_years_archives").doc(yearId).collection("framers").where("center", "==", center).get(),
+            db.collection("training_years_archives").doc(yearId).collection("grades").where("center", "==", center).get()
+        ]);
+
+        window.currentInspArchiveRawData = {
+            trainees: tSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            framers: fSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            grades: gSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        };
+
+        switchInspArchiveSubTab('trainees');
+
+    } catch (err) {
+        console.error("خطأ في جلب بيانات أرشيف المركز:", err);
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#dc2626;">تعذر جلب بيانات الأرشيف: ${err.message}</div>`;
+    }
+};
+
+window.switchInspArchiveSubTab = function(subTab) {
+    window.currentInspArchiveSubTab = subTab;
+    const tabs = ['trainees', 'framers', 'grades'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`inspTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (btn) {
+            if (t === subTab) {
+                btn.classList.add('active');
+                btn.style.background = '#102a43';
+                btn.style.color = '#fff';
+            } else {
+                btn.classList.remove('active');
+                btn.style.background = '#f0f4f8';
+                btn.style.color = '#102a43';
+            }
+        }
+    });
+    filterInspArchiveData();
+};
+
+window.filterInspArchiveData = function() {
+    const term = (document.getElementById('inspArchiveSearchInput')?.value || '').trim().toLowerCase();
+    const container = document.getElementById('inspArchiveContentBody');
+    if (!container) return;
+
+    const subTab = window.currentInspArchiveSubTab;
+    let list = window.currentInspArchiveRawData[subTab] || [];
+
+    if (term) {
+        list = list.filter(item => {
+            const name = (item.name || (item.baseInfo && item.baseInfo.name) || '').toLowerCase();
+            const id = String(item.id || item.empId || '').toLowerCase();
+            const spec = String(item.specialty || item.spec || '').toLowerCase();
+            return name.includes(term) || id.includes(term) || spec.includes(term);
+        });
+    }
+
+    if (list.length === 0) {
+        container.innerHTML = `
+        <div style="text-align:center; padding:40px; color:#94a3b8; font-family:'Cairo';">
+            <i class="fa-solid fa-folder-open fa-2x" style="margin-bottom:8px;"></i>
+            <p style="margin:0; font-weight:bold;">لا توجد سجلات مسجلة في هذا القسم لمركزكم في هذه السنة.</p>
+        </div>`;
+        return;
+    }
+
+    let tableHtml = '';
+    if (subTab === 'trainees') {
+        tableHtml = `
+        <table class="att-table" id="inspArchivePrintTable">
+            <thead>
+                <tr>
+                    <th style="width:30px;">#</th>
+                    <th>الاسم واللقب</th>
+                    <th>الرقم التعريفي</th>
+                    <th>الرتبة</th>
+                    <th>التخصص</th>
+                    <th>الطور</th>
+                    <th>الفوج</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((t, i) => {
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold; color:#102a43;">${t.name || '-'}</td>
+                <td style="font-family:monospace; color:#1E68E8; font-weight:bold;">${t.id || t.empId || '-'}</td>
+                <td>${t.grade || t.rank || '-'}</td>
+                <td><span class="badge" style="color:#0FBA50; border-color:#0FBA50;">${t.specialty || t.spec || '-'}</span></td>
+                <td>${t.level || '-'}</td>
+                <td>${t.group || '-'}</td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    } else if (subTab === 'framers') {
+        tableHtml = `
+        <table class="att-table" id="inspArchivePrintTable">
+            <thead>
+                <tr>
+                    <th style="width:30px;">#</th>
+                    <th>اسم الأستاذ المؤطر</th>
+                    <th>الرقم الوظيفي</th>
+                    <th>المهمة / الصفة</th>
+                    <th>المقاييس المسندة</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((f, i) => {
+            const modules = Array.isArray(f.framingModules) ? f.framingModules.join(', ') : (f.modules || '-');
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold; color:#102a43;">${f.name || '-'}</td>
+                <td style="font-family:monospace;">${f.empId || f.id || '-'}</td>
+                <td><span class="badge" style="color:#1E68E8; border-color:#1E68E8;">${f.role || 'أستاذ مؤطر'}</span></td>
+                <td>${modules}</td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    } else if (subTab === 'grades') {
+        tableHtml = `
+        <table class="att-table" id="inspArchivePrintTable">
+            <thead>
+                <tr>
+                    <th style="width:30px;">#</th>
+                    <th>اسم المتربص</th>
+                    <th>الرقم التعريفي</th>
+                    <th>المعدل العام</th>
+                    <th>القرار النهائي</th>
+                </tr>
+            </thead>
+            <tbody>`;
+        list.forEach((g, i) => {
+            const avg = g.grades ? g.grades.genAverage : (g.genAverage || '-');
+            const dec = g.grades ? g.grades.decision : (g.decision || '-');
+            const decColor = (dec === 'ناجح') ? '#0FBA50' : '#d90429';
+            tableHtml += `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:bold; color:#102a43;">${g.name || '-'}</td>
+                <td style="font-family:monospace;">${g.empId || g.id || '-'}</td>
+                <td style="font-weight:bold; font-size:14px; color:#1E68E8;">${avg}</td>
+                <td><span style="font-weight:bold; color:${decColor};">${dec}</span></td>
+            </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+    }
+
+    container.innerHTML = `
+        <div style="margin-bottom:10px; font-size:13px; font-weight:bold; color:#555;">
+            عدد السجلات المسترجعة من الأرشيف: <span style="color:#0FBA50;">${list.length}</span> سجل
+        </div>
+        ${tableHtml}
+    `;
+};
+
+window.exportInspectorArchiveToExcel = function() {
+    const table = document.getElementById('inspArchivePrintTable');
+    if (!table) return Swal.fire('تنبيه', 'لا توجد بيانات لتصديرها.', 'info');
+
+    try {
+        const wb = XLSX.utils.table_to_book(table, { sheet: "أرشيف المركز" });
+        const subTab = window.currentInspArchiveSubTab;
+        const yearSel = document.getElementById('inspArchiveYearSelect');
+        const year = yearSel ? yearSel.value : 'Archive';
+        XLSX.writeFile(wb, `ارشف_المركز_${year}_${subTab}.xlsx`);
+    } catch (e) {
+        Swal.fire('خطأ', 'تعذر تصدير ملف الإكسل: ' + e.message, 'error');
+    }
+};
+
